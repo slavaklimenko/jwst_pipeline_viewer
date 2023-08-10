@@ -1,0 +1,61 @@
+detector 1 pipeline
+
+ncounts - number of counts in the group
+
+The list of MIRI procedures:
+1. Data quality - generates dq map from reference files
+2. Saturation check - selects pixels with ncounts above the saturation limit (plus (+1) neighbors pixels- optional)
+Note: original pipeline probably does not added a 'saturation' flag to data quality map 
+3. Reset anomaly - the latest reference file has zero correction - NO CORRECTION AT THIS STEP
+Note: this correction should be applied in dark subtraction procedure, according to fits header of the reference file
+4. First frame - set DQ=1 for the pixels in the first group (in the integration), i.e. 'DO NOT USE' (FLAG = 1)
+5. Last frame  - set DQ=1 for the pixels in the last group
+6. Linear correction - makes correction for nonlinearity of ncounts for each group - Y[i] is changed to polynom of Y[i]
+7. RSCD - does not applied for the first integration - NO CORRECTION AT THIS STEP
+8. Dark subtraction - subtracts dark carrurent frpm all groups - it is taken from reference files (~10% of ncounts value). 
+Note: I did not find the RESET correction at this step
+9. Reference pixel - subtracts signal from reference pixels (not illuminated) from all other pixels - Typical value??
+10. Jump detection - detects spikes - chacnge of the slopes between groups in pixels, and select the groups as "CR" in DQ map (neighbors pixels are also selected as CR - optional)
+11. Slope fitting - fits the signal in good pixels and derives the slope and its uncertainty
+
+Comments:
+
+10. Jump detection
+
+There is a problem with the algorithm.
+The procedure is iterative:
+First iteration:
+Calculate the difference in ncounts between groups: Y(i+1)-Y(i), it is called as "first diff" or slope,
+Exclude pixel with highest slope
+Calculate median slope in good (DQ=0) pixels.
+If the absolute value of ("first diff" - median) > X sigma, then this group is selected as CR in DQ map.
+Sigma is calculated as sqrt(first diff + read-error-noise**2), read-error~noise ~ 50 counts, it is usually higher than 'first diff'
+Second iteration:
+The "CR" group is excluded and the first step is repeated.
+The main problem is the pixels with non-linear slope is selected as CR-pixels. 
+
+The default value of X is 20. I use X=5. The distribution of "first diff - mean" is close to the normal distribution.
+
+11. Slope fitting
+
+The procedure fits only "good" groups in the pixels map - with DQ flag == 0
+If the number of good pixels == 1, then slope = 0, and variance_slope = 1e9
+If the number of good pixels == 2, then slope = signal(1) - signal(0), variance_slope = sqrt(2)*read_noise
+If the number of good pixels > 2   then slope is calculated using 'optimal weights method'
+-------------
+def calc_opt_sums(ramp_data, rn_sect, gain_sect, data_masked, mask_2d, xvalues, good_pix): in ols_fit.py
+    """
+    Calculate the sums needed to determine the slope and intercept (and sigma of
+    each) using the optimal weights.  For each good pixel's segment, from the
+    initial and final indices and the corresponding number of counts, calculate
+    the SNR. From the SNR, calculate the weighting exponent using the formulation
+    by Fixsen (Fixsen et al, PASP, 112, 1350). Using this exponent and the gain
+    and the readnoise, the weights are calculated from which the sums are
+    calculated.
+--------------
+...
+
+
+
+
+
