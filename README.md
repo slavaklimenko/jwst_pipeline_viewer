@@ -1,7 +1,7 @@
 # jwst_Viewer
 How to run the code
 1) edit path to your uncalib files in "init.dat" file
-2) create conda env and install following packages:
+2) create conda env and install the following packages:
 asdf                      2.15.0                   pypi_0    pypi
 astropy                   5.3                      pypi_0    pypi
 jwst                      1.11.0                   pypi_0    pypi
