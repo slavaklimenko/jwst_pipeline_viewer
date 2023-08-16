@@ -286,7 +286,18 @@ class plotImage(pg.ImageView): #(pg.PlotWidget):
         #print('coord', text, val)
         self.label.setText(text)
         self.label.resize(400, 40)
-
+        if self.parent.Exposures.table.current_pipeline_stage == 'stage2':
+            wcs = self.parent.stage2.data.meta.wcs
+            print(wcs.available_frames)
+            cal_detector_to_alpha = wcs.get_transform('detector', 'alpha_beta')
+            print('detector_to_alpha', cal_detector_to_alpha(col,row))
+            cal_detector_to_v2v3 = wcs.get_transform('detector', 'v2v3')
+            print('detector_to_v2v3', cal_detector_to_v2v3(col, row))
+            #cal_detector_to_v2v3vacor = wcs.get_transform('detector', 'v2v3vacor')
+            #print('detector_to_v2v3vacor', cal_detector_to_v2v3vacor(col, row))
+            cal_detector_to_world = wcs.get_transform('detector', 'world')
+            print('detector_to_world', cal_detector_to_world(col, row))
+            print('')
 
     def mousePressEvent(self, event, pos=None):
         print(pos)
@@ -1895,6 +1906,9 @@ class expPipeline2Widget(QWidget):
 
     def Run_all_stage2(self):
         print('Run all')
+        print('Init_Stage2:')
+        self.parent.Exposures.table.init_stage2()
+        self.parent.Exposures.table.show_image(mode='stage2')
         print('AssignWCS')
         self.parent.Exposures.table.stage2_call_wcs()
         print('Bkgr_Subtraction')
@@ -1921,18 +1935,37 @@ class JWSTviewer(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        input_dir = '/home/slava/science/data/JWST/ID2155/J0235/UNCALIB/JWST'
-        input2_dir = './output/results/'
-        spec2_cachedir = './temp/spec2/'
-        output2_dir = './output/detector2/'
+        self.read_settings()
+        #input1_dir = '/home/slava/science/data/JWST/ID2155/J0235/UNCALIB/JWST'
+        #input2_dir = './output/results/'
+        #spec2_cachedir = './temp/spec2/'
+        #utput2_dir = './output/detector2/'
 
-        self.EXP = detector1(input_file='jw02155001001_04102_00001_mirifulong_uncal.fits', path=input_dir, output_dir=output_dir)
-        self.stage2 = detector2(miri_uncal_file='jw02155001001_04102_00001_mirifulong_uncal.fits', path=input2_dir, output_dir=output2_dir,spec2_cachedir=spec2_cachedir)
+        self.EXP = detector1(input_file='jw02155001001_04102_00001_mirifulong_uncal.fits', path=self.init_settings['input1_dir'], output_dir=self.init_settings['output1_dir'])
+        self.stage2 = detector2(miri_uncal_file='jw02155001001_04102_00001_mirifulong_uncal.fits', path=self.init_settings['input2_dir'], output_dir=self.init_settings['output2_dir'],
+                                spec2_cachedir=self.init_settings['spec2_cachedir'])
         #self.H2.readfolder()
         self.initStyles()
         print('me')
         self.initUI()
 
+    def read_settings(self,init_file='init.dat'):
+        self.init_settings = {}
+        with open(init_file) as f:
+            for k, line in enumerate(f):
+                values = [s for s in line.split()]
+                if  line[0]!= '#':
+                    if values[0] == 'input1_dir:':
+                        input_dir  = values[1]
+                        self.init_settings['input1_dir'] = values[1]
+                    if values[0] == 'input2_dir:':
+                        self.init_settings['input2_dir']=values[1]
+                    if values[0] == 'spec2_cachedir:':
+                        self.init_settings['spec2_cachedir'] = values[1]
+                    if values[0] == 'output1_dir:':
+                        self.init_settings['output1_dir'] = values[1]
+                    if values[0] == 'output2_dir:':
+                        self.init_settings['output2_dir'] = values[1]
     def initStyles(self):
         self.setStyleSheet(open('styles.ini').read())
 

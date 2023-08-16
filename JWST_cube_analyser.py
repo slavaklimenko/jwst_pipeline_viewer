@@ -109,8 +109,9 @@ class image():
 
 
 class plotCube(pg.ImageView): #(pg.PlotWidget):
-    def __init__(self, parent):
+    def __init__(self, parent,cube_name='A'):
         self.parent = parent
+        self.cube_name = cube_name
         self.img = pg.ImageView.__init__(self, name='Cube image', view=pg.PlotItem(), discreteTimeLine=True)
         self.initstatus()
         self.vb = self.getView()
@@ -146,22 +147,35 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
         if add:
             if mode == None:
                 print('add cube name:',name)
-                filename = self.parent.Cubes.filelist[name]
-                self.parent.CUBE.add_cube(cubename=filename)
-                self.parent.CUBE.init_cube()
-                channel = self.parent.CUBE.data.channel
-                band = self.parent.CUBE.data.band
-                self.data = self.parent.CUBE.data.data
+                if self.cube_name == 'A':
+                    filename = self.parent.Cubes_A.filelist[name]
+                    self.parent.CUBE_A.add_cube(cubename=filename)
+                    self.parent.CUBE_A.init_cube()
+                    channel = self.parent.CUBE_A.data.channel
+                    band = self.parent.CUBE_A.data.band
+                    self.data = self.parent.CUBE_A.data.data
+                elif self.cube_name == 'B':
+                    filename = self.parent.Cubes_B.filelist[name]
+                    self.parent.CUBE_B.add_cube(cubename=filename)
+                    self.parent.CUBE_B.init_cube()
+                    channel = self.parent.CUBE_B.data.channel
+                    band = self.parent.CUBE_B.data.band
+                    self.data = self.parent.CUBE_B.data.data
+
                 t,x, y = (0,2, 1)
                 self.setImage(self.data, axes={'t': t, 'x': x, 'y': y, 'c': None}, levels=[-100,800]) #autoRange=True,
                 self.vb.hoverEvent = self.imageHoverEvent
                 hist = self.getHistogramWidget()
                 hist.setHistogramRange(mn=-200, mx=1000)
                 if 1:
-                    rois = []
-                    rois.append(pg.EllipseROI([15, 15], [10, 10], pen=pg.mkPen('lightgreen', width=3)))
-                    rois.append(pg.CircleROI([30, 30], [10, 10], pen=pg.mkPen('red', width=2), movable=True, resizable=True))
-                    self.roi_list = rois
+                    self.roi_list = []
+                    if self.cube_name == 'A':
+                        roi_colors = ['lightgreen','red']
+                    elif self.cube_name == 'B':
+                        roi_colors = ['purple','yellow']
+                    self.roi_list.append(pg.EllipseROI([15, 15], [10, 10], pen=pg.mkPen(roi_colors[0], width=3)))
+                    self.roi_list.append(pg.CircleROI([30, 30], [10, 10], pen=pg.mkPen(roi_colors[1], width=2), movable=True, resizable=True))
+                    #self.roi_list = rois
                     #self.roi_mask = {}
                     #rois.append(pg.EllipseROI([20, 20], [12, 12], pen=(9, 2)))
 
@@ -205,20 +219,28 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
                                 d = d[roi.roi_mask]
                                 roi_selected_flux[i] = np.nansum(d)/num_pixels
                             if roi == self.roi_list[0]:
-                                self.parent.plot_spectrum.plot_spec(data=roi_selected_flux, add=False)
-                                self.parent.plot_spectrum.plot_spec(data=roi_selected_flux, pen=roi.pen)
+                                if self.cube_name == 'A':
+                                    self.parent.plot_spectrum.plot_specA1(data=roi_selected_flux, add=False)
+                                    self.parent.plot_spectrum.plot_specA1(data=roi_selected_flux, pen=roi.pen)
+                                if self.cube_name == 'B':
+                                    self.parent.plot_spectrum.plot_specB1(data=roi_selected_flux, add=False)
+                                    self.parent.plot_spectrum.plot_specB1(data=roi_selected_flux, pen=roi.pen)
                             elif roi == self.roi_list[1]:
-                                self.parent.plot_spectrum.plot_spec_2(data=roi_selected_flux, add=False)
-                                self.parent.plot_spectrum.plot_spec_2(data=roi_selected_flux,pen=roi.pen)
+                                if self.cube_name == 'A':
+                                    self.parent.plot_spectrum.plot_specA2(data=roi_selected_flux, add=False)
+                                    self.parent.plot_spectrum.plot_specA2(data=roi_selected_flux,pen=roi.pen)
+                                if self.cube_name == 'B':
+                                    self.parent.plot_spectrum.plot_specB2(data=roi_selected_flux, add=False)
+                                    self.parent.plot_spectrum.plot_specB2(data=roi_selected_flux, pen=roi.pen)
 
                     ## Add each ROI to the scene and link its data to a plot curve with the same color
-                    for r in rois:
+                    for r in self.roi_list:
                         self.vb.addItem(r)
                         c = self.roi.plot(pen=r.pen)
                         r.curve = c
                         r.sigRegionChanged.connect(updateRoi)
 
-                    #self.updateRoi = updateRoi(rois[0])
+                    #self.updateRoi = updateRoi(self.roi_list[0])
 
                     def updatePlotSpec():
                         data_roi = self.roi.getArrayRegion(arr=self.data, img=self.imageItem, axes=(1, 2))
@@ -275,7 +297,10 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
             self.lam_world = wcs1['CRVAL3'] + (self.lam - wcs1['CRPIX3']) * wcs1['CDELT3']
             print('world coord:',self.x_world,self.y_world,self.lam_world)
         else:
-            lam_world,x_world,y_world = self.parent.CUBE.conv_world_coord(t=self.lam, x=self.x, y=self.y)
+            if self.cube_name == 'A':
+                lam_world,x_world,y_world = self.parent.CUBE_A.conv_world_coord(t=self.lam, x=self.x, y=self.y)
+            elif self.cube_name == 'B':
+                lam_world,x_world,y_world = self.parent.CUBE_B.conv_world_coord(t=self.lam, x=self.x, y=self.y)
         if row < self.data.shape[0] and row >= 0 and col < self.data.shape[1] and col > 0:
             val = self.data[self.t,row,col]
         else:
@@ -308,9 +333,9 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
         if self.s_status:
             #name = self.parent.name
 
-            if self.parent.CUBE.data.data is not None and 0:
+            if self.parent.CUBE_A.data.data is not None and 0:
                 col,row =int(self.x),int(self.y)
-                show_fit = self.parent.s3d.Cubes.table.flags['read_fit_slopes']
+                show_fit = self.parent.s3d.Cubes_A.table.flags['read_fit_slopes']
                 self.parent.plot_pixel.plot_profile(row=row, col=col,add=False,show_fit=show_fit)
                 self.parent.plot_pixel.plot_profile(row=row, col=col,show_fit=show_fit)
                 self.parent.plot_pixel_diffs.plot_pixel_diffs(row=row, col=col, add=False)
@@ -464,10 +489,10 @@ class plotImage(pg.ImageView): #(pg.PlotWidget):
                 nexp[4] = int(self.parent.exp_pars.nEXP4.text())
                 self.Nscreen = Nscreen
                 print('add cube name:',name)
-                asn_filename = self.parent.Cubes.associtations_list[name] #.split('/')[-1]
-                self.parent.CUBE.load3asn(asn_filename)
+                asn_filename = self.parent.Cubes_A.associtations_list[name] #.split('/')[-1]
+                self.parent.CUBE_A.load3asn(asn_filename)
 
-                rate_filename = self.parent.CUBE.ratefiles[nexp[Nscreen]]
+                rate_filename = self.parent.CUBE_A.ratefiles[nexp[Nscreen]]
                 f = rate_filename['expname']
                 path = self.parent.stage2[Nscreen-1].path
                 exp_name = f.split('/')[-1].replace('cal.fits', '')
@@ -712,23 +737,24 @@ class plotSpec(pg.PlotWidget):
 
 
 
-    def plot_spec(self, data=None, add=True,pen=pg.mkPen(color='white', style=Qt.DashLine, width=1)):
+    def plot_specA1(self, data=None, add=True,pen=pg.mkPen(color='white', style=Qt.DashLine, width=1)):
         if add:
-            wavel = self.parent.CUBE.data.wavelength
+            wavel = self.parent.CUBE_A.data.wavelength
             if np.size(data) == np.size(wavel):
                 pen = pen
-                self.plot_line = pg.PlotCurveItem(wavel, data,pen=pen)
-                self.vb.addItem(self.plot_line)
+                self.plot_lineA1 = pg.PlotCurveItem(wavel, data,pen=pen)
+                self.vb.addItem(self.plot_lineA1)
                 pen = pg.mkPen(color='darkgray', style=Qt.DashLine, width=1)
-                self.zero_level = pg.PlotCurveItem([wavel[0]-2, wavel[-1] + 2], [0, 0], pen=pen)
+                #self.zero_level = pg.PlotCurveItem([wavel[0]-2, wavel[-1] + 2], [0, 0], pen=pen)
+                self.zero_level = pg.PlotCurveItem([0, 30], [0, 0], pen=pen)
                 self.vb.addItem(self.zero_level)
 
                 self.lr = pg.LinearRegionItem(values=[5,5])
                 self.lr.setZValue(-10)
                 self.vb.addItem(self.lr)
                 def update_lr():
-                    (timeind, time) = self.parent.plot_3dcube.timeIndex(self.parent.plot_3dcube.timeLine)
-                    (l,x,y) = self.parent.CUBE.conv_world_coord(t=time, x=10, y=10)
+                    (timeind, time) = self.parent.plot_3dcubeA.timeIndex(self.parent.plot_3dcubeA.timeLine)
+                    (l,x,y) = self.parent.CUBE_A.conv_world_coord(t=time, x=10, y=10)
                     self.lr.setRegion(rgn=[l,l])
 
                 update_lr()
@@ -736,75 +762,81 @@ class plotSpec(pg.PlotWidget):
                 def update_roi_slicer(pos_ind=None):
                     if pos_ind is None:
                         return
-                    if pos_ind != self.parent.plot_3dcube.currentIndex:
-                        self.parent.plot_3dcube.currentIndex = pos_ind
+                    if pos_ind != self.parent.plot_3dcubeA.currentIndex:
+                        self.parent.plot_3dcubeA.currentIndex = pos_ind
                         #self.parent.plot_3dcube.updateRoi
                         #self.parent.plot_3dcube.updateImage()
 
 
                 pos_ind = int(self.lr.getRegion()[0])
-                #self.lr.sigRegionChanged.connect(update_roi_slicer(pos_ind=pos_ind))
-                #pen = pg.mkPen(color='gray', style=Qt.DashLine, width=3)
-                #self.median_diff_level = pg.PlotCurveItem([-2, x[-1] + 2], [median_diffs/error[1], median_diffs/error[1]], pen=pen)
-                #self.vb.addItem(self.median_diff_level)
 
-
-                #sat_limit = float(self.parent.exp_pars.CRlimit.text())
-                #print('pixel diffs:', (diffs-median_diffs)/error)
-                #print('')
-                #if np.sum((diffs-median_diffs)/error > 5):
-                #    self.parent.show_cr_limit = True
-                #    pen = pg.mkPen(color='b', style=Qt.DashLine, width=3)
-                #    self.crp_limit = pg.PlotCurveItem([-2, x[-1] + 2], [median_diffs/error[1]+sat_limit, median_diffs/error[1]+sat_limit], pen=pen)
-                #    self.crm_limit = pg.PlotCurveItem([-2, x[-1] + 2], [median_diffs/error[1]-sat_limit, median_diffs/error[1]-sat_limit], pen=pen)
-                #    self.vb.addItem(self.crp_limit)
-                #    self.vb.addItem(self.crm_limit)
-                #    pen = pg.mkPen(color='g', style=Qt.DashLine, width=3)
-                #    self.crp_limit_3cr = pg.PlotCurveItem([-2, x[-1] + 2], [median_diffs/error[1]+5,median_diffs/error[1]+5], pen=pen)
-                #    self.vb.addItem(self.crp_limit_3cr)
-                #    pen = pg.mkPen(color='r', style=Qt.DashLine, width=3)
-                #    self.crp_limit_2cr = pg.PlotCurveItem([-2, x[-1] + 2], [median_diffs/error[1]+6,median_diffs/error[1]+6], pen=pen)
-                #    self.vb.addItem(self.crp_limit_2cr)
 
                 self.vb.autoRange()
-                self.vb.setLimits(xMin=wavel[0]*0.98, xMax=wavel[-1]*1.02)
+                #self.vb.setLimits(xMin=wavel[0]*0.98, xMax=wavel[-1]*1.02)
 
-                #text = 'Pixel: '
-                #if col is not None:
-                #    text += ' {0:.0f} {1:.0f}'.format(col, row)
-                #self.legend_model.addItem(self.plot_line, text)
+
         else:
             try:
-                self.vb.removeItem(self.plot_line)
+                self.vb.removeItem(self.plot_lineA1)
 
                 self.vb.removeItem(self.zero_level)
                 self.vb.removeItem(self.lr)
 
-                #self.legend_model.removeItem(self.plot_line)
-                #if self.parent.show_cr_limit == True:
-                #    self.vb.removeItem(self.crp_limit)
-                #    self.vb.removeItem(self.crm_limit)
-                #    self.parent.show_cr_limit = False
-                #    self.vb.removeItem(self.crp_limit_3cr)
-                #    self.vb.removeItem(self.crp_limit_2cr)
+
 
             except:
                 pass
 
-    def plot_spec_2(self, data=None, add=True,pen=pg.mkPen(color='white', style=Qt.DashLine, width=1)): #pg.mkPen(color='gray', style=Qt.DashLine, width=3)
+    def plot_specA2(self, data=None, add=True,pen=pg.mkPen(color='white', style=Qt.DashLine, width=1)): #pg.mkPen(color='gray', style=Qt.DashLine, width=3)
         if add:
-            wavel = self.parent.CUBE.data.wavelength
+            wavel = self.parent.CUBE_A.data.wavelength
             if np.size(data) == np.size(wavel):
 
                 pen = pen
-                self.plot_line2 = pg.PlotCurveItem(wavel, data,pen=pen)
-                self.vb.addItem(self.plot_line2)
+                self.plot_lineA2 = pg.PlotCurveItem(wavel, data,pen=pen)
+                self.vb.addItem(self.plot_lineA2)
 
                 self.vb.autoRange()
-                self.vb.setLimits(xMin=wavel[0]*0.98, xMax=wavel[-1]*1.02)
+                #self.vb.setLimits(xMin=wavel[0]*0.98, xMax=wavel[-1]*1.02)
         else:
             try:
-                self.vb.removeItem(self.plot_line2)
+                self.vb.removeItem(self.plot_lineA2)
+
+            except:
+                pass
+
+    def plot_specB1(self, data=None, add=True, pen=pg.mkPen(color='white', style=Qt.DashLine,
+                                                            width=1)):  # pg.mkPen(color='gray', style=Qt.DashLine, width=3)
+        if add:
+            wavel = self.parent.CUBE_B.data.wavelength
+            if np.size(data) == np.size(wavel):
+                pen = pen
+                self.plot_lineB1 = pg.PlotCurveItem(wavel, data, pen=pen)
+                self.vb.addItem(self.plot_lineB1)
+
+                self.vb.autoRange()
+                #self.vb.setLimits(xMin=wavel[0] * 0.98, xMax=wavel[-1] * 1.02)
+        else:
+            try:
+                self.vb.removeItem(self.plot_lineB1)
+
+            except:
+                pass
+
+    def plot_specB2(self, data=None, add=True, pen=pg.mkPen(color='white', style=Qt.DashLine,
+                                                            width=1)):  # pg.mkPen(color='gray', style=Qt.DashLine, width=3)
+        if add:
+            wavel = self.parent.CUBE_B.data.wavelength
+            if np.size(data) == np.size(wavel):
+                pen = pen
+                self.plot_lineB2 = pg.PlotCurveItem(wavel, data, pen=pen)
+                self.vb.addItem(self.plot_lineB2)
+
+                self.vb.autoRange()
+                #self.vb.setLimits(xMin=wavel[0] * 0.98, xMax=wavel[-1] * 1.02)
+        else:
+            try:
+                self.vb.removeItem(self.plot_lineB2)
 
             except:
                 pass
@@ -851,7 +883,7 @@ class CUBElistTable(pg.TableWidget):
 
     def update_cube_list(self):
         if 1:
-            self.parent.parent.Cubes.__init__(self.parent.parent, closebutton=False)
+            self.parent.parent.Cubes_A.__init__(self.parent.parent, closebutton=False)
         else:
             Cubes = self.parent.parent.Cubes
             filenames, fileparams, codenames = Cubes.readfolder(self.parent.parent.CUBE.output_dir)
@@ -880,8 +912,8 @@ class CUBElistTable(pg.TableWidget):
         band = self.parent.parent.exp_pars.asn_band.currentText()
         print('ASN file params:', source, channel, band)
 
-        input_dir = self.parent.parent.CUBE.path
-        files = self.parent.parent.CUBE.create_association(input_dir=input_dir,source = source,channel = channel, band =band)
+        input_dir = self.parent.parent.CUBE_A.path
+        files = self.parent.parent.CUBE_A.create_association(input_dir=input_dir,source = source,channel = channel, band =band)
         print('Asn files for cube building:', files)
         #self.parent.parent.CUBE.writel3asn(files=files,asnfile=source+'_'+channel+'_'+band+)
         #sort_calfiles(files):
@@ -892,18 +924,18 @@ class CUBElistTable(pg.TableWidget):
         master_outlier_flag = int(self.parent.parent.exp_pars.master_outlier_flag.currentIndex())
         master_extract1d_flag = int(self.parent.parent.exp_pars.master_extract1d_flag.currentIndex())
         channel = self.parent.parent.exp_pars.asn_channel.currentText()
-        asn_file = self.parent.parent.CUBE.tmp_asn_file
+        asn_file = self.parent.parent.CUBE_A.tmp_asn_file
         print('Built cube from asn files:')
-        self.parent.parent.CUBE.build_cube(input_file=asn_file, channel = channel, master_bkgr_flag = master_bkgr_flag ,
+        self.parent.parent.CUBE_A.build_cube(input_file=asn_file, channel = channel, master_bkgr_flag = master_bkgr_flag ,
                                            master_res_bkgr_flag = master_res_bkgr_flag, master_outlier_flag = master_outlier_flag,
                                            master_extract1d_flag = master_extract1d_flag)
 
 
     def extract_roi(self, mode = 'pixels'):
-        cube = self.parent.parent.plot_3dcube
-        data = self.parent.parent.CUBE.data
-        wavel = self.parent.parent.CUBE.data.wavelength
-        name = self.parent.parent.CUBE.cubename.split('/')[-1].split('.')[0]
+        cube = self.parent.parent.plot_3dcubeA
+        data = self.parent.parent.CUBE_A.data
+        wavel = self.parent.parent.CUBE_A.data.wavelength
+        name = self.parent.parent.CUBE_A.cubename.split('/')[-1].split('.')[0]
         roi_name = ['sci','bkgr']
         if mode == 'pixels':
             for ir,roi in enumerate(cube.roi_list):
@@ -925,179 +957,16 @@ class CUBElistTable(pg.TableWidget):
                     fout.close()
 
 
-    def set_dq(self):
-        print('set data quality map')
-        self.parent.parent.CUBE.dq_init_step()
-        self.parent.parent.CUBE.dq_init_step()
 
-    def show_dq(self):
-        print('set data quality map')
-        flag = self.parent.parent.exp_commands.dq_categories.currentText()
-        self.parent.parent.CUBE.show_dq(flag=flag)
 
-    def check_saturation(self):
-        if self.flags['saturation_step'] == False:
-            flag = self.parent.parent.exp_pars.addneighbors.isChecked()
-            debug = self.parent.parent.exp_pars.debug.isChecked()
-            print('Run Saturation step: add_neighbors=',flag, ' show_debug = ',debug)
-            self.parent.parent.CUBE.saturation_step(n_pix_grow_sat=flag,debug=debug)
-            self.flags['saturation_step'] = True
-            print('SATURATION STEP: DONE')
-        else:
-            flag = self.parent.parent.exp_pars.addneighbors.isChecked()
-            debug = self.parent.parent.exp_pars.debug.isChecked()
-            print('Run second saturation step: add_neighbors=', flag, ' show_debug = ', debug)
-            self.parent.parent.CUBE.reset_dq(flagname='SATURATED')
-            self.parent.parent.CUBE.saturation_step(n_pix_grow_sat=flag, debug=debug)
-            self.flags['saturation_step'] = True
-            print('SATURATION STEP: DONE')
-        if debug:
-            plt.show()
-
-    def show_saturation(self):
-        if self.flags['saturation_step'] == True:
-            if self.flags['show_saturated'] == False:
-                self.flags['show_saturated'] = True
-                mask = np.where(np.bitwise_and(self.parent.parent.CUBE.data.pixeldq, dqflags.pixel['SATURATED']))
-                self.parent.parent.plot_image.selectPixels(add=self.flags['show_saturated'], x=mask[1], y=mask[0],type='saturated')
-                #for i, j in zip(mask[0], mask[1]):
-                #    self.parent.parent.plot_image.selectPixel(add=self.flags['show_saturated'], x=j, y=i)
-            else:
-                self.flags['show_saturated'] = False
-                self.parent.parent.plot_image.selectPixels(add=False,type='saturated')
-
-    def show_DNU(self):
-            if self.flags['show_dnu'] == False:
-                self.flags['show_dnu'] = True
-                mask = np.where(np.bitwise_and(self.parent.parent.CUBE.data.pixeldq, dqflags.pixel['DO_NOT_USE']))
-                self.parent.parent.plot_image.selectPixels(add=self.flags['show_dnu'], x=mask[1], y=mask[0],color='orange',
-                                                           type='dnu')
-                # for i, j in zip(mask[0], mask[1]):
-                #    self.parent.parent.plot_image.selectPixel(add=self.flags['show_saturated'], x=j, y=i)
-            else:
-                self.flags['show_dnu'] = False
-                self.parent.parent.plot_image.selectPixels(add=False, type='dnu')
-
-    def first_group(self):
-        debug = self.parent.parent.exp_pars.debug.isChecked()
-        self.parent.parent.CUBE.first_step(debug=debug)
-        print('FIRST STEP: DONE')
-    def last_group(self):
-        debug = self.parent.parent.exp_pars.debug.isChecked()
-        self.parent.parent.CUBE.last_step(debug=debug)
-        print('LAST STEP: DONE')
-
-    def reset_correction(self):
-        debug = self.parent.parent.exp_pars.debug.isChecked()
-        self.parent.parent.CUBE.reset_step(debug=debug)
-        print('RESET STEP: DONE')
-
-    def linear_correction(self):
-        if self.parent.parent.CUBE.data.meta.cal_step.linearity == 'COMPLETE':
-            print('Linearity correction was applied already')
-        else:
-            debug = self.parent.parent.exp_pars.debug.isChecked()
-            self.parent.parent.CUBE.linear_step(debug=debug)
-            print('LINEAR STEP: DONE')
-
-    def show_linear_correction(self):
-        if self.parent.parent.CUBE.data.meta.cal_step.linearity == 'COMPLETE':
-            print('Linear correction was completed already')
-        else:
-            debug = self.parent.parent.exp_pars.debug.isChecked()
-            print('show_linear_correction: not ready')
-
-    def rscd_correction(self):
-        if self.parent.parent.CUBE.data.meta.cal_step.rscd == 'COMPLETE':
-            print('RSCD correction was applied already')
-        else:
-            debug = self.parent.parent.exp_pars.debug.isChecked()
-            self.parent.parent.CUBE.rscd_step(debug=debug)
-            print('RSCD STEP: DONE')
-
-    def dark_correction(self):
-        if self.parent.parent.EXP.data.meta.cal_step.dark_sub == 'COMPLETE':
-            print('Dark subtraction was applied already')
-        else:
-            debug = self.parent.parent.exp_pars.debug.isChecked()
-            self.parent.parent.EXP.dark_step(debug=debug)
-            print('DARK STEP: DONE')
-
-    def reference_pix_correction(self):
-        if self.parent.parent.CUBE.data.meta.cal_step.refpix == 'COMPLETE':
-            print('RefPix correction was applied already')
-        else:
-            debug = self.parent.parent.exp_pars.debug.isChecked()
-            self.parent.parent.CUBE.refpix_corr_step(debug=debug)
-            print('REF PIX STEP: DONE')
-
-    def jump_detection(self):
-        if self.flags['CR_step'] == False:
-            CRlimit = float(self.parent.parent.exp_pars.CRlimit.text())
-            RecalcMedian = int(self.parent.parent.exp_pars.CR_recalc_flag.currentIndex())
-            flag = self.parent.parent.exp_pars.addCRneighbors.isChecked()
-            debug = 3 #self.parent.parent.exp_pars.debug.isChecked()
-            print('Run CR step: add_neighbors=', flag, ' show_debug = ', debug)
-            self.parent.parent.CUBE.jump_corr_step(debug=debug, limit=CRlimit, flag_4_neighbors=flag,RecalcMedian=RecalcMedian)
-            self.flags['CR_step'] = True
-            print('CR STEP: DONE')
-        else:
-            CRlimit = float(self.parent.parent.exp_pars.CRlimit.text())
-            flag = self.parent.parent.exp_pars.addCRneighbors.isChecked()
-            debug = 3 #self.parent.parent.exp_pars.debug.isChecked()
-            print('Run second CR step: add_neighbors=', flag, ' show_debug = ', debug)
-            self.parent.parent.CUBE.reset_dq(flagname='JUMP_DET')
-            self.parent.parent.CUBE.jump_corr_step(debug=debug, limit=CRlimit, flag_4_neighbors=flag)
-            self.flags['CR_step'] = True
-            print('CR STEP: DONE')
-        if debug:
-            plt.show()
-
-        #debug = self.parent.parent.exp_pars.debug.isChecked()
-        #CRlimit = float(self.parent.parent.exp_pars.CRlimit.text())
-        #self.parent.parent.EXP.jump_corr_step(debug=debug,limit = CRlimit)
-        #print('JUMP STEP (CR): DONE')
-
-    def show_single_CR(self):
-        if self.flags['CR_step'] == True:
-            if self.flags['show_CR'] == False:
-                self.flags['show_CR'] = True
-                mask = np.where(np.bitwise_and(self.parent.parent.CUBE.data.pixeldq, dqflags.pixel['JUMP_DET']))
-                #for i, j in zip(mask[0], mask[1]):
-                #    self.parent.parent.plot_image.selectPixels(add=self.flags['show_CR'], x=j, y=i)
-                self.parent.parent.plot_image.selectPixels(add=self.flags['show_CR'], x=mask[1], y=mask[0],color='g',type='cr')
-            else:
-                self.flags['show_CR'] = False
-                self.parent.parent.plot_image.selectPixels(add=False,type='cr')
-
-    def show_second_CR(self):
-        print('show_muliple_CR:')
-        if self.flags['CR_step'] == True:
-            if self.flags['show_multi_CR'] == False:
-                self.flags['show_multi_CR'] = True
-                mask = np.where(np.bitwise_and(self.parent.parent.CUBE.data.pixeldq, dqflags.pixel['JUMP_DET']))
-                x,y = [],[]
-                for i in range(mask[0].shape[0]):
-                    mask_tmp = np.bitwise_and(self.parent.parent.CUBE.data.groupdq[0,:,mask[0][i],mask[1][i]], dqflags.pixel['JUMP_DET'])
-                    if np.sum(mask_tmp)>4:
-                        x.append(mask[1][i])
-                        y.append(mask[0][i])
-                x,y = np.array(x),np.array(y)
-
-                #for i, j in zip(mask[0], mask[1]):
-                #    self.parent.parent.plot_image.selectPixels(add=self.flags['show_CR'], x=j, y=i)
-                self.parent.parent.plot_image.selectPixels(add=self.flags['show_multi_CR'], x=x, y=y,color='m',type='cr_multi')
-            else:
-                self.flags['show_multi_CR'] = False
-                self.parent.parent.plot_image.selectPixels(add=False,type='cr_multi')
 
     def show_roi(self):
         print('show_ROI pixels:')
         if 1:
             if 1:
-                roi_mask = self.parent.parent.plot_3dcube.roi_list[0].roi_mask
+                roi_mask = self.parent.parent.plot_3dcubeA.roi_list[0].roi_mask
                 x,y = np.where(roi_mask>0)
-                (timeind, time) = self.parent.parent.plot_3dcube.timeIndex(self.parent.parent.plot_3dcube.timeLine)
+                (timeind, time) = self.parent.parent.plot_3dcubeA.timeIndex(self.parent.parent.plot_3dcubeA.timeLine)
                 lam = time+2
                 lam_array = np.zeros_like(x) + lam
                 print('roi pixels at lambda=',lam)
@@ -1115,7 +984,7 @@ class CUBElistTable(pg.TableWidget):
                 for e, k in zip(x_world, y_world):
                     print(e, k)
             else:
-                lam_world, x_world,y_world = self.parent.parent.CUBE.conv_world_coord(t=lam_array, x=y, y=x)
+                lam_world, x_world,y_world = self.parent.parent.CUBE_A.conv_world_coord(t=lam_array, x=y, y=x)
 
             if 1:
                 wcs1 = self.parent.parent.stage2[0].data.meta.wcs
@@ -1174,7 +1043,7 @@ class CUBElistTable(pg.TableWidget):
                 self.parent.parent.plot_2dimage4.vb.setRange(xRange=(np.min(x_det4) * 0.95, np.max(x_det4) * 1.05),
                                                              yRange=(np.min(y_det4) * 0.95, np.max(y_det4) * 1.05))
 
-                self.parent.parent.plot_3dcube.selectPixels(add=self.flags['show_ROI'], x=y, y=x,color='m',type='cr_multi')
+                self.parent.parent.plot_3dcubeA.selectPixels(add=self.flags['show_ROI'], x=y, y=x,color='m',type='cr_multi')
 
             else:
                 self.flags['show_ROI'] = False
@@ -1182,194 +1051,26 @@ class CUBElistTable(pg.TableWidget):
                 self.parent.parent.plot_2dimage2.selectPixels(add=False, type='cr_multi')
                 self.parent.parent.plot_2dimage3.selectPixels(add=False, type='cr_multi')
                 self.parent.parent.plot_2dimage4.selectPixels(add=False, type='cr_multi')
-                self.parent.parent.plot_3dcube.selectPixels(add=False, type='cr_multi')
-
-
-    def slope_fit(self,denug=False):
-
-        #CRlimit = float(self.parent.parent.exp_pars.CRlimit.text())
-        #flag = self.parent.parent.exp_pars.addCRneighbors.isChecked()
-        debug = self.parent.parent.exp_pars.debug.isChecked()
-        print('Run Slope Fit step: show_debug = ', debug)
-        self.parent.parent.CUBE.slope_fitting_step(debug=debug)
-        self.flags['slope_fit_step'] = True
-        print('Slope Fit STEP: DONE')
-        if debug:
-            plt.show()
-
-    def read_slopes(self,input_file = None):
-        #miri1 = calwebb_detector1.Detector1Pipeline()
-        #miri_output = miri1.run(miri_uncal_file)
-        if self.flags['slope_fit_step'] == True:
-            print('Read Slope Fits from local files')
-            ramp_fit = self.parent.parent.CUBE.ramp_fit
-            if input_file == None:
-                input_file = self.parent.parent.CUBE.input_file
-            input_file_base = os.path.basename(input_file).replace('uncal.fits', '')
-            output_dir = self.parent.parent.CUBE.output_dir
-            rampfit_output_file = os.path.join(output_dir, '{}_0_rampfitstep.fits'.format(input_file_base))
-
-            # Generate the name of the optional output file
-            optional_file = os.path.join(output_dir, '{}fitopt.fits'.format(input_file_base))
-            hdulist = fits.open(optional_file)
-            intercepts = hdulist['YINT'].data[0, :, :, :]
-            intercepts_err = hdulist['SIGYINT'].data[0, :, :, :]
-            local_slopes = hdulist['SLOPE'].data[0, :, :, :]
-            local_sig_slopes = hdulist['SIGSLOPE'].data[0, :, :, :]
-            hdulist.close()
-
-            num_groups = ramp_fit[0].meta.exposure.ngroups
-            group_time = ramp_fit[0].meta.exposure.group_time
-            print('Time per group:', group_time, ' in s')
-            #group_times = np.arange(num_groups) * group_time
-
-
-            self.parent.parent.CUBE.itercepts = intercepts
-            self.parent.parent.CUBE.itercepts_err = intercepts_err
-            self.parent.parent.CUBE.slopes = ramp_fit[0].data* group_time  #in DN/groups
-            self.parent.parent.CUBE.slopes_err = ramp_fit[0].err* group_time #in DN/groups
-            self.parent.parent.CUBE.local_slopes = local_slopes * group_time  # in DN/groups
-            self.parent.parent.CUBE.local_slopes_err = local_sig_slopes * group_time  # in DN/groups
-            self.flags['read_fit_slopes'] = True
-
-        else:
-            print('Read Slope Fits from Final files')
-            if input_file == None:
-                input_file = self.parent.parent.CUBE.input_file
-            input_file_base = os.path.basename(input_file).replace('uncal.fits', '')
-            output_dir = './output/results/'              #/self.parent.parent.EXP.output_dir
-
-            files = os.listdir(output_dir)
-            if np.sum(input_file_base in f for f in files):
-                # Generate the name of the optional output file
-                optional_file = os.path.join(output_dir, '{}fitopt.fits'.format(input_file_base))
-                hdulist = fits.open(optional_file)
-                intercepts = hdulist['YINT'].data[0, :, :, :]
-                intercepts_err = hdulist['SIGYINT'].data[0, :, :, :]
-                local_slopes = hdulist['SLOPE'].data[0, :, :, :]
-                local_sig_slopes = hdulist['SIGSLOPE'].data[0, :, :, :]
-                hdulist.close()
-
-                optional_file = os.path.join(output_dir, '{}rate.fits'.format(input_file_base))
-                hdulist = fits.open(optional_file)
-                header = hdulist[0].header
-                group_time =  hdulist[0].header['TGROUP']
-                slopes = hdulist['SCI'].data[:,:]
-                slope_errs = hdulist['ERR'].data[:, :]
-                dq = hdulist['DQ'].data[:, :]
-                print('Time per group:', group_time, ' in s')
-                hdulist.close()
-                ramp_fit_0  = datamodels.open(optional_file)
-                ramp_fit_1 = datamodels.open(optional_file = os.path.join(output_dir, '{}rateints.fits'.format(input_file_base)))
-                # group_times = np.arange(num_groups) * group_time
-
-                self.parent.parent.CUBE.itercepts = intercepts
-                self.parent.parent.CUBE.itercepts_err = intercepts_err
-                self.parent.parent.CUBE.slopes = slopes * group_time  # in DN/groups
-                self.parent.parent.CUBE.slopes_err = slope_errs * group_time  # in DN/groups
-                self.parent.parent.CUBE.local_slopes = local_slopes * group_time  # in DN/groups
-                self.parent.parent.CUBE.local_slopes_err = local_sig_slopes * group_time  # in DN/groups
-                self.parent.parent.CUBE.data.pixeldq = dq
-                self.parent.parent.CUBE.ramp_fit = ramp_fit_0,ramp_fit_1
-                #self.parent.parent.EXP.ramp_fit[0].data = slopes
-                #self.flags['read_fit_slopes'] = True
-                self.flags=self.flags.fromkeys(self.flags, True)
-                self.flags['show_saturated'] = False
-                self.flags['show_CR'] = False
-                self.flags['show_multi_CR'] = False
-                self.flags['show_dnu'] = False
-                print('flags after reading',self.flags)
-
-                def val2log(val='1'):
-                    val = val.replace("\n", "")
-                    if val == '2':
-                        return None
-                    else:
-                        return val
-                cal_steps_file = output_dir + input_file_base+'cal_steps.csw'
-                with open(cal_steps_file, 'r') as f:
-                    for k, line in enumerate(f):
-                        values = [s for s in line.split(',')]
-                self.parent.parent.CUBE.data.meta.cal_step.linearity = val2log(values[0])
-                self.parent.parent.CUBE.data.meta.cal_step.rscd = val2log(values[1])
-                self.parent.parent.CUBE.data.meta.cal_step.dark_sub = val2log(values[2])
-                self.parent.parent.CUBE.data.meta.cal_step.refpix = val2log(values[3])
-                print('self.parent.parent.EXP.data.meta.cal_step.refpix',self.parent.parent.CUBE.data.meta.cal_step.refpix)
-
-            else:
-                print('There is no saved files')
-
-    def show_slope_image(self):
-        if self.flags['slope_fit_step'] == True:
-            ramp_fit = self.parent.parent.CUBE.ramp_fit
-            fig,ax = plt.subplots()
-            print(np.min(ramp_fit[0].data),np.max(ramp_fit[0].data))
-            im = ax.imshow(ramp_fit[0].data, vmin=-10, vmax=10)
-            fontsize=12
-            ax.set_title('Slope Image')
-            ax.tick_params(which='both', width=1, direction='in', labelsize=fontsize, right='True', top='True')
-            ax.tick_params(which='major', length=5)
-            ax.tick_params(which='minor', length=3)
-            fig.colorbar(im, ax=ax, label='Slope')
-
-            plt.show()
+                self.parent.parent.plot_3dcubeA.selectPixels(add=False, type='cr_multi')
 
 
 
-    def save_slope_fit(self,output_dir=None,copy_add_data=True):
-        if self.flags['slope_fit_step'] == True:
-            from jwst.pipeline import calwebb_detector1
-            miri1 = calwebb_detector1.Detector1Pipeline()
-            if output_dir == 'local':
-                miri1.output_dir = self.parent.parent.CUBE.output_dir
-            elif output_dir == 'final':
-                miri1.output_dir = './output/results/'
-            else:
-                output_dir = None
-            if output_dir != None:
-                miri1.output_file =  self.parent.parent.CUBE.name
-                input, ints_model = self.parent.parent.CUBE.ramp_fit
-                if ints_model is not None:
-                    miri1.save_model(ints_model, 'rateints')
-                if input is not None:
-                    miri1.save_model(input, 'rate')
-            if output_dir == 'final' and copy_add_data==True:
-                # Providing the folder path
-                origin = self.parent.parent.CUBE.output_dir
-                target = miri1.output_dir
-
-                # Fetching the list of all the files
-                files = os.listdir(origin)
-
-                # Fetching all the files to directory
-                exp_name = self.parent.parent.CUBE.name.split('_uncal')[0]
-                for file_name in files:
-                    if exp_name in file_name:
-                        shutil.copy(origin + file_name, target + file_name)
-
-                s = self.parent.parent.CUBE.data.meta.cal_step
-                lst = []
-                for l in [s.linearity,s.rscd,s.dark_sub,s.refpix]:
-                    if l != None:
-                        lst.append(l)
-                    else:
-                        lst.append(2)
-                print(lst)
-                with open(target + exp_name+'_cal_steps.csw', 'w') as f:
-                    csv_writer = csv.writer(f, delimiter=',')
-                    csv_writer.writerows([lst])
 
 
-                print("Fit slopes are saved to", target+exp_name)
+
+
+
+
 
 
 class chooseExpWidget(QWidget):
     """
     Widget for choose fitting parameters during the fit.
     """
-    def __init__(self, parent, closebutton=True):
+    def __init__(self, parent, closebutton=True,cube_choice='A'):
         super().__init__()
         self.parent = parent
+        self.cube_choice=cube_choice
         #self.resize(700, 900)
         #self.move(400, 100)
         self.setStyleSheet(open('styles.ini').read())
@@ -1383,7 +1084,7 @@ class chooseExpWidget(QWidget):
         self.associtations_list = {}
 
         if 1:
-            filenames,fileparams,codenames = self.readfolder(self.parent.CUBE.output_dir)
+            filenames,fileparams,codenames = self.readfolder(self.parent.CUBE_A.output_dir)
             lst = []
             for s,pars in zip(filenames,fileparams):
                 d = [s.split('/')[-1]]
@@ -1392,7 +1093,7 @@ class chooseExpWidget(QWidget):
                 lst.append(d)
                 #filenamelst.append(d[0].split('/')[-1])
                 self.filelist[d[0].split('/')[-1]]=s
-                self.associtations_list[d[0].split('/')[-1]]=self.parent.CUBE.path +'/'+ d[4]
+                self.associtations_list[d[0].split('/')[-1]]=self.parent.CUBE_A.path +'/'+ d[4]
             lst = np.array([tuple(l) for l in lst], dtype=[('name','U400')] + [(p,'U50') for p in codenames])
             data = lst
         self.table.setdata(data)
@@ -1487,17 +1188,20 @@ class chooseExpWidget(QWidget):
 
     def click(self, name):
         self.parent.current_name = name
-        self.parent.plot_3dcube.add(name, self.buttons[name].isChecked())
-        if 1:
-            self.parent.plot_2dimage1.add(name, self.buttons[name].isChecked(),Nscreen = 1)
-            self.parent.plot_2dimage2.add(name, self.buttons[name].isChecked(), Nscreen=2)
-            self.parent.plot_2dimage3.add(name, self.buttons[name].isChecked(), Nscreen=3)
-            self.parent.plot_2dimage4.add(name, self.buttons[name].isChecked(), Nscreen=4)
+        if self.cube_choice == 'A':
+            self.parent.plot_3dcubeA.add(name, self.buttons[name].isChecked())
+            if 0:
+                self.parent.plot_2dimage1.add(name, self.buttons[name].isChecked(), Nscreen=1)
+                self.parent.plot_2dimage2.add(name, self.buttons[name].isChecked(), Nscreen=2)
+                self.parent.plot_2dimage3.add(name, self.buttons[name].isChecked(), Nscreen=3)
+                self.parent.plot_2dimage4.add(name, self.buttons[name].isChecked(), Nscreen=4)
+        elif self.cube_choice == 'B':
+            self.parent.plot_3dcubeB.add(name, self.buttons[name].isChecked())
         print('self.buttons[name].isChecked()',self.buttons[name].isChecked())
         if self.buttons[name].isChecked()==True:
-            flags = self.parent.Cubes.table.flags
-            self.parent.Cubes.table.flags = flags.fromkeys(flags, False)
-            print('added by click', self.parent.Cubes.table.flags)
+            flags = self.parent.Cubes_A.table.flags
+            self.parent.Cubes_A.table.flags = flags.fromkeys(flags, False)
+            print('added by click', self.parent.Cubes_A.table.flags)
         p = np.where(self.table.data['name'] == name)
         self.table.setCurrentCell(np.where(self.table.data['name'] == name)[0][0], 0)
 
@@ -1680,102 +1384,67 @@ class expRunWidget(QWidget):
 
     def create_ASN_file(self):
         print('create_asn:')
-        self.parent.Cubes.table.create_asn_file()
+        self.parent.Cubes_A.table.create_asn_file()
 
     def call_build_3dCube(self):
         print('build cube:')
-        self.parent.Cubes.table.build_3dcube()
+        self.parent.Cubes_A.table.build_3dcube()
 
     def update_CubeList(self):
         print('update list:')
-        self.parent.Cubes.table.update_cube_list()
+        self.parent.Cubes_A.table.update_cube_list()
 
     def extract_Roi(self,mode=None):
         print('extract Roi:')
-        self.parent.Cubes.table.extract_roi()
+        self.parent.Cubes_A.table.extract_roi()
 
 
     def set_DQ_map(self, debug = False):
         print('set_DQ_map, debug:', debug)
-        self.parent.Cubes.table.set_dq()
+        self.parent.Cubes_A.table.set_dq()
 
     def show_DQ_map(self, debug = False,group=None):
         print('set_DQ_map, debug:', debug)
-        self.parent.Cubes.table.show_dq()
+        self.parent.Cubes_A.table.show_dq()
 
 
     def SaturationStep(self, debug = False):
         print('SaturationStep, debug:', debug)
-        self.parent.Cubes.table.check_saturation()
+        self.parent.Cubes_A.table.check_saturation()
 
     def show_SATpixels(self):
         print('Show Saturation pixels')
-        self.parent.Cubes.table.show_saturation()
+        self.parent.Cubes_A.table.show_saturation()
 
     def show_DNUpixels(self):
         print('Show Saturation pixels')
-        self.parent.Cubes.table.show_DNU()
+        self.parent.Cubes_A.table.show_DNU()
 
     def FirstLastStep(self, debug = False):
-        self.parent.Cubes.table.first_group()
-        self.parent.Cubes.table.last_group()
+        self.parent.Cubes_A.table.first_group()
+        self.parent.Cubes_A.table.last_group()
 
     def ResetStep(self, debug=False):
-        self.parent.Cubes.table.reset_correction()
+        self.parent.Cubes_A.table.reset_correction()
 
 
     def LinearStep(self, debug=False):
-        self.parent.Cubes.table.linear_correction()
+        self.parent.Cubes_A.table.linear_correction()
 
-    def ShowLinearCorrection(self, debug=False):
-        self.parent.Cubes.table.show_linear_correction()
 
-    def RSCDStep(self, debug=False):
-        self.parent.Cubes.table.rscd_correction()
-
-    def DarkStep(self, debug=False):
-        self.parent.Cubes.table.dark_correction()
-
-    def RefPixStep(self, debug=False):
-        self.parent.Cubes.table.reference_pix_correction()
-
-    def JumpStep(self, debug=False):
-        self.parent.Cubes.table.jump_detection()
-
-    def ShowFirstCR(self, debug=False):
-        self.parent.Cubes.table.show_single_CR()
-
-    def ShowSecondCR(self, debug=False):
-        self.parent.Cubes.table.show_second_CR()
 
     def ShowROI(self, debug=False):
-        self.parent.Cubes.table.show_roi()
-
-    def SlopeFitStep(self, debug=False):
-        self.parent.Cubes.table.slope_fit()
-        self.parent.Cubes.table.read_slopes()
-        self.parent.Cubes.table.save_slope_fit(output_dir='local')
-
-    def ShowSlopeFit(self, debug=False):
-        self.parent.Cubes.table.show_slope_image()
-
-    def SaveSlopeFit(self, debug=False):
-        self.parent.Cubes.table.save_slope_fit(output_dir='final')
-
-    def ReadSlopeFit(self, debug=False):
-        self.parent.Cubes.table.read_slopes()
-
-    def RunDet1Pipeline(self,denug=False):
-        print('Show Saturation pixels')
-        self.parent.Cubes.table.show_saturation()
-
+        self.parent.Cubes_A.table.show_roi()
 class JWST_spec_viewer(QMainWindow):
 
     def __init__(self):
         super().__init__()
         input_dir = './output/detector2'
         spec3_cachedir = './temp/spec3/'
-        self.CUBE = detector3(obj_key_name = 'jw02155001001_04102',bkgr_key_name = 'jw02155009001_02101', path = input_dir, output_dir=output_dir)
+        self.CUBE_A = detector3(obj_key_name = 'jw02155001001_04102',bkgr_key_name = 'jw02155009001_02101', path = input_dir, output_dir=output_dir)
+        self.CUBE_B = detector3(obj_key_name='jw02155001001_04102', bkgr_key_name='jw02155009001_02101', path=input_dir,
+                              output_dir=output_dir)
+
         input2_dir = './output/results/'
         spec2_cachedir = './temp/spec2/'
         output2_dir = './output/detector2/'
@@ -1801,20 +1470,22 @@ class JWST_spec_viewer(QMainWindow):
         # self.specview sets the type of plot representation
 
         if 1:# >>> create panel for plotting spectra
-            self.plot_3dcube = plotCube(self)
+            self.plot_3dcubeA = plotCube(self,cube_name='A')
+            self.plot_3dcubeB = plotCube(self,cube_name='B')
             self.plot_2dimage1 = plotImage(self)
             self.plot_2dimage2 = plotImage(self)
             self.plot_2dimage3 = plotImage(self)
             self.plot_2dimage4 = plotImage(self)
             self.plot_spectrum = plotSpec(self)
-            self.Cubes = chooseExpWidget(self, closebutton=False)
+            self.Cubes_A = chooseExpWidget(self, closebutton=False,cube_choice='A')
+            self.Cubes_B = chooseExpWidget(self, closebutton=False,cube_choice='B')
             self.exp_pars = expParsWidget(self)
             self.exp_commands = expRunWidget(self)
             # self.plot.setFrameShape(QFrame.StyledPanel)
 
             self.splitter = QSplitter(Qt.Vertical)
             self.splitter_image = QSplitter(Qt.Horizontal)
-            self.splitter_image.addWidget(self.plot_3dcube)
+            self.splitter_image.addWidget(self.plot_3dcubeA)
 
             self.spec_image1 = QSplitter(Qt.Vertical)
             self.spec_image12 = QSplitter(Qt.Horizontal)
@@ -1827,6 +1498,7 @@ class JWST_spec_viewer(QMainWindow):
             self.spec_image1.addWidget(self.spec_image34)
 
             self.splitter_image.addWidget(self.spec_image1)
+            self.splitter_image.addWidget(self.plot_3dcubeB)
             #self.splitter_image.addWidget(self.plot_2dimage)
             self.splitter.addWidget(self.splitter_image)
 
@@ -1839,7 +1511,10 @@ class JWST_spec_viewer(QMainWindow):
             self.splitter_pars_left_panel.addWidget(self.exp_pars)
             self.splitter_pars_left_panel.addWidget(self.exp_commands)
             self.splitter_pars.addWidget(self.splitter_pars_left_panel)
-            self.splitter_pars.addWidget(self.Cubes)
+            self.splitter_pars_right_panel = QSplitter(Qt.Vertical)
+            self.splitter_pars_right_panel.addWidget(self.Cubes_A)
+            self.splitter_pars_right_panel.addWidget(self.Cubes_B)
+            self.splitter_pars.addWidget(self.splitter_pars_right_panel)
             self.splitter.addWidget(self.splitter_pars)
 
             self.splitter.setSizes([150, 300,100,100,100,100])

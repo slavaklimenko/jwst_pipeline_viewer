@@ -102,15 +102,32 @@ class detector3():
             self.data.objname =  header['TARGPROP']
             self.data.band =  header['BAND']
             self.data.channel =  header['CHANNEL']
+            header = hdu1['SCI'].header
+            wcs = {}
+            wcs['CRPIX1'] = header['CRPIX1']
+            wcs['CRPIX2'] = header['CRPIX2']
+            wcs['CRPIX3'] = header['CRPIX3']
+            wcs['CRVAL1'] = header['CRVAL1']
+            wcs['CRVAL2'] = header['CRVAL2']
+            wcs['CRVAL3'] = header['CRVAL3']
+            wcs['CDELT1'] = header['CDELT1']
+            wcs['CDELT2'] = header['CDELT2']
+            wcs['CDELT3'] = header['CDELT3']
+            self.data.wcs = wcs
             hdu1.close()
         if read_spectum:
-            sstring = self.cubename.split('_s3d')[0] +  '_extract1dstep.fits'
+            sstring = self.cubename.split('_s3d')[0] +  '_x1d.fits'
             specfile = sorted(glob.glob(sstring))
             hdu2 = fits.open(specfile[0])
             self.data.wavelength = hdu2['EXTRACT1D'].data['WAVELENGTH']
             hdu2.close()
-
-
+    def conv_world_coord(self,t,x,y):
+        wcs1 = self.data.wcs
+        x_world = wcs1['CRVAL1'] - (x - wcs1['CRPIX1']) * wcs1['CDELT1']
+        y_world = wcs1['CRVAL2'] + (y - wcs1['CRPIX2']) * wcs1['CDELT2']
+        lam_world = wcs1['CRVAL3'] + (t - wcs1['CRPIX3']) * wcs1['CDELT3']
+        print('world coord:', x_world, y_world, lam_world)
+        return lam_world,x_world,y_world
 
         #with datamodels.open(self.cubename) as input_models:
         #    if isinstance(input_models, datamodels.IFUImageModel):
@@ -143,7 +160,7 @@ class detector3():
         '''
         # Define the basic association of science files
         asn_exptypes = ['science', 'background']
-        if 0:
+        if 1:
             input_models = datamodels.open(asnfile, asn_exptypes=asn_exptypes)
             table = input_models.meta.instance['asn_table']
             ratefiles = table['products'][0]['members']
@@ -157,10 +174,16 @@ class detector3():
             d['expname'] = './output/detector2/jw02155001001_04102_00002_mirifushort_cal.fits'
             d['exptype'] = 'science'
             ratefiles.append(d)
+            d = {}
+            d['expname'] = './output/detector2/jw02155001001_04102_00003_mirifushort_cal.fits'
+            d['exptype'] = 'science'
+            ratefiles.append(d)
+            d = {}
+            d['expname'] = './output/detector2/jw02155001001_04102_00004_mirifushort_cal.fits'
+            d['exptype'] = 'science'
+            ratefiles.append(d)
         self.ratefiles = ratefiles
         f = 1
-
-
 
     def read_ratefiles(self,det1_dir =None, input_file_base = None, debug=1):
         if det1_dir != None:
@@ -221,7 +244,6 @@ class detector3():
         cb = CubeBuildStep()
         cb.call('rbm.json', channel='2', save_results=True, output_dir=self.output_dir, output_file='rbm_before')
 
-
     # This step divides the array data by the pixel flatfield reference file. (for MIRI MRS the reference flatfield is currently unity everywhere )
     def outlier_detection_step(self, input_file=None, debug=False, output_dir=None):
         '''
@@ -276,7 +298,7 @@ class detector3():
         spec3('od.json')
         # Otherwise, just copy cached outputs into our output directory structure
 
-    def create_association(self, input_dir=None,channel = '1', band ='short'):
+    def create_association(self, input_dir=None,source = 'Object',channel = '1', band ='Short(A)',name=None):
         sci_exp_list = []
         bkg_exp_list = []
         if channel == '1' or channel ==  '2':
@@ -284,35 +306,47 @@ class detector3():
         elif channel == '3' or channel ==  '4':
             key_name = 'mirifulong_cal.fits'
         band_code_sci = {}
-        band_code_sci['short'] = '2'
-        band_code_sci['medium'] = '4'
-        band_code_sci['long'] = '6'
+        band_code_sci['SHORT(A)'] = '2'
+        band_code_sci['MEDIUM(B)'] = '4'
+        band_code_sci['LONG(C)'] = '6'
         band_code_bkg = {}
-        band_code_bkg['short'] = '1'
-        band_code_bkg['medium'] = '3'
-        band_code_bkg['long'] = '5'
+        band_code_bkg['SHORT(A)'] = '1'
+        band_code_bkg['MEDIUM(B)'] = '3'
+        band_code_bkg['LONG(C)'] = '5'
 
         sstring = input_dir + '/' + '*' + key_name
         cal_files = sorted(glob.glob(sstring))
         for f in cal_files:
-            f_dth_pos = (f.split('/')[-1]).split('_')[2]
-            f_band = ((f.split('/')[-1]).split('_')[1])[3:]
-            if self.obj_key_name in f:
-                if band_code_sci[band] in  f_band:
+            hdulist = fits.open(f)
+            header = hdulist[0].header
+            f_targ_name = header['TARGPROP']
+            f_band = header['BAND']
+            f_channel = header['CHANNEL']
+            f_dit_pos = header['PATT_NUM']
+            hdulist.close()
+            if 'BACK' not in f_targ_name:
+                if channel in f_channel and f_band in band:
                         sci_exp_list.append(f)
 
-            elif self.bkgr_key_name in f:
-                if band_code_bkg[band] in f_band:
+            elif 'BACK' in f_targ_name:
+                if channel in f_channel and f_band in band:
                     bkg_exp_list.append(f)
 
-        ass_name_sci = 'sci_'+channel+band+'.json'
-        ass_name_bkg = 'bkg_'+channel+band+'.json'
-        print(ass_name_sci,sci_exp_list)
-        print(ass_name_bkg,bkg_exp_list)
+        asn_name_sci = input_dir + '/'+ 'sci_test_sub_bkgr_' + channel + band + '.json'
+        asn_name_bkg = input_dir + '/'+ 'bkg_test_sub_bkgr_' + channel + band + '.json'
 
-        self.writel3asn(sci_exp_list, ass_name_sci, 'sci')
-        self.writel3asn(bkg_exp_list, ass_name_bkg, 'bkg')
-        return [ass_name_sci,ass_name_bkg]
+        if source == 'Object':
+            if name == None:
+                name = 'sci_test'
+            print('science',asn_name_sci, [el for el in sci_exp_list])
+            self.writel3asn(sci_exp_list, asn_name_sci, name)
+            self.tmp_asn_file = asn_name_sci
+            return asn_name_sci
+        elif source == 'Background':
+            print('background', asn_name_bkg, bkg_exp_list)
+            self.writel3asn(bkg_exp_list, asn_name_bkg, 'bkg')
+            self.tmp_asn_file = asn_name_bkg
+            return asn_name_bkg
 
     def sort_calfiles(files):
         channel = []
@@ -340,23 +374,26 @@ class detector3():
 
         return files12A, files12B, files12C, files34A, files34B, files34C
 
-
-    def cube_creation(self, input_file='rbm.json', output_dir=None,channel = '1'):
+    def build_cube(self, input_file='rbm.json', output_dir=None,channel = '1', master_bkgr_flag = 0,
+        master_res_bkgr_flag = 0, master_outlier_flag = 0,  master_extract1d_flag = 1):
         if output_dir == None:
             output_dir = self.output_dir
 
         spec3 = Spec3Pipeline()
-        spec3.output_dir = None #output_dir
+        spec3.output_dir = output_dir
         spec3.save_results = True
-        spec3.master_background.skip = True
-        spec3.outlier_detection.skip = True
-        spec3.mrs_imatch.skip = True
+        spec3.master_background.skip = 1 - master_bkgr_flag
+        print('master_background.skip', 1 - master_bkgr_flag)
+        spec3.outlier_detection.skip = 1 - master_outlier_flag
+        print('spec3.outlier_detection.skip', 1 - master_outlier_flag)
+        spec3.mrs_imatch.skip = 1 - master_res_bkgr_flag
+        print('mrs_imatch.skip',1 - master_res_bkgr_flag)
         spec3.cube_build.channel = channel
         spec3.cube_build.output_file = (input_file.split('/')[-1]).split('.')[0]
-        spec3.extract_1d.skip = True
-
-        #run building 3dcube
+        spec3.extract_1d.skip = 1 - master_extract1d_flag
+        print('spec3.extract_1d.skip', 1 - master_extract1d_flag)
         spec3(input_file)
+        print('DONE!')
 
     def spec_extraction(self, cube_filename = 'sci_1short_ch1-short_s3d.fits'):
         '''
@@ -377,7 +414,7 @@ class detector3():
         norm = ImageNormalize(flux1, interval=ZScaleInterval(), stretch=LogStretch())
 
         # And plot the data.  Highlight a pixel in the bad column with a red X
-        ax1.imshow(flux1[0, :, :], cmap='gray', origin='lower')
+        ax1.imshow(flux1[199, :, :], cmap='gray', origin='lower')
         ax1.set_title('SKYALIGN')
 
     def plot_spec(self,spec_file_name = 'sci_1short_ch1-short_extract1dstep.fits'):
@@ -392,8 +429,23 @@ class detector3():
         ax.set_xlabel('Wavelength (micron)')
         ax.set_ylabel('Flux (Jy)')
 
+    def create_association_12pieces(self):
 
+        # Find and sort all of the input files
+        sstring = self.path + 'det*cal.fits'
+        calfiles = np.array(sorted(glob.glob(sstring)))
+        sortfiles = self.sort_calfiles(calfiles)  # Split them up into bands
+        print('Found ' + str(len(calfiles)) + ' input files to process')
 
+        asnlist = []
+        names = ['12A', '12B', '12C', '34A', '34B', '34C']
+        for ii in range(0, len(sortfiles)):
+            thesefiles = sortfiles[ii]
+            ninband = len(thesefiles)
+            if (ninband > 0):
+                filename = 'l3asn-' + names[ii] + '.json'
+                asnlist.append(filename)
+                self.writel3asn(thesefiles, filename, 'Level3')
 
 
 if __name__ == '__main__':
@@ -407,9 +459,9 @@ if __name__ == '__main__':
     #exposure.residual_background_matching()
     #exposure =  detector3(obj_key_name = 'jw02155001001_04102',bkgr_key_name = 'jw02155009001_02101', path = input_dir, output_dir=output_dir)
     #[sci, bkg] = exposure.create_association(input_dir=exposure.path, channel = '1', band ='short')
-    exposure.cube_creation(channel='1')
+    #exposure.cube_creation(channel='1')
     #exposure.spec_extraction()
-    #exposure.plot_cube()
+    exposure.plot_cube()
     #exposure.plot_spec()
 
     plt.show()

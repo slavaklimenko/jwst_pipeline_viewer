@@ -1,0 +1,7 @@
+#settings
+#set path to input & output data
+input1_dir: /home/slava/science/data/JWST/ID2155/J0235/UNCALIB/JWST   #path to folder with uncalibrated data
+input2_dir: ./output/results/
+spec2_cachedir: ./temp/spec2/
+output1_dir: ./output/detector1/
+output2_dir: ./output/detector2/
