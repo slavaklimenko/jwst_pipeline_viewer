@@ -113,6 +113,10 @@ class detector3():
             wcs['CDELT1'] = header['CDELT1']
             wcs['CDELT2'] = header['CDELT2']
             wcs['CDELT3'] = header['CDELT3']
+            wcs['NAXIS1'] = header['NAXIS1']
+            wcs['NAXIS2'] = header['NAXIS2']
+            wcs['NAXIS3'] = header['NAXIS3']
+
             self.data.wcs = wcs
             hdu1.close()
         if read_spectum:
@@ -121,12 +125,19 @@ class detector3():
             hdu2 = fits.open(specfile[0])
             self.data.wavelength = hdu2['EXTRACT1D'].data['WAVELENGTH']
             hdu2.close()
-    def conv_world_coord(self,t,x,y):
+    def conv_world_coord(self,t,x,y,mode='normal'):
         wcs1 = self.data.wcs
-        x_world = wcs1['CRVAL1'] - (x - wcs1['CRPIX1']) * wcs1['CDELT1']
-        y_world = wcs1['CRVAL2'] + (y - wcs1['CRPIX2']) * wcs1['CDELT2']
-        lam_world = wcs1['CRVAL3'] + (t - wcs1['CRPIX3']) * wcs1['CDELT3']
+        if mode == 'cubevis':
+            x_world = wcs1['CRVAL1'] - (x - wcs1['CRPIX1']+1) * wcs1['CDELT1']*1.043
+            y_world = wcs1['CRVAL2'] + (y - wcs1['CRPIX2']+1) * wcs1['CDELT2']*1.043
+            lam_world = wcs1['CRVAL3'] + wcs1['CDELT3']*(t - wcs1['CRPIX3']-wcs1['NAXIS3'])
+        elif mode == 'normal':
+            x_world = wcs1['CRVAL1'] - (x - wcs1['CRPIX1'] +1) * wcs1['CDELT1']
+            y_world = wcs1['CRVAL2'] + (y - wcs1['CRPIX2'] +1) * wcs1['CDELT2']
+            lam_world = wcs1['CRVAL3'] + (t - wcs1['CRPIX3'] + 1)* wcs1['CDELT3']
+
         print('world coord:', x_world, y_world, lam_world)
+        #print(self.data.wcs((t,x,y)))
         return lam_world,x_world,y_world
 
         #with datamodels.open(self.cubename) as input_models:
@@ -453,15 +464,15 @@ if __name__ == '__main__':
     miri_uncal_file = 'jw02155001001_04102_00001_mirifulong_uncal.fits'
     input_dir = './output/detector2'
     spec3_cachedir = './temp/spec3/'
-    exposure = detector3(cubename='./output/detector3/sci_1short_ch1-short_s3d.fits')
-    exposure.init_cube()
-    exposure.load3asn(asnfile='sci_1short.json')
+    exposure = detector3(cubename='./output/detector3/sci_1SHORT(A)_ch1-short_s3d.fits')
+    #exposure.init_cube()
+    #exposure.load3asn(asnfile='sci_1short.json')
     #exposure.residual_background_matching()
     #exposure =  detector3(obj_key_name = 'jw02155001001_04102',bkgr_key_name = 'jw02155009001_02101', path = input_dir, output_dir=output_dir)
     #[sci, bkg] = exposure.create_association(input_dir=exposure.path, channel = '1', band ='short')
     #exposure.cube_creation(channel='1')
     #exposure.spec_extraction()
-    exposure.plot_cube()
+    exposure.plot_cube(cube_filename='./output/detector3/sci_1SHORT(A)_ch1-short_s3d.fits')
     #exposure.plot_spec()
 
     plt.show()

@@ -1,4 +1,4 @@
-import os
+import sys, os
 import shutil
 from astropy.io import ascii
 import astropy.constants as ac
@@ -41,6 +41,7 @@ from PyQt5.QtWidgets import (QApplication, QMessageBox, QMainWindow, QWidget,
 from pyqtgraph.Qt import QtCore, QtGui
 from stdatamodels.jwst import datamodels
 import csv
+from PyQt5.QtWidgets import (QApplication)
 
 output_dir = './output/detector3/'
 input_dir = './output/detector2/'
@@ -129,6 +130,8 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
         self.label.move(25, 50)
         self.label2 = QLabel("World:", self.ui.graphicsView.viewport())
         self.label2.move(25, 15)
+        self.label_filename = QLabel("Filename:", self.ui.graphicsView.viewport())
+        self.label_filename.move(1325, 15)
 
 
 
@@ -147,6 +150,7 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
         if add:
             if mode == None:
                 print('add cube name:',name)
+                self.init_name = name
                 if self.cube_name == 'A':
                     filename = self.parent.Cubes_A.filelist[name]
                     self.parent.CUBE_A.add_cube(cubename=filename)
@@ -161,6 +165,8 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
                     channel = self.parent.CUBE_B.data.channel
                     band = self.parent.CUBE_B.data.band
                     self.data = self.parent.CUBE_B.data.data
+                self.label_filename.setText(filename.split('/')[-1].split('s3d')[0])
+                self.label_filename.resize(600, 40)
 
                 t,x, y = (0,2, 1)
                 self.setImage(self.data, axes={'t': t, 'x': x, 'y': y, 'c': None}, levels=[-100,800]) #autoRange=True,
@@ -188,14 +194,33 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
                             rows,cols = self.data.shape[1],self.data.shape[2]
                             m = np.mgrid[:rows, :cols]
                             possx = m[0, :, :]  # make the x pos array
+                            #possx2 = (np.mgrid[:cols, :rows])[0,:,:]
                             possy = m[1, :, :]  # make the y pos array
                             possx.shape = rows,cols
                             possy.shape = rows,cols
-                            mpossx = roi.getArrayRegion(possx, self.imageItem).astype(int)
-                            mpossx = mpossx[np.nonzero(mpossx)]  # get the x pos from ROI
-                            mpossy = roi.getArrayRegion(possy, self.imageItem).astype(int)
-                            mpossy = mpossy[np.nonzero(mpossy)]  # get the y pos from ROI
-                            mask[mpossy, mpossx] = True #self.data[0,mpossx, mpossy]>0
+                            mpossx = roi.getArrayRegion(arr=possx, img=self.imageItem , axes=(1,0)).astype(int)
+                            mpossx2 = roi.getArrayRegion(arr=possx, img=self.imageItem , axes=(1,0)).astype(float)
+                            print(mpossx2)
+                            mpossx1 = mpossx[np.nonzero(mpossx)]  # get the x pos from ROI
+                            mpossy = roi.getArrayRegion(arr=possy, img = self.imageItem , axes=(1,0)).astype(int)
+                            mpossy1 = mpossy[np.nonzero(mpossy)]  # get the y pos from ROI
+                            mask[mpossx1, mpossy1] = True #self.data[0,mpossx, mpossy]>0
+                            roi.roi_mask = mask
+                        if 0:  # set_roi_mask
+                            mask = np.array(np.zeros((self.data.shape[1], self.data.shape[2])), dtype='bool')
+                            rows, cols = self.data.shape[1], self.data.shape[2]
+                            m = np.mgrid[:rows, :cols]
+                            possx = m[0, :, :]  # make the x pos array
+                            # possx2 = (np.mgrid[:cols, :rows])[0,:,:]
+                            possy = m[1, :, :]  # make the y pos array
+                            possx.shape = rows, cols
+                            possy.shape = rows, cols
+                            mpossx = roi.getArrayRegion(arr=possx, img=self.imageItem, axes=(0, 1)).astype(int)
+                            mpossx2 = roi.getArrayRegion(possx, self.imageItem).astype(float)
+                            mpossx1 = mpossx[np.nonzero(mpossx)]  # get the x pos from ROI
+                            mpossy = roi.getArrayRegion(arr=possy, img=self.imageItem, axes=(0, 1)).astype(int)
+                            mpossy1 = mpossy[np.nonzero(mpossy)]  # get the y pos from ROI
+                            mask[mpossy1, mpossx1] = True  # self.data[0,mpossx, mpossy]>0
                             roi.roi_mask = mask
                         updateRoiPlot(roi, arr1)
 
@@ -298,17 +323,18 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
             print('world coord:',self.x_world,self.y_world,self.lam_world)
         else:
             if self.cube_name == 'A':
-                lam_world,x_world,y_world = self.parent.CUBE_A.conv_world_coord(t=self.lam, x=self.x, y=self.y)
+                lam_world,x_world,y_world = self.parent.CUBE_A.conv_world_coord(t=self.lam, x=int(self.x), y=int(self.y))
             elif self.cube_name == 'B':
                 lam_world,x_world,y_world = self.parent.CUBE_B.conv_world_coord(t=self.lam, x=self.x, y=self.y)
         if row < self.data.shape[0] and row >= 0 and col < self.data.shape[1] and col > 0:
             val = self.data[self.t,row,col]
         else:
             val = -999
-        text = "pixel: (row=%d, col=%d, l=%d), val: %.2f MJy/sr" % ( row, col,time,val)
+        #text = "pixel: (x=%.1f, y=%.1f, l=%d), val: %.2f MJy/sr" % (self.x, self.y, time, val)
+        text = "pixel: (row=%d, col=%d, l=%d), val: %.2f MJy/sr" % ( col, row,time,val)
         print(text)
 
-        text_world_coord = "world: (ra=%.5f, dec=%.5f, l=%.4f)" % (x_world,y_world,lam_world)
+        text_world_coord = "world: (ra=%.6f, dec=%.6f, l=%.6f)" % (x_world,y_world,lam_world)
         print(text_world_coord)
         #cal_world_to_detector = wcs.get_transform('world', 'detector')
         #print('world->detector', cal_world_to_detector(x_world,y_world, lam_world))
@@ -333,7 +359,7 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
         if self.s_status:
             #name = self.parent.name
 
-            if self.parent.CUBE_A.data.data is not None and 0:
+            if 0:
                 col,row =int(self.x),int(self.y)
                 show_fit = self.parent.s3d.Cubes_A.table.flags['read_fit_slopes']
                 self.parent.plot_pixel.plot_profile(row=row, col=col,add=False,show_fit=show_fit)
@@ -733,6 +759,7 @@ class plotSpec(pg.PlotWidget):
         self.legend_model = pg.LegendItem(offset=(-70, -30))
         self.legend_model.setParentItem(self.vb)
         self.setTitle("Pixel difference", color="olive", size="10pt")
+        self.lines = self.listDataItems()
 
 
 
@@ -771,7 +798,7 @@ class plotSpec(pg.PlotWidget):
                 pos_ind = int(self.lr.getRegion()[0])
 
 
-                self.vb.autoRange()
+                #self.vb.autoRange()
                 #self.vb.setLimits(xMin=wavel[0]*0.98, xMax=wavel[-1]*1.02)
 
 
@@ -795,8 +822,8 @@ class plotSpec(pg.PlotWidget):
                 pen = pen
                 self.plot_lineA2 = pg.PlotCurveItem(wavel, data,pen=pen)
                 self.vb.addItem(self.plot_lineA2)
-
-                self.vb.autoRange()
+                self.lines = self.listDataItems()
+                #self.vb.autoRange()
                 #self.vb.setLimits(xMin=wavel[0]*0.98, xMax=wavel[-1]*1.02)
         else:
             try:
@@ -814,7 +841,7 @@ class plotSpec(pg.PlotWidget):
                 self.plot_lineB1 = pg.PlotCurveItem(wavel, data, pen=pen)
                 self.vb.addItem(self.plot_lineB1)
 
-                self.vb.autoRange()
+                #self.vb.autoRange()
                 #self.vb.setLimits(xMin=wavel[0] * 0.98, xMax=wavel[-1] * 1.02)
         else:
             try:
@@ -832,7 +859,7 @@ class plotSpec(pg.PlotWidget):
                 self.plot_lineB2 = pg.PlotCurveItem(wavel, data, pen=pen)
                 self.vb.addItem(self.plot_lineB2)
 
-                self.vb.autoRange()
+                #self.vb.autoRange()
                 #self.vb.setLimits(xMin=wavel[0] * 0.98, xMax=wavel[-1] * 1.02)
         else:
             try:
@@ -856,6 +883,7 @@ class CUBElistTable(pg.TableWidget):
         self.show()
         self.flags = {}
         if 1:
+            self.flags['show_roi_detector'] = False
             self.flags['saturation_step'] = False
             self.flags['show_saturated'] = False
             self.flags['CR_step'] = False
@@ -931,127 +959,233 @@ class CUBElistTable(pg.TableWidget):
                                            master_extract1d_flag = master_extract1d_flag)
 
 
-    def extract_roi(self, mode = 'pixels'):
-        cube = self.parent.parent.plot_3dcubeA
-        data = self.parent.parent.CUBE_A.data
-        wavel = self.parent.parent.CUBE_A.data.wavelength
-        name = self.parent.parent.CUBE_A.cubename.split('/')[-1].split('.')[0]
+    def extract_roi(self, cube_name = '(A)'):
+        if cube_name == '(A)':
+            cube = self.parent.parent.plot_3dcubeA
+            data = self.parent.parent.CUBE_A.data
+            wavel = self.parent.parent.CUBE_A.data.wavelength
+            name = self.parent.parent.CUBE_A.cubename.split('/')[-1].split('.')[0]
+        elif cube_name == '(B)':
+            cube = self.parent.parent.plot_3dcubeB
+            data = self.parent.parent.CUBE_B.data
+            wavel = self.parent.parent.CUBE_B.data.wavelength
+            name = self.parent.parent.CUBE_B.cubename.split('/')[-1].split('.')[0]
         roi_name = ['sci','bkgr']
-        if mode == 'pixels':
-            for ir,roi in enumerate(cube.roi_list):
-                if np.sum(roi.roi_mask) > 0:
-                    num_pixels = np.sum(roi.roi_mask)
-                    roi_selected_flux = np.zeros(cube.data.shape[0])
-                    roi_selected_flux_error = np.zeros(cube.data.shape[0])
-                    for i in range(cube.data.shape[0]):
-                        d = data.data[i, :, :]
-                        d = d[roi.roi_mask]
-                        derr = data.err[i, :, :]
-                        derr = derr[roi.roi_mask]
-                        roi_selected_flux[i] = np.sum(d/derr**2) / np.sum(1/derr**2)
-                        roi_selected_flux_error[i] = 1/np.sum(1/derr**2)
-                    filename = './output/detector3/roi_spectra/'+name+roi_name[ir]+'.spec1d'
-                    with open(filename, 'w') as fout:
-                        for x,y,e in zip(wavel,roi_selected_flux,roi_selected_flux_error):
-                            fout.write('%.4e %.4e %.4e \n' %(x,y,e))
-                    fout.close()
+        for ir,roi in enumerate(cube.roi_list):
+            if np.sum(roi.roi_mask) > 0:
+                num_pixels = np.sum(roi.roi_mask)
+                roi_selected_flux = np.zeros(cube.data.shape[0])
+                roi_selected_flux_error = np.zeros(cube.data.shape[0])
+                for i in range(cube.data.shape[0]):
+                    d = data.data[i, :, :]
+                    d = d[roi.roi_mask]
+                    derr = data.err[i, :, :]
+                    derr = derr[roi.roi_mask]
+                    roi_selected_flux[i] = np.sum(d/derr**2) / np.sum(1/derr**2)
+                    roi_selected_flux_error[i] = 1/np.sum(1/derr**2)
+                filename = './output/detector3/roi_spectra/'+name+'_'+cube_name+'_'+roi_name[ir]+'.spec1d'
+                with open(filename, 'w') as fout:
+                    for x,y,e in zip(wavel,roi_selected_flux,roi_selected_flux_error):
+                        fout.write('%.4e %.4e %.4e \n' %(x,y,e))
+                fout.close()
 
 
 
 
 
-    def show_roi(self):
+    def show_roi(self,mode='A1'):
         print('show_ROI pixels:')
         if 1:
-            if 1:
+            if mode == 'A1':
                 roi_mask = self.parent.parent.plot_3dcubeA.roi_list[0].roi_mask
-                x,y = np.where(roi_mask>0)
                 (timeind, time) = self.parent.parent.plot_3dcubeA.timeIndex(self.parent.parent.plot_3dcubeA.timeLine)
-                lam = time+2
-                lam_array = np.zeros_like(x) + lam
-                print('roi pixels at lambda=',lam)
-                #for e,k in zip(x,y):
-                #    print(e,k)
-                #self.parent.CUBE.data.data
-            if 0:
-                wcs1 = self.parent.parent.CUBE.data.wcs
-                x_world = wcs1['CRVAL1'] - (x - wcs1['CRPIX1']) * wcs1['CDELT1']
-                y_world = wcs1['CRVAL2'] + (y - wcs1['CRPIX2']) * wcs1['CDELT2']
-                lam_world = wcs1['CRVAL3'] + (lam - wcs1['CRPIX3']) * wcs1['CDELT3']
-                lam_w_axis = np.zeros_like(x_world)
-                lam_w_axis[:] = lam_world
-                print('roi world pixels:')
-                for e, k in zip(x_world, y_world):
-                    print(e, k)
-            else:
+            elif mode == 'A2':
+                roi_mask = self.parent.parent.plot_3dcubeA.roi_list[1].roi_mask
+                (timeind, time) = self.parent.parent.plot_3dcubeA.timeIndex(self.parent.parent.plot_3dcubeA.timeLine)
+            elif mode == 'B1':
+                roi_mask = self.parent.parent.plot_3dcubeB.roi_list[0].roi_mask
+                (timeind, time) = self.parent.parent.plot_3dcubeB.timeIndex(self.parent.parent.plot_3dcubeB.timeLine)
+            elif mode == 'B2':
+                roi_mask = self.parent.parent.plot_3dcubeB.roi_list[1].roi_mask
+                (timeind, time) = self.parent.parent.plot_3dcubeB.timeIndex(self.parent.parent.plot_3dcubeB.timeLine)
+
+            x, y = np.where(roi_mask > 0)
+            lam = time
+            lam_array = np.zeros_like(x) + lam
+            print('roi pixels at lambda=',lam)
+            if mode in ['A1', 'A2']:
                 lam_world, x_world,y_world = self.parent.parent.CUBE_A.conv_world_coord(t=lam_array, x=y, y=x)
-
-            if 1:
-                wcs1 = self.parent.parent.stage2[0].data.meta.wcs
-                cal_world_to_detector1 = wcs1.get_transform('world', 'detector')
-                (x_det1, y_det1) = cal_world_to_detector1(x_world, y_world, lam_world)
-                mask = (x_det1>=0)*(x_det1<=self.parent.parent.stage2[0].data.data.shape[0])*(y_det1>-1)
-                x_det1,y_det1 = np.array(x_det1[mask],dtype=int),np.array(y_det1[mask],dtype=int)
-                text = 'ROI: %.2f' % (np.nansum(self.parent.parent.stage2[0].data.data[y_det1,x_det1])) #/np.size(x_det1))
-                print(text)
-                self.parent.parent.plot_2dimage1.Roilabel.setText(text)
-                #self.parent.parent.plot_2dimage1.resize(400, 40)
-
-                wcs2 = self.parent.parent.stage2[1].data.meta.wcs
-                cal_world_to_detector2 = wcs2.get_transform('world', 'detector')
-                (x_det2, y_det2) = cal_world_to_detector2(x_world, y_world, lam_world)
-                mask = (x_det2 >= 0) * (x_det2 <= self.parent.parent.stage2[1].data.shape[0])*(y_det2>-1)
-                x_det2,y_det2 = np.array(x_det2[mask],dtype=int),np.array(y_det2[mask],dtype=int)
-                text = 'ROI: %.2f' % (np.nansum(self.parent.parent.stage2[1].data.data[y_det2,x_det2])) #/ np.size(x_det2))
-                print(text)
-                self.parent.parent.plot_2dimage2.Roilabel.setText(text)
-
-                wcs3 = self.parent.parent.stage2[2].data.meta.wcs
-                cal_world_to_detector3 = wcs3.get_transform('world', 'detector')
-                (x_det3, y_det3) = cal_world_to_detector3(x_world, y_world, lam_world)
-                mask = (x_det3 >= 0) * (x_det3 <= self.parent.parent.stage2[2].data.shape[0])*(y_det3>0)
-                x_det3,y_det3 = np.array(x_det3[mask],dtype=int),np.array(y_det3[mask],dtype=int)
-                text = 'ROI: %.2f' % (np.nansum(self.parent.parent.stage2[2].data.data[y_det3, x_det3]) )#/ np.size(x_det3))
-                print(text)
-                self.parent.parent.plot_2dimage3.Roilabel.setText(text)
-
-                wcs4 = self.parent.parent.stage2[3].data.meta.wcs
-                cal_world_to_detector4 = wcs4.get_transform('world', 'detector')
-                (x_det4, y_det4) = cal_world_to_detector4(x_world, y_world, lam_world)
-                mask = (x_det4 >= 0) * (x_det4 <= self.parent.parent.stage2[3].data.shape[0])*(y_det4>0)
-                x_det4,y_det4 = np.array(x_det4[mask],dtype=int),np.array(y_det4[mask],dtype=int)
-                text = 'ROI: %.2f' % (np.nansum(self.parent.parent.stage2[3].data.data[y_det4, x_det4])) #/ np.size(x_det4))
-                print(text)
-                self.parent.parent.plot_2dimage4.Roilabel.setText(text)
-
-
+            elif mode in ['B1', 'B2']:
+                lam_world, x_world, y_world = self.parent.parent.CUBE_B.conv_world_coord(t=lam_array, x=y, y=x)
             if self.flags['show_ROI'] == False:
                 self.flags['show_ROI'] = True
-                #x,y = np.array(x_det),np.array(y_det)
-                self.parent.parent.plot_2dimage1.selectPixels(add=self.flags['show_ROI'], x=x_det1, y=y_det1,color='m',type='cr_multi')
-                print('x_det1')
-                print(x_det1)
-                #self.parent.parent.plot_2dimage1.vb.setLimits(xMin=np.min(x_det1), xMax=np.max(x_det1), yMin=np.min(y_det1), yMax=np.max(x_det1))
-                self.parent.parent.plot_2dimage1.vb.setRange(xRange=(np.min(x_det1)*0.95,np.max(x_det1)*1.05), yRange=(np.min(y_det1)*0.95,np.max(y_det1)*1.05))
-                self.parent.parent.plot_2dimage2.selectPixels(add=self.flags['show_ROI'], x=x_det2, y=y_det2,color='m',type='cr_multi')
-                self.parent.parent.plot_2dimage2.vb.setRange(xRange=(np.min(x_det2) * 0.95, np.max(x_det2) * 1.05),
-                                                             yRange=(np.min(y_det2) * 0.95, np.max(y_det2) * 1.05))
-                self.parent.parent.plot_2dimage3.selectPixels(add=self.flags['show_ROI'], x=x_det3, y=y_det3,color='m',type='cr_multi')
-                self.parent.parent.plot_2dimage3.vb.setRange(xRange=(np.min(x_det3) * 0.95, np.max(x_det3) * 1.05),
-                                                             yRange=(np.min(y_det3) * 0.95, np.max(y_det3) * 1.05))
-                self.parent.parent.plot_2dimage4.selectPixels(add=self.flags['show_ROI'], x=x_det4, y=y_det4,color='m',type='cr_multi')
-                self.parent.parent.plot_2dimage4.vb.setRange(xRange=(np.min(x_det4) * 0.95, np.max(x_det4) * 1.05),
-                                                             yRange=(np.min(y_det4) * 0.95, np.max(y_det4) * 1.05))
+                if mode in ['A1','A2']:
+                    self.parent.parent.plot_3dcubeA.selectPixels(add=self.flags['show_ROI'], x=y, y=x, color='m',type='cr_multi')
+                elif mode in ['B1','B2']:
+                    self.parent.parent.plot_3dcubeB.selectPixels(add=self.flags['show_ROI'], x=y, y=x, color='m',
+                                                                 type='cr_multi')
+                if self.flags['show_roi_detector'] == True:
+                    wcs1 = self.parent.parent.stage2[0].data.meta.wcs
+                    cal_world_to_detector1 = wcs1.get_transform('world', 'detector')
+                    (x_det1, y_det1) = cal_world_to_detector1(x_world, y_world, lam_world)
+                    mask = (x_det1>=0)*(x_det1<=self.parent.parent.stage2[0].data.data.shape[0])*(y_det1>-1)
+                    x_det1,y_det1 = np.array(x_det1[mask],dtype=int),np.array(y_det1[mask],dtype=int)
+                    text = 'ROI: %.2f' % (np.nansum(self.parent.parent.stage2[0].data.data[y_det1,x_det1])) #/np.size(x_det1))
+                    print(text)
+                    self.parent.parent.plot_2dimage1.Roilabel.setText(text)
+                    #self.parent.parent.plot_2dimage1.resize(400, 40)
 
-                self.parent.parent.plot_3dcubeA.selectPixels(add=self.flags['show_ROI'], x=y, y=x,color='m',type='cr_multi')
+                    wcs2 = self.parent.parent.stage2[1].data.meta.wcs
+                    cal_world_to_detector2 = wcs2.get_transform('world', 'detector')
+                    (x_det2, y_det2) = cal_world_to_detector2(x_world, y_world, lam_world)
+                    mask = (x_det2 >= 0) * (x_det2 <= self.parent.parent.stage2[1].data.shape[0])*(y_det2>-1)
+                    x_det2,y_det2 = np.array(x_det2[mask],dtype=int),np.array(y_det2[mask],dtype=int)
+                    text = 'ROI: %.2f' % (np.nansum(self.parent.parent.stage2[1].data.data[y_det2,x_det2])) #/ np.size(x_det2))
+                    print(text)
+                    self.parent.parent.plot_2dimage2.Roilabel.setText(text)
+
+                    wcs3 = self.parent.parent.stage2[2].data.meta.wcs
+                    cal_world_to_detector3 = wcs3.get_transform('world', 'detector')
+                    (x_det3, y_det3) = cal_world_to_detector3(x_world, y_world, lam_world)
+                    mask = (x_det3 >= 0) * (x_det3 <= self.parent.parent.stage2[2].data.shape[0])*(y_det3>0)
+                    x_det3,y_det3 = np.array(x_det3[mask],dtype=int),np.array(y_det3[mask],dtype=int)
+                    text = 'ROI: %.2f' % (np.nansum(self.parent.parent.stage2[2].data.data[y_det3, x_det3]) )#/ np.size(x_det3))
+                    print(text)
+                    self.parent.parent.plot_2dimage3.Roilabel.setText(text)
+
+                    wcs4 = self.parent.parent.stage2[3].data.meta.wcs
+                    cal_world_to_detector4 = wcs4.get_transform('world', 'detector')
+                    (x_det4, y_det4) = cal_world_to_detector4(x_world, y_world, lam_world)
+                    mask = (x_det4 >= 0) * (x_det4 <= self.parent.parent.stage2[3].data.shape[0])*(y_det4>0)
+                    x_det4,y_det4 = np.array(x_det4[mask],dtype=int),np.array(y_det4[mask],dtype=int)
+                    text = 'ROI: %.2f' % (np.nansum(self.parent.parent.stage2[3].data.data[y_det4, x_det4])) #/ np.size(x_det4))
+                    print(text)
+                    self.parent.parent.plot_2dimage4.Roilabel.setText(text)
+
+
+
+                    #x,y = np.array(x_det),np.array(y_det)
+                    self.parent.parent.plot_2dimage1.selectPixels(add=self.flags['show_ROI'], x=x_det1, y=y_det1,color='m',type='cr_multi')
+                    print('x_det1')
+                    print(x_det1)
+                    #self.parent.parent.plot_2dimage1.vb.setLimits(xMin=np.min(x_det1), xMax=np.max(x_det1), yMin=np.min(y_det1), yMax=np.max(x_det1))
+                    self.parent.parent.plot_2dimage1.vb.setRange(xRange=(np.min(x_det1)*0.95,np.max(x_det1)*1.05), yRange=(np.min(y_det1)*0.95,np.max(y_det1)*1.05))
+                    self.parent.parent.plot_2dimage2.selectPixels(add=self.flags['show_ROI'], x=x_det2, y=y_det2,color='m',type='cr_multi')
+                    self.parent.parent.plot_2dimage2.vb.setRange(xRange=(np.min(x_det2) * 0.95, np.max(x_det2) * 1.05),
+                                                                 yRange=(np.min(y_det2) * 0.95, np.max(y_det2) * 1.05))
+                    self.parent.parent.plot_2dimage3.selectPixels(add=self.flags['show_ROI'], x=x_det3, y=y_det3,color='m',type='cr_multi')
+                    self.parent.parent.plot_2dimage3.vb.setRange(xRange=(np.min(x_det3) * 0.95, np.max(x_det3) * 1.05),
+                                                                 yRange=(np.min(y_det3) * 0.95, np.max(y_det3) * 1.05))
+                    self.parent.parent.plot_2dimage4.selectPixels(add=self.flags['show_ROI'], x=x_det4, y=y_det4,color='m',type='cr_multi')
+                    self.parent.parent.plot_2dimage4.vb.setRange(xRange=(np.min(x_det4) * 0.95, np.max(x_det4) * 1.05),
+                                                                 yRange=(np.min(y_det4) * 0.95, np.max(y_det4) * 1.05))
+
+
 
             else:
                 self.flags['show_ROI'] = False
-                self.parent.parent.plot_2dimage1.selectPixels(add=False, type='cr_multi')
-                self.parent.parent.plot_2dimage2.selectPixels(add=False, type='cr_multi')
-                self.parent.parent.plot_2dimage3.selectPixels(add=False, type='cr_multi')
-                self.parent.parent.plot_2dimage4.selectPixels(add=False, type='cr_multi')
-                self.parent.parent.plot_3dcubeA.selectPixels(add=False, type='cr_multi')
+                if mode in ['A1', 'A2']:
+                    self.parent.parent.plot_3dcubeA.selectPixels(add=False, type='cr_multi')
+                elif mode in ['B1', 'B2']:
+                    self.parent.parent.plot_3dcubeB.selectPixels(add=False, type='cr_multi')
+                if self.flags['show_roi_detector'] == True:
+                    self.parent.parent.plot_2dimage1.selectPixels(add=False, type='cr_multi')
+                    self.parent.parent.plot_2dimage2.selectPixels(add=False, type='cr_multi')
+                    self.parent.parent.plot_2dimage3.selectPixels(add=False, type='cr_multi')
+                    self.parent.parent.plot_2dimage4.selectPixels(add=False, type='cr_multi')
+
+
+
+    def show_detector_roi(self,add=True,mode = 'A'):
+        print('show_ROI pixels:')
+        #plt = pg.plot()
+        #plt1 =  QSplitter(Qt.Vertical)
+        #plot_2dimage2 = plotImage(self)
+        #plt1.addWidget(plot_2dimage2)
+        if 1:
+            if add:
+                self.flags['show_roi_detector']=True
+                self.parent.parent.spec_image1.show()
+                if mode == 'A':
+                    name = self.parent.parent.plot_3dcubeA.init_name
+                elif mode == 'B':
+                    name = self.parent.parent.plot_3dcubeB.init_name
+                self.parent.parent.plot_2dimage1.add(name, add=add, Nscreen=1)
+                self.parent.parent.plot_2dimage2.add(name, add=add, Nscreen=2)
+                self.parent.parent.plot_2dimage3.add(name, add=add, Nscreen=3)
+                self.parent.parent.plot_2dimage4.add(name, add=add, Nscreen=4)
+            else:
+                self.flags['show_roi_detector']=False
+
+        if 0:
+            app1 = QApplication([])
+            show_gui = 0
+
+            win = pg.GraphicsLayoutWidget(show=True)
+            win.setWindowTitle('pyqtgraph example: Scrolling Plots')
+            # 1) Simplest approach -- update data in the array such that plot appears to scroll
+            #    In these examples, the array size is fixed.
+            p1 = win.addPlot()
+            p2 = win.addPlot()
+            data1 = np.random.normal(size=300)
+            curve1 = p1.plot(data1)
+            curve2 = p2.plot(data1)
+            ptr1 = 0
+
+            def update1():
+                global data1, ptr1
+                data1[:-1] = data1[1:]  # shift data in the array one sample left
+                # (see also: np.roll)
+                data1[-1] = np.random.normal()
+                curve1.setData(data1)
+
+                ptr1 += 1
+                curve2.setData(data1)
+                curve2.setPos(ptr1, 0)
+
+            # 2) Allow data to accumulate. In these examples, the array doubles in length
+            #    whenever it is full.
+            win.nextRow()
+            p3 = win.addPlot()
+            p4 = win.addPlot()
+            # Use automatic downsampling and clipping to reduce the drawing load
+            p3.setDownsampling(mode='peak')
+            p4.setDownsampling(mode='peak')
+            p3.setClipToView(True)
+            p4.setClipToView(True)
+            p3.setRange(xRange=[-100, 0])
+            p3.setLimits(xMax=0)
+            curve3 = p3.plot()
+            curve4 = p4.plot()
+
+            data3 = np.empty(100)
+            ptr3 = 0
+
+            def update2():
+                global data3, ptr3
+                data3[ptr3] = np.random.normal()
+                ptr3 += 1
+                if ptr3 >= data3.shape[0]:
+                    tmp = data3
+                    data3 = np.empty(data3.shape[0] * 2)
+                    data3[:tmp.shape[0]] = tmp
+                curve3.setData(data3[:ptr3])
+                curve3.setPos(-ptr3, 0)
+                curve4.setData(data3[:ptr3])
+
+            # 3) Plot in chunks, adding one new plot curve for every 100 samples
+            chunkSize = 100
+            # Remove chunks after we have 10
+            maxChunks = 10
+            win.nextRow()
+            p5 = win.addPlot(colspan=2)
+            p5.setLabel('bottom', 'Time', 's')
+            p5.setXRange(-10, 0)
+            curves = []
+            data5 = np.empty((chunkSize + 1, 2))
+            ptr5 = 0
+
+            app1.exec_()  # Start QApplication event loop ***
 
 
 
@@ -1190,11 +1324,6 @@ class chooseExpWidget(QWidget):
         self.parent.current_name = name
         if self.cube_choice == 'A':
             self.parent.plot_3dcubeA.add(name, self.buttons[name].isChecked())
-            if 0:
-                self.parent.plot_2dimage1.add(name, self.buttons[name].isChecked(), Nscreen=1)
-                self.parent.plot_2dimage2.add(name, self.buttons[name].isChecked(), Nscreen=2)
-                self.parent.plot_2dimage3.add(name, self.buttons[name].isChecked(), Nscreen=3)
-                self.parent.plot_2dimage4.add(name, self.buttons[name].isChecked(), Nscreen=4)
         elif self.cube_choice == 'B':
             self.parent.plot_3dcubeB.add(name, self.buttons[name].isChecked())
         print('self.buttons[name].isChecked()',self.buttons[name].isChecked())
@@ -1355,19 +1484,6 @@ class expRunWidget(QWidget):
         self.build_cube.clicked[bool].connect(partial(self.call_build_3dCube))
         self.build_cube.setFixedSize(200, 60)
         horizontal_layout.addWidget(self.build_cube)
-        self.select_roi = QPushButton('Select ROI')
-        self.select_roi.clicked[bool].connect(partial(self.ShowROI, 'slope'))
-        self.select_roi.setFixedSize(200, 60)
-        horizontal_layout.addWidget(self.select_roi)
-
-        self.extract_1d_roi = QPushButton('Extract ROI')
-        self.extract_1d_roi.clicked[bool].connect(partial(self.extract_Roi, 'slope'))
-        self.extract_1d_roi.setFixedSize(200, 60)
-        horizontal_layout.addWidget(self.extract_1d_roi)
-        horizontal_layout.addStretch(1)
-        l.addLayout(horizontal_layout)
-
-        horizontal_layout = QHBoxLayout(self)
         self.update_cubes_list = QPushButton('Update_List')
         self.update_cubes_list.clicked[bool].connect(partial(self.update_CubeList))
         self.update_cubes_list.setFixedSize(200, 60)
@@ -1375,7 +1491,36 @@ class expRunWidget(QWidget):
         horizontal_layout.addStretch(1)
         l.addLayout(horizontal_layout)
 
+        horizontal_layout = QHBoxLayout(self)
+
+        l.addLayout(horizontal_layout)
+        self.select_roi = QPushButton('Select ROI')
+        self.select_roi.clicked[bool].connect(partial(self.ShowROI, 'slope'))
+        self.select_roi.setFixedSize(200, 60)
+        horizontal_layout.addWidget(self.select_roi)
+        self.roi_type = QComboBox()
+        self.roi_type.addItems(['green','red','purple','yellow'])
+        self.roi_type.setCurrentIndex(0)
+        self.roi_type.setFixedSize(90, 30)
+        horizontal_layout.addWidget(self.roi_type)
+        self.show_roi = QPushButton('Show Detector', self, checkable=True)
+        self.show_roi.setChecked(False)
+        self.show_roi.clicked[bool].connect(partial(self.ShowDetectorROI))
+        self.show_roi.setFixedSize(200, 60)
+        horizontal_layout.addWidget(self.show_roi)
+        self.extract_1d_roi = QPushButton('Extract ROI')
+        self.extract_1d_roi.clicked[bool].connect(partial(self.extract_Roi, 'slope'))
+        self.extract_1d_roi.setFixedSize(200, 60)
+        horizontal_layout.addWidget(self.extract_1d_roi)
+        self.extract_1d_roi_cube = QComboBox()
+        self.extract_1d_roi_cube.addItems(['(A)', '(B)'])
+        self.extract_1d_roi_cube.setCurrentIndex(0)
+        self.extract_1d_roi_cube.setFixedSize(60, 30)
+        horizontal_layout.addWidget(self.extract_1d_roi_cube)
+
+        horizontal_layout.addStretch(1)
         layout.addLayout(l)
+
         layout.addStretch(1)
         self.setLayout(layout)
 
@@ -1396,8 +1541,11 @@ class expRunWidget(QWidget):
 
     def extract_Roi(self,mode=None):
         print('extract Roi:')
-        self.parent.Cubes_A.table.extract_roi()
-
+        cube = self.extract_1d_roi_cube.currentText()
+        if cube == '(A)':
+            self.parent.Cubes_A.table.extract_roi(cube_name=cube)
+        elif cube == '(B)':
+            self.parent.Cubes_B.table.extract_roi(cube_name=cube)
 
     def set_DQ_map(self, debug = False):
         print('set_DQ_map, debug:', debug)
@@ -1434,7 +1582,21 @@ class expRunWidget(QWidget):
 
 
     def ShowROI(self, debug=False):
-        self.parent.Cubes_A.table.show_roi()
+        roi_type = self.roi_type.currentText()
+        rois = {}
+        rois['green'] = 'A1'
+        rois['red']=  'A2'
+        rois['purple']=  'B1'
+        rois['yellow'] =  'B2'
+        self.parent.Cubes_A.table.show_roi(mode = rois[roi_type])
+    def ShowDetectorROI(self):
+        roi_type = self.roi_type.currentText()
+        rois = {}
+        rois['green'] = 'A'
+        rois['red'] = 'A'
+        rois['purple'] = 'B'
+        rois['yellow'] = 'B'
+        self.parent.Cubes_A.table.show_detector_roi(add=self.parent.exp_commands.show_roi.isChecked(), mode = rois[roi_type])
 class JWST_spec_viewer(QMainWindow):
 
     def __init__(self):
@@ -1497,7 +1659,7 @@ class JWST_spec_viewer(QMainWindow):
             self.spec_image34.addWidget(self.plot_2dimage4)
             self.spec_image1.addWidget(self.spec_image34)
 
-            self.splitter_image.addWidget(self.spec_image1)
+            #self.splitter_image.addWidget(self.spec_image1)
             self.splitter_image.addWidget(self.plot_3dcubeB)
             #self.splitter_image.addWidget(self.plot_2dimage)
             self.splitter.addWidget(self.splitter_image)
