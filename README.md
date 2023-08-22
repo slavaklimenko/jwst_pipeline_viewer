@@ -6,7 +6,7 @@ How to run the code
 2) edit path to your uncalib files in "init.dat" file
 
 3) create a conda environment and install the following packages:
-python                    3.11+
+python                    3.11.0
 asdf                      2.15.0
 astropy                   5.3
 jwst                      1.11.0 
