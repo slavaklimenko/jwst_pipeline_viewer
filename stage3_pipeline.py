@@ -79,6 +79,7 @@ class detector3():
         self.output_dir=output_dir
         self.data = None
         self.spec3_cachedir = spec3_cachedir
+        self.flags = {}
         #self.read_ratefiles(det1_dir=self.path,input_file_base=self.name)
         #self.read_associated_bkg_ratefiles(det1_dir=self.path,input_file_base=self.name)
 
@@ -116,6 +117,7 @@ class detector3():
             wcs['NAXIS1'] = header['NAXIS1']
             wcs['NAXIS2'] = header['NAXIS2']
             wcs['NAXIS3'] = header['NAXIS3']
+            self.flags['subtract_bkgr'] = False
 
             self.data.wcs = wcs
             hdu1.close()
@@ -125,6 +127,8 @@ class detector3():
             hdu2 = fits.open(specfile[0])
             self.data.wavelength = hdu2['EXTRACT1D'].data['WAVELENGTH']
             hdu2.close()
+        else:
+            self.data.wavelength = np.arange(self.data.data.shape[0])
     def conv_world_coord(self,t,x,y,mode='normal'):
         wcs1 = self.data.wcs
         if mode == 'cubevis':
@@ -139,6 +143,25 @@ class detector3():
         print('world coord:', x_world, y_world, lam_world)
         #print(self.data.wcs((t,x,y)))
         return lam_world,x_world,y_world
+
+    def conv_pix_2_world_coord(self, lam_world=None,x_world=5,y_world=5):
+        wcs1 = self.data.wcs
+        if lam_world != None:
+            #x_world = wcs1['CRVAL1'] - (x - wcs1['CRPIX1'] + 1) * wcs1['CDELT1']
+            x = (wcs1['CRVAL1'] - x_world)/ wcs1['CDELT1'] - 1 + wcs1['CRPIX1']
+            #y_world = wcs1['CRVAL2'] + (y - wcs1['CRPIX2'] + 1) * wcs1['CDELT2']
+            y = (y_world-wcs1['CRVAL2'])/wcs1['CDELT2'] -1 + wcs1['CRPIX2']
+            #lam_world = wcs1['CRVAL3'] + (t - wcs1['CRPIX3'] + 1) * wcs1['CDELT3']
+            t = (lam_world - wcs1['CRVAL3'])/wcs1['CDELT3'] -1 + wcs1['CRPIX3']
+            print('world coord:', x_world, y_world, lam_world)
+            # print(self.data.wcs((t,x,y)))
+            return t,x,y
+        else:
+            x = (wcs1['CRVAL1'] - x_world) / wcs1['CDELT1'] - 1 + wcs1['CRPIX1']
+            # y_world = wcs1['CRVAL2'] + (y - wcs1['CRPIX2'] + 1) * wcs1['CDELT2']
+            y = (y_world - wcs1['CRVAL2']) / wcs1['CDELT2'] - 1 + wcs1['CRPIX2']
+            # lam_world = wcs1['CRVAL3'] + (t - wcs1['CRPIX3'] + 1) * wcs1['CDELT3']
+            return x, y
 
         #with datamodels.open(self.cubename) as input_models:
         #    if isinstance(input_models, datamodels.IFUImageModel):
@@ -309,55 +332,84 @@ class detector3():
         spec3('od.json')
         # Otherwise, just copy cached outputs into our output directory structure
 
-    def create_association(self, input_dir=None,source = 'Object',channel = '1', band ='Short(A)',name=None):
-        sci_exp_list = []
-        bkg_exp_list = []
-        if channel == '1' or channel ==  '2':
-            key_name = 'mirifushort_cal.fits'
-        elif channel == '3' or channel ==  '4':
-            key_name = 'mirifulong_cal.fits'
-        band_code_sci = {}
-        band_code_sci['SHORT(A)'] = '2'
-        band_code_sci['MEDIUM(B)'] = '4'
-        band_code_sci['LONG(C)'] = '6'
-        band_code_bkg = {}
-        band_code_bkg['SHORT(A)'] = '1'
-        band_code_bkg['MEDIUM(B)'] = '3'
-        band_code_bkg['LONG(C)'] = '5'
+    def create_association(self, input_dir=None,source = 'Object',channel = '1', band ='Short(A)',name=None,subfilename = ''):
+        if band != 'ABC':
+            sci_exp_list = []
+            bkg_exp_list = []
+            if channel == '1' or channel ==  '2':
+                key_name = 'mirifushort_cal.fits'
+            elif channel == '3' or channel ==  '4':
+                key_name = 'mirifulong_cal.fits'
+            band_code_sci = {}
+            band_code_sci['SHORT(A)'] = '2'
+            band_code_sci['MEDIUM(B)'] = '4'
+            band_code_sci['LONG(C)'] = '6'
+            band_code_bkg = {}
+            band_code_bkg['SHORT(A)'] = '1'
+            band_code_bkg['MEDIUM(B)'] = '3'
+            band_code_bkg['LONG(C)'] = '5'
 
-        sstring = input_dir + '/' + '*' + key_name
-        cal_files = sorted(glob.glob(sstring))
-        for f in cal_files:
-            hdulist = fits.open(f)
-            header = hdulist[0].header
-            f_targ_name = header['TARGPROP']
-            f_band = header['BAND']
-            f_channel = header['CHANNEL']
-            f_dit_pos = header['PATT_NUM']
-            hdulist.close()
-            if 'BACK' not in f_targ_name:
-                if channel in f_channel and f_band in band:
-                        sci_exp_list.append(f)
+            sstring = input_dir + '/' + '*' + key_name
+            cal_files = sorted(glob.glob(sstring))
+            for f in cal_files:
+                hdulist = fits.open(f)
+                header = hdulist[0].header
+                f_targ_name = header['TARGPROP']
+                f_band = header['BAND']
+                f_channel = header['CHANNEL']
+                f_dit_pos = header['PATT_NUM']
+                hdulist.close()
+                if 'BACK' not in f_targ_name:
+                    if channel in f_channel and f_band in band:
+                            sci_exp_list.append(f)
 
-            elif 'BACK' in f_targ_name:
-                if channel in f_channel and f_band in band:
-                    bkg_exp_list.append(f)
+                elif 'BACK' in f_targ_name:
+                    if channel in f_channel and f_band in band:
+                        bkg_exp_list.append(f)
 
-        asn_name_sci = input_dir + '/'+ 'sci_test_sub_bkgr_' + channel + band + '.json'
-        asn_name_bkg = input_dir + '/'+ 'bkg_test_sub_bkgr_' + channel + band + '.json'
+            asn_name_sci = input_dir + '/'+ 'sci_' + subfilename+ '.json'
+            asn_name_bkg = input_dir + '/'+ 'bkg_' + subfilename+ '.json'
 
-        if source == 'Object':
-            if name == None:
-                name = 'sci_test'
-            print('science',asn_name_sci, [el for el in sci_exp_list])
-            self.writel3asn(sci_exp_list, asn_name_sci, name)
-            self.tmp_asn_file = asn_name_sci
-            return asn_name_sci
-        elif source == 'Background':
-            print('background', asn_name_bkg, bkg_exp_list)
-            self.writel3asn(bkg_exp_list, asn_name_bkg, 'bkg')
-            self.tmp_asn_file = asn_name_bkg
-            return asn_name_bkg
+            if source == 'Object':
+                if name == None:
+                    name = 'sci_test'
+                print('science',asn_name_sci, [el for el in sci_exp_list])
+                self.writel3asn(sci_exp_list, asn_name_sci, name)
+                self.tmp_asn_file = asn_name_sci
+                return asn_name_sci
+            elif source == 'Background':
+                print('background', asn_name_bkg, bkg_exp_list)
+                self.writel3asn(bkg_exp_list, asn_name_bkg, 'bkg')
+                self.tmp_asn_file = asn_name_bkg
+                return asn_name_bkg
+            elif source == 'Both':
+                name='all'
+                asn_name_all = input_dir + '/' + 'both_' + subfilename + '.json'
+                self.writel3asn(sci_exp_list, asn_name_all, name,bg=bkg_exp_list)
+                self.tmp_asn_file = asn_name_all
+                return asn_name_all
+
+        else:
+            key_name = '*cal.fits'
+            sstring = input_dir + '/' + '*' + key_name
+            cal_files = np.array(sorted(glob.glob(sstring)))
+            exp_list =[]
+            for f in cal_files:
+                hdulist = fits.open(f)
+                header = hdulist[0].header
+                f_targ_name = header['TARGPROP']
+                hdulist.close()
+                if 'BACK' not in f_targ_name and source == 'Object':
+                    exp_list.append(f)
+
+                elif 'BACK' in f_targ_name and source == 'Background':
+                    exp_list.append(f)
+            asn_name = input_dir + '/' + 'sci_' + subfilename + '.json'
+            self.writel3asn(exp_list, asn_name, 'Level3')
+            self.tmp_asn_file = asn_name
+            return asn_name
+
+
 
     def sort_calfiles(files):
         channel = []
@@ -385,8 +437,8 @@ class detector3():
 
         return files12A, files12B, files12C, files34A, files34B, files34C
 
-    def build_cube(self, input_file='rbm.json', output_dir=None,channel = '1', master_bkgr_flag = 0,
-        master_res_bkgr_flag = 0, master_outlier_flag = 0,  master_extract1d_flag = 1):
+    def build_cube(self, input_file='rbm.json', output_dir=None,channel = '1', band = 'A',master_bkgr_flag = 0,
+        master_res_bkgr_flag = 0, master_outlier_flag = 0,  master_extract1d_flag = 1,master_resample_spec_flag=1):
         if output_dir == None:
             output_dir = self.output_dir
 
@@ -394,15 +446,21 @@ class detector3():
         spec3.output_dir = output_dir
         spec3.save_results = True
         spec3.master_background.skip = 1 - master_bkgr_flag
-        print('master_background.skip', 1 - master_bkgr_flag)
         spec3.outlier_detection.skip = 1 - master_outlier_flag
-        print('spec3.outlier_detection.skip', 1 - master_outlier_flag)
         spec3.mrs_imatch.skip = 1 - master_res_bkgr_flag
-        print('mrs_imatch.skip',1 - master_res_bkgr_flag)
+        spec3.resample_spec.skip = 1-master_resample_spec_flag
         spec3.cube_build.channel = channel
         spec3.cube_build.output_file = (input_file.split('/')[-1]).split('.')[0]
         spec3.extract_1d.skip = 1 - master_extract1d_flag
+        if band == 'ABC':
+            spec3.cube_build.output_type = 'channel'
+
+        print('master_background.skip', 1 - master_bkgr_flag)
+        print('spec3.outlier_detection.skip', 1 - master_outlier_flag)
+        print('mrs_imatch.skip',1 - master_res_bkgr_flag)
+        print('mrs_resample_spec.skip', 1 - master_resample_spec_flag)
         print('spec3.extract_1d.skip', 1 - master_extract1d_flag)
+
         spec3(input_file)
         print('DONE!')
 

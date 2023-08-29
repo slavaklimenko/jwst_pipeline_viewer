@@ -286,7 +286,7 @@ class plotImage(pg.ImageView): #(pg.PlotWidget):
         #print('coord', text, val)
         self.label.setText(text)
         self.label.resize(400, 40)
-        if self.parent.Exposures.table.current_pipeline_stage == 'stage2':
+        if self.parent.Exposures.table.current_pipeline_stage == 'stage2' and 0:
             wcs = self.parent.stage2.data.meta.wcs
             print(wcs.available_frames)
             cal_detector_to_alpha = wcs.get_transform('detector', 'alpha_beta')
@@ -893,8 +893,9 @@ class EXPlistTable(pg.TableWidget):
 
     def set_dq(self):
         print('set data quality map')
-        self.parent.parent.EXP.dq_init_step()
-        self.parent.parent.EXP.dq_init_step()
+        save_res_flag = int(self.parent.parent.exp_pars.save_tmp_res.currentIndex())
+        self.parent.parent.EXP.dq_init_step(save_results=bool(save_res_flag))
+        #self.parent.parent.EXP.dq_init_step()
 
     def show_dq(self):
         print('set data quality map')
@@ -907,16 +908,18 @@ class EXPlistTable(pg.TableWidget):
         if self.flags['saturation_step'] == False:
             flag = self.parent.parent.exp_pars.addneighbors.isChecked()
             debug = self.parent.parent.exp_pars.debug.isChecked()
+            save_res_flag = int(self.parent.parent.exp_pars.save_tmp_res.currentIndex())
             print('Run Saturation step: add_neighbors=',flag, ' show_debug = ',debug)
-            self.parent.parent.EXP.saturation_step(n_pix_grow_sat=flag,debug=debug)
+            self.parent.parent.EXP.saturation_step(n_pix_grow_sat=flag,debug=debug,save_results=bool(save_res_flag))
             self.flags['saturation_step'] = True
             print('SATURATION STEP: DONE')
         else:
             flag = self.parent.parent.exp_pars.addneighbors.isChecked()
             debug = self.parent.parent.exp_pars.debug.isChecked()
+            save_res_flag = int(self.parent.parent.exp_pars.save_tmp_res.currentIndex())
             print('Run second saturation step: add_neighbors=', flag, ' show_debug = ', debug)
             self.parent.parent.EXP.reset_dq(flagname='SATURATED')
-            self.parent.parent.EXP.saturation_step(n_pix_grow_sat=flag, debug=debug)
+            self.parent.parent.EXP.saturation_step(n_pix_grow_sat=flag, debug=debug,save_results=bool(save_res_flag))
             self.flags['saturation_step'] = True
             print('SATURATION STEP: DONE')
         if debug:
@@ -948,24 +951,28 @@ class EXPlistTable(pg.TableWidget):
 
     def first_group(self):
         debug = self.parent.parent.exp_pars.debug.isChecked()
-        self.parent.parent.EXP.first_step(debug=debug)
+        save_res_flag = int(self.parent.parent.exp_pars.save_tmp_res.currentIndex())
+        self.parent.parent.EXP.first_step(debug=debug,save_results=bool(save_res_flag))
         print('FIRST STEP: DONE')
     def last_group(self):
         debug = self.parent.parent.exp_pars.debug.isChecked()
-        self.parent.parent.EXP.last_step(debug=debug)
+        save_res_flag = int(self.parent.parent.exp_pars.save_tmp_res.currentIndex())
+        self.parent.parent.EXP.last_step(debug=debug,save_results=bool(save_res_flag))
         print('LAST STEP: DONE')
 
     def reset_correction(self):
         debug = self.parent.parent.exp_pars.debug.isChecked()
-        self.parent.parent.EXP.reset_step(debug=debug)
+        save_res_flag = int(self.parent.parent.exp_pars.save_tmp_res.currentIndex())
+        self.parent.parent.EXP.reset_step(debug=debug,save_results=bool(save_res_flag))
         print('RESET STEP: DONE')
 
     def linear_correction(self):
         if self.parent.parent.EXP.data.meta.cal_step.linearity == 'COMPLETE':
             print('Linearity correction was applied already')
         else:
+            save_res_flag = int(self.parent.parent.exp_pars.save_tmp_res.currentIndex())
             debug = self.parent.parent.exp_pars.debug.isChecked()
-            self.parent.parent.EXP.linear_step(debug=debug)
+            self.parent.parent.EXP.linear_step(debug=debug,save_results=bool(save_res_flag))
             print('LINEAR STEP: DONE')
 
     def show_linear_correction(self):
@@ -979,24 +986,27 @@ class EXPlistTable(pg.TableWidget):
         if self.parent.parent.EXP.data.meta.cal_step.rscd == 'COMPLETE':
             print('RSCD correction was applied already')
         else:
+            save_res_flag = int(self.parent.parent.exp_pars.save_tmp_res.currentIndex())
             debug = self.parent.parent.exp_pars.debug.isChecked()
-            self.parent.parent.EXP.rscd_step(debug=debug)
+            self.parent.parent.EXP.rscd_step(debug=debug,save_results=bool(save_res_flag))
             print('RSCD STEP: DONE')
 
     def dark_correction(self):
         if self.parent.parent.EXP.data.meta.cal_step.dark_sub == 'COMPLETE':
             print('Dark subtraction was applied already')
         else:
+            save_res_flag = int(self.parent.parent.exp_pars.save_tmp_res.currentIndex())
             debug = self.parent.parent.exp_pars.debug.isChecked()
-            self.parent.parent.EXP.dark_step(debug=debug)
+            self.parent.parent.EXP.dark_step(debug=debug,save_results=bool(save_res_flag))
             print('DARK STEP: DONE')
 
     def reference_pix_correction(self):
         if self.parent.parent.EXP.data.meta.cal_step.refpix == 'COMPLETE':
             print('RefPix correction was applied already')
         else:
+            save_res_flag = int(self.parent.parent.exp_pars.save_tmp_res.currentIndex())
             debug = self.parent.parent.exp_pars.debug.isChecked()
-            self.parent.parent.EXP.refpix_corr_step(debug=debug)
+            self.parent.parent.EXP.refpix_corr_step(debug=debug,save_results=bool(save_res_flag))
             print('REF PIX STEP: DONE')
 
     def jump_detection(self):
@@ -1005,17 +1015,19 @@ class EXPlistTable(pg.TableWidget):
             RecalcMedian = int(self.parent.parent.exp_pars.CR_recalc_flag.currentIndex())
             flag = self.parent.parent.exp_pars.addCRneighbors.isChecked()
             debug = 3 #self.parent.parent.exp_pars.debug.isChecked()
+            save_res_flag = int(self.parent.parent.exp_pars.save_tmp_res.currentIndex())
             print('Run CR step: add_neighbors=', flag, ' show_debug = ', debug)
-            self.parent.parent.EXP.jump_corr_step(debug=debug, limit=CRlimit, flag_4_neighbors=flag,RecalcMedian=RecalcMedian)
+            self.parent.parent.EXP.jump_corr_step(debug=debug, limit=CRlimit, flag_4_neighbors=flag,RecalcMedian=RecalcMedian,save_results=bool(save_res_flag))
             self.flags['CR_step'] = True
             print('CR STEP: DONE')
         else:
             CRlimit = float(self.parent.parent.exp_pars.CRlimit.text())
             flag = self.parent.parent.exp_pars.addCRneighbors.isChecked()
             debug = 3 #self.parent.parent.exp_pars.debug.isChecked()
+            save_res_flag = int(self.parent.parent.exp_pars.save_tmp_res.currentIndex())
             print('Run second CR step: add_neighbors=', flag, ' show_debug = ', debug)
             self.parent.parent.EXP.reset_dq(flagname='JUMP_DET')
-            self.parent.parent.EXP.jump_corr_step(debug=debug, limit=CRlimit, flag_4_neighbors=flag)
+            self.parent.parent.EXP.jump_corr_step(debug=debug, limit=CRlimit, flag_4_neighbors=flag,save_results=bool(save_res_flag))
             self.flags['CR_step'] = True
             print('CR STEP: DONE')
         if debug:
@@ -1064,16 +1076,15 @@ class EXPlistTable(pg.TableWidget):
         #CRlimit = float(self.parent.parent.exp_pars.CRlimit.text())
         #flag = self.parent.parent.exp_pars.addCRneighbors.isChecked()
         debug = self.parent.parent.exp_pars.debug.isChecked()
-        print('Run Slope Fit step: show_debug = ', debug)
-        self.parent.parent.EXP.slope_fitting_step(debug=debug)
+        save_res_flag = True #int(self.parent.parent.exp_pars.save_tmp_res.currentIndex())
+        print('Run Slope Fit step: show_debug = ', debug, 'save result =  ', bool(save_res_flag))
+        self.parent.parent.EXP.slope_fitting_step(debug=debug,save_results=bool(save_res_flag))
         self.flags['slope_fit_step'] = True
         print('Slope Fit STEP: DONE')
         if debug:
             plt.show()
 
     def read_slopes(self,input_file = None):
-        #miri1 = calwebb_detector1.Detector1Pipeline()
-        #miri_output = miri1.run(miri_uncal_file)
         if self.flags['slope_fit_step'] == True:
             print('Read Slope Fits from local files')
             ramp_fit = self.parent.parent.EXP.ramp_fit
@@ -1189,7 +1200,6 @@ class EXPlistTable(pg.TableWidget):
             plt.show()
 
 
-
     def save_slope_fit(self,output_dir=None,copy_add_data=True):
         if self.flags['slope_fit_step'] == True:
             from jwst.pipeline import calwebb_detector1
@@ -1283,6 +1293,9 @@ class EXPlistTable(pg.TableWidget):
     def stage2_fringe_flat_correction(self):
         print('Source ID Step - Stage 2')
         self.parent.parent.stage2.fringe_flat_step()
+
+    def stage2_residual_fringe_correction(self):
+        self.parent.parent.stage2.res_fringe_step()
 
     def stage2_flux_calibration(self):
         print('Source ID Step - Stage 2')
@@ -1506,15 +1519,17 @@ class expParsWidget(QWidget):
         horizontal_layout.addWidget(self.addCRneighbors)
         horizontal_layout.addWidget(QLabel('VaryMed:'))
         self.CR_recalc_flag = QComboBox()
-        #if self.parent.EXP.data == None:
         self.CR_recalc_flag.addItems(['No','Yes'])
-        #    self.sides.setCurrentIndex(0)
-        #elif self.parent.EXP.data.groupdq != None:
-        #    list = []
-        #    self.satpixlist.addItems(['total', 'one side', 'both sides'])
         self.CR_recalc_flag.setCurrentIndex(1)
         self.CR_recalc_flag.setFixedSize(90, 30)
         horizontal_layout.addWidget(self.CR_recalc_flag)
+        horizontal_layout.addWidget(QLabel('SaveRes:'))
+        self.save_tmp_res = QComboBox()
+        self.save_tmp_res.addItems(['No','Yes'])
+        self.save_tmp_res.setCurrentIndex(0)
+        self.save_tmp_res.setFixedSize(90, 30)
+        horizontal_layout.addWidget(self.save_tmp_res)
+
         horizontal_layout.addStretch(1)
         layout.addLayout(horizontal_layout)
 
@@ -1638,13 +1653,17 @@ class expRunWidget(QWidget):
         l.addLayout(horizontal_layout)
         layout.addLayout(l)
 
-        l = QVBoxLayout(self)
-        l.addWidget(QLabel('Slope Fitting:'))
         horizontal_layout = QHBoxLayout(self)
         self.slope_fit_step = QPushButton('9. SlopeFit')
         self.slope_fit_step.clicked[bool].connect(partial(self.SlopeFitStep))
         self.slope_fit_step.setFixedSize(250, 60)
         horizontal_layout.addWidget(self.slope_fit_step)
+
+        self.run_all_stage1 = QPushButton('Run stage(1)')
+        self.run_all_stage1.clicked[bool].connect(partial(self.RunAllStage1))
+        self.run_all_stage1.setFixedSize(250, 60)
+        horizontal_layout.addWidget(self.run_all_stage1)
+
         self.show_single_fit = QPushButton('SaveFit')
         self.show_single_fit.clicked[bool].connect(partial(self.SaveSlopeFit))
         self.show_single_fit.setFixedSize(200, 60)
@@ -1728,6 +1747,36 @@ class expRunWidget(QWidget):
         self.parent.Exposures.table.read_slopes()
         self.parent.Exposures.table.save_slope_fit(output_dir='local')
 
+    def RunAllStage1(self):
+        print('Run all stage 1:')
+        print('Init_Stage2:')
+        self.parent.Exposures.table.set_dq()
+        #self.parent.Exposures.table.show_image(mode='stage2')
+        print('Saturated pixels')
+        self.parent.Exposures.table.check_saturation()
+        print('First Last')
+        self.parent.Exposures.table.first_group()
+        self.parent.Exposures.table.last_group()
+        print('Reset correction')
+        self.parent.Exposures.table.reset_correction()
+        print('Linear corr')
+        self.parent.Exposures.table.linear_correction()
+        print('RSCD')
+        self.parent.Exposures.table.rscd_correction()
+        print('Dark Subtraction')
+        self.parent.Exposures.table.dark_correction()
+        print('Reference pixels')
+        self.parent.Exposures.table.reference_pix_correction()
+        print('Jump detection')
+        self.parent.Exposures.table.jump_detection()
+        print('Slope Fit')
+        self.parent.Exposures.table.slope_fit()
+        self.parent.Exposures.table.read_slopes()
+        print('Save Fit')
+        self.parent.Exposures.table.save_slope_fit(output_dir='final', copy_add_data=False)
+        print('Run all: done.')
+
+
     def ShowSlopeFit(self, debug=False):
         self.parent.Exposures.table.show_slope_image()
 
@@ -1777,13 +1826,13 @@ class expPipeline2Widget(QWidget):
         self.show_comparison.setFixedSize(200, 60)
         horizontal_layout.addWidget(self.show_comparison)
         self.compare_init_map_choice = QComboBox()
-        flags = ['Initial','BkgrSub','Flatfield','Straylight','Fringe']
+        flags = ['Initial','BkgrSub','Flatfield','Straylight','Fringe','Photom','ResFringe']
         self.compare_init_map_choice.addItems(flags)
         self.compare_init_map_choice.setCurrentIndex(0)
         self.compare_init_map_choice.setFixedSize(150, 30)
         horizontal_layout.addWidget(self.compare_init_map_choice)
         self.compare_sec_map_choice = QComboBox()
-        flags = ['Initial', 'BkgrSub', 'Flatfield', 'Straylight', 'Fringe']
+        flags = ['Initial', 'BkgrSub', 'Flatfield', 'Straylight', 'Fringe','Photom','ResFringe']
         self.compare_sec_map_choice.addItems(flags)
         self.compare_sec_map_choice.setCurrentIndex(0)
         self.compare_sec_map_choice.setFixedSize(140, 30)
@@ -1828,19 +1877,30 @@ class expPipeline2Widget(QWidget):
         self.run_fringe_corr.setFixedSize(200, 60)
         horizontal_layout.addWidget(self.run_fringe_corr)
 
+
+
         self.run_flux_calib = QPushButton('7.Flux calib')
         self.run_flux_calib.clicked[bool].connect(partial(self.Flux_calibration, False))
         self.run_flux_calib.setFixedSize(150, 60)
         horizontal_layout.addWidget(self.run_flux_calib)
 
-        self.run_all_stage2 = QPushButton('Run all')
-        self.run_all_stage2.clicked[bool].connect(partial(self.Run_all_stage2))
-        self.run_all_stage2.setFixedSize(150, 60)
-        horizontal_layout.addWidget(self.run_all_stage2)
+
+        self.run_res_fringe_corr = QPushButton('8.ResFringe')
+        self.run_res_fringe_corr.clicked[bool].connect(partial(self.Residual_Fringe_correction))
+        self.run_res_fringe_corr.setFixedSize(200, 60)
+        horizontal_layout.addWidget(self.run_res_fringe_corr)
+
+
         horizontal_layout.addStretch(1)
         l.addLayout(horizontal_layout)
 
         horizontal_layout = QHBoxLayout(self)
+
+        self.run_all_stage2 = QPushButton('Run stage(2)')
+        self.run_all_stage2.clicked[bool].connect(partial(self.Run_all_stage2))
+        self.run_all_stage2.setFixedSize(150, 60)
+        horizontal_layout.addWidget(self.run_all_stage2)
+
         self.read_steps_stage2 = QPushButton('Read step')
         self.read_steps_stage2.clicked[bool].connect(partial(self.Read_steps_stage2))
         self.read_steps_stage2.setFixedSize(150, 60)
@@ -1900,6 +1960,10 @@ class expPipeline2Widget(QWidget):
         print('Fringe Flat correction')
         self.parent.Exposures.table.stage2_fringe_flat_correction()
 
+    def Residual_Fringe_correction(self):
+        print('Residual Fringe correction')
+        self.parent.Exposures.table.stage2_residual_fringe_correction()
+
     def Flux_calibration(self, debug=False):
         print('Flux_calibration')
         self.parent.Exposures.table.stage2_flux_calibration()
@@ -1946,7 +2010,6 @@ class JWSTviewer(QMainWindow):
                                 spec2_cachedir=self.init_settings['spec2_cachedir'])
         #self.H2.readfolder()
         self.initStyles()
-        print('me')
         self.initUI()
 
     def read_settings(self,init_file='init.dat'):

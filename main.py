@@ -16,5 +16,5 @@ from PyQt5.QtWidgets import (QApplication)
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     ex = JWSTviewer.JWSTviewer()
-    ex2 = JWST_cube_analyser.JWST_spec_viewer()
+    #ex2 = JWST_cube_analyser.JWST_spec_viewer()
     sys.exit(app.exec_())

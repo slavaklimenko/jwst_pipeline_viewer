@@ -389,7 +389,7 @@ class detector1():
             if debug:
                 print('Input file is updated to:', name)
 
-    def dq_init_step(self, input_file=None, debug=True, output_dir=None):
+    def dq_init_step(self, input_file=None, debug=True, output_dir=None,save_results=False):
         '''
         This step populates the Data Quality (DQ) mask that is associated with the data file.
         '''
@@ -401,7 +401,7 @@ class detector1():
 
         dq_init_step = DQInitStep()
         dq_init_step.output_dir = output_dir
-        dq_init_step.save_results = True
+        dq_init_step.save_results = save_results
 
         # Call the run() method on the uncal file
         self.data = dq_init_step.run(self.path + '/'+ input_file)
@@ -413,7 +413,7 @@ class detector1():
             print('{} pixels have no flags.'.format(len(idx_pixelDQ)))
             print('{} pixels ({:.2f}% of the detector) have flags.'.format(num_flagged, num_flagged / self.data.pixeldq.size))
 
-    def saturation_step(self, input_file=None, debug=True, output_dir=None,n_pix_grow_sat=0):
+    def saturation_step(self, input_file=None, debug=True, output_dir=None,n_pix_grow_sat=0,save_results=False):
         if output_dir == None:
             output_dir = self.output_dir
         if input_file == None:
@@ -421,7 +421,7 @@ class detector1():
 
         saturation_step = SaturationStep()
         saturation_step.output_dir = output_dir
-        saturation_step.save_results = True
+        saturation_step.save_results = save_results
         saturation_step.n_pix_grow_sat = n_pix_grow_sat
 
         # Call using the output from the previously-run dq_init step
@@ -485,7 +485,7 @@ class detector1():
                     full_ramp = saturation.data[0, :, y, x]
                     plot_ramp(groups, full_ramp, title='Normal pixel', xpixel=x, ypixel=y, ax=ax[1, axi])
 
-    def reset_step(self, input_file=None, debug=True, output_dir=None):
+    def reset_step(self, input_file=None, debug=True, output_dir=None,save_results=False):
         if output_dir == None:
             output_dir = self.output_dir
         if input_file == None:
@@ -493,14 +493,14 @@ class detector1():
 
         reset_step = ResetStep()
         reset_step.output_dir = output_dir
-        reset_step.save_results = True
+        reset_step.save_results = save_results
 
         # Call using the output from the previously-run dq_init step
         self.data = reset_step.run(input_file)
         if debug:
             print('Reset step: Done.')
 
-    def first_step(self, input_file=None, debug=True, output_dir=None):
+    def first_step(self, input_file=None, debug=True, output_dir=None,save_results=False):
         '''
         the first group in every integration is flagged as bad in  GROUPDQ array (if the number of groups >=3)
         '''
@@ -511,14 +511,14 @@ class detector1():
 
         first_step = FirstFrameStep()
         first_step.output_dir = output_dir
-        first_step.save_results = True
+        first_step.save_results = save_results
 
         # Call using the the output from the previously-run dq_init step
         self.data = first_step.run(input_file)
         if debug:
             print('First step: Done.')
 
-    def last_step(self, input_file=None, debug=True, output_dir=None):
+    def last_step(self, input_file=None, debug=True, output_dir=None,save_results=False):
         '''
         flags the final group in each integration as bad  (the “DO_NOT_USE” bit is set in the GROUPDQ flag array),
         but only if the total number of groups in each integration is greater than 2
@@ -530,14 +530,14 @@ class detector1():
 
         last_step = LastFrameStep()
         last_step.output_dir = output_dir
-        last_step.save_results = True
+        last_step.save_results = save_results
 
         # Call using the the output from the previously-run dq_init step
         self.data = last_step.run(input_file)
         if debug:
             print('LAST step: Done.')
 
-    def linear_step(self, input_file=None, debug=True, output_dir=None):
+    def linear_step(self, input_file=None, debug=True, output_dir=None,save_results=False):
         '''
         Correction of science data values for detector non-linearity.
         The correction is represented by an nth-order polynomial for each pixel in the detector (not selected as "NO_LIN_CORRECTION" or "SATURATED"),
@@ -551,7 +551,7 @@ class detector1():
 
         linear_step = LinearityStep()
         linear_step.output_dir = output_dir
-        linear_step.save_results = True
+        linear_step.save_results = save_results
         linear_step.debug = debug
 
         # Call using the the output from the previously-run dq_init step
@@ -559,7 +559,7 @@ class detector1():
         if debug:
             print('LINEAR step: Done.')
 
-    def rscd_step(self, input_file=None, debug=True, output_dir=None):
+    def rscd_step(self, input_file=None, debug=True, output_dir=None,save_results=False):
         '''
         This correction is currently only implemented for MIRI data and is only applied to integrations after the first integration.
         ( However, the reset FETS do not instantaneously reset the level, instead the exponential adjustment of the FET after a reset causes
@@ -573,14 +573,14 @@ class detector1():
             input_file = self.data
         rscd_step = RscdStep()
         rscd_step.output_dir = output_dir
-        rscd_step.save_results = True
+        rscd_step.save_results = save_results
 
         # Call using the the output from the previously-run dq_init step
         self.data = rscd_step.run(input_file)
         if debug:
             print('RSDF step: Done.')
 
-    def dark_step(self, input_file=None, debug=True, output_dir=None):
+    def dark_step(self, input_file=None, debug=True, output_dir=None,save_results=False):
         '''
         subtrat dark model from reference files
         '''
@@ -590,14 +590,14 @@ class detector1():
             input_file = self.data
         dark_step = DarkCurrentStep()
         dark_step.output_dir = output_dir
-        dark_step.save_results = True
+        dark_step.save_results = save_results
 
         # Call using the the output from the previously-run dq_init step
         self.data = dark_step.run(input_file)
         if debug:
             print('DARK subtract: Done.')
 
-    def refpix_corr_step(self, input_file=None, debug=0, output_dir=None):
+    def refpix_corr_step(self, input_file=None, debug=0, output_dir=None,save_results=False):
         if output_dir == None:
             output_dir = self.output_dir
         if input_file == None:
@@ -609,7 +609,7 @@ class detector1():
         # Instantiate and set parameters
         refpix_step = RefPixStep()
         refpix_step.output_dir = output_dir
-        refpix_step.save_results = True
+        refpix_step.save_results = save_results
 
         # Call using the saturation instance from the previously-run
         # saturation step
@@ -622,7 +622,7 @@ class detector1():
             print('REF PIX correction: Done.')
             plt.show()
 
-    def jump_corr_step(self, input_file=None, debug=False, output_dir=None,limit=5,flag_4_neighbors=True,RecalcMedian=True):
+    def jump_corr_step(self, input_file=None, debug=False, output_dir=None,limit=5,flag_4_neighbors=True,RecalcMedian=True,save_results=False):
         if output_dir == None:
             output_dir = self.output_dir
         if input_file == None:
@@ -634,7 +634,7 @@ class detector1():
         # Using the run() method
         jump_step = JumpStep()
         jump_step.output_dir = output_dir
-        jump_step.save_results = True
+        jump_step.save_results = save_results
         jump_step.rejection_threshold = limit
         jump_step.debug=debug
         jump_step.flag_4_neighbors = flag_4_neighbors
@@ -709,7 +709,7 @@ class detector1():
             plt.show()
         #return jump
 
-    def slope_fitting_step(self, input_file=None, debug=True, output_dir=None):
+    def slope_fitting_step(self, input_file=None, debug=True, output_dir=None,save_results=False):
         '''
 
         :param input_file:
@@ -729,12 +729,12 @@ class detector1():
         # Using the run() method
         ramp_fit_step = RampFitStep()
         ramp_fit_step.output_dir = output_dir
-        ramp_fit_step.save_results = True
+        ramp_fit_step.save_results = save_results
         ramp_fit_step.debug = debug
 
         # Let's save the optional outputs, in order
         # to help with visualization later
-        ramp_fit_step.save_opt = True
+        ramp_fit_step.save_opt = save_results
 
         # Call using the dark instance from the previously-run
         # jump step

@@ -45,6 +45,7 @@ from jwst.extract_1d import Extract1dStep
 from jwst.cube_skymatch import CubeSkyMatchStep
 from jwst.master_background import MasterBackgroundStep
 from jwst.outlier_detection import OutlierDetectionStep
+from jwst.residual_fringe import ResidualFringeStep
 
 # JWST pipeline utilities
 from jwst import datamodels # JWST datamodels
@@ -118,6 +119,8 @@ class detector2():
         map2mapfilename['Flatfield']='*flatfieldstep.fits'
         map2mapfilename['Straylight']='*straylightstep.fits'
         map2mapfilename['Fringe']='*fringestep.fits'
+        map2mapfilename['Photom'] = '*cal.fits'
+        map2mapfilename['ResFringe']='*residual_fringe.fits'
 
         sstring = self.output_dir +   map2mapfilename[first_map_name]
         filenames = sorted(glob.glob(sstring))
@@ -194,6 +197,8 @@ class detector2():
         if newmapfile != None:
             print('load ',newmapfile)
             self.init_rate_files(input_file=newmapfile)
+            if step_name == 'FluxCalib':
+                self.calfiles = self.data
 
 
 
@@ -327,6 +332,30 @@ class detector2():
         if debug:
             print('FRINGE STEP: Done.')
 
+    def res_fringe_step(self, input_file=None, debug=True, output_dir=None):
+        '''
+          For spatially unresolved (point) sources or extended sources with structure, applying the fringe flat will undoubtedly leave
+          residual fringes since these produce different fringe patterns on the detector than accounted for by the fringe flat.
+          The second step for fringe removal is the residual_fringe_step. This step is part of the calwebb_spec2 pipeline,
+          but currently it is skipped by default. To apply this step set the step parameter, --skip = False.
+          This step is  applied after photom, but before cube_build
+        '''
+        if output_dir == None:
+            output_dir = self.output_dir
+        if input_file == None:
+            input_file = self.data #calfiles
+
+        res_fringe_flat_step = ResidualFringeStep()
+        res_fringe_flat_step.skip = False
+        #res_fringe_flat_step.ignore_region_min = []
+        #res_fringe_flat_step.ignore_region_max = []
+        res_fringe_flat_step.output_dir = output_dir
+        res_fringe_flat_step.save_results = True
+
+        # Call using the the output from the previously-run dq_init step
+        self.data = res_fringe_flat_step.run(input_file)
+        if debug:
+            print('FRINGE STEP: Done.')
     def flux_calibration_step(self, input_file=None, debug=True, output_dir=None):
         '''
         Correction of science data values for detector non-linearity.
