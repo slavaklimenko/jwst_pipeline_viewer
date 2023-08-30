@@ -332,24 +332,15 @@ class detector3():
         spec3('od.json')
         # Otherwise, just copy cached outputs into our output directory structure
 
-    def create_association(self, input_dir=None,source = 'Object',channel = '1', band ='Short(A)',name=None,subfilename = ''):
+    def create_association(self, input_dir=None,source = 'Object',channel = '1', band ='SHORT',subfilename = ''):
         if band != 'ABC':
-            sci_exp_list = []
-            bkg_exp_list = []
-            if channel == '1' or channel ==  '2':
-                key_name = 'mirifushort_cal.fits'
-            elif channel == '3' or channel ==  '4':
-                key_name = 'mirifulong_cal.fits'
-            band_code_sci = {}
-            band_code_sci['SHORT(A)'] = '2'
-            band_code_sci['MEDIUM(B)'] = '4'
-            band_code_sci['LONG(C)'] = '6'
-            band_code_bkg = {}
-            band_code_bkg['SHORT(A)'] = '1'
-            band_code_bkg['MEDIUM(B)'] = '3'
-            band_code_bkg['LONG(C)'] = '5'
+            exp_list = []
+            bandname = {}
+            bandname['SHORT'] = 'A'
+            bandname['MEDIUM'] = 'B'
+            bandname['LONG'] = 'C'
 
-            sstring = input_dir + '/' + '*' + key_name
+            sstring = input_dir + '/' + '*_cal.fits'
             cal_files = sorted(glob.glob(sstring))
             for f in cal_files:
                 hdulist = fits.open(f)
@@ -359,53 +350,14 @@ class detector3():
                 f_channel = header['CHANNEL']
                 f_dit_pos = header['PATT_NUM']
                 hdulist.close()
-                if 'BACK' not in f_targ_name:
-                    if channel in f_channel and f_band in band:
-                            sci_exp_list.append(f)
-
-                elif 'BACK' in f_targ_name:
-                    if channel in f_channel and f_band in band:
-                        bkg_exp_list.append(f)
-
-            asn_name_sci = input_dir + '/'+ 'sci_' + subfilename+ '.json'
-            asn_name_bkg = input_dir + '/'+ 'bkg_' + subfilename+ '.json'
-
-            if source == 'Object':
-                if name == None:
-                    name = 'sci_test'
-                print('science',asn_name_sci, [el for el in sci_exp_list])
-                self.writel3asn(sci_exp_list, asn_name_sci, name)
-                self.tmp_asn_file = asn_name_sci
-                return asn_name_sci
-            elif source == 'Background':
-                print('background', asn_name_bkg, bkg_exp_list)
-                self.writel3asn(bkg_exp_list, asn_name_bkg, 'bkg')
-                self.tmp_asn_file = asn_name_bkg
-                return asn_name_bkg
-            elif source == 'Both':
-                name='all'
-                asn_name_all = input_dir + '/' + 'both_' + subfilename + '.json'
-                self.writel3asn(sci_exp_list, asn_name_all, name,bg=bkg_exp_list)
-                self.tmp_asn_file = asn_name_all
-                return asn_name_all
-
-        else:
-            key_name = '*cal.fits'
-            sstring = input_dir + '/' + '*' + key_name
-            cal_files = np.array(sorted(glob.glob(sstring)))
-            exp_list =[]
-            for f in cal_files:
-                hdulist = fits.open(f)
-                header = hdulist[0].header
-                f_targ_name = header['TARGPROP']
-                hdulist.close()
-                if 'BACK' not in f_targ_name and source == 'Object':
+                if f_targ_name == source and channel in f_channel and f_band in band:
                     exp_list.append(f)
-
-                elif 'BACK' in f_targ_name and source == 'Background':
-                    exp_list.append(f)
-            asn_name = input_dir + '/' + 'sci_' + subfilename + '.json'
-            self.writel3asn(exp_list, asn_name, 'Level3')
+            if subfilename == '':
+                asn_name = input_dir + '/'+ source + '_'+channel + bandname[band] + '.json'
+            else:
+                asn_name = input_dir + '/' + source + subfilename + '.json'
+            print('ASN_FILE',asn_name, [el for el in exp_list])
+            self.writel3asn(exp_list, asn_name, source + '_'+channel + bandname[band])
             self.tmp_asn_file = asn_name
             return asn_name
 

@@ -1569,35 +1569,35 @@ class chooseExpWidget(QWidget):
         if 1:
             filenames,fileparams,codenames = self.readfolder(self.parent.CUBE_A.output_dir)
             lst = []
-            for s,pars in zip(filenames,fileparams):
-                d = [s.split('/')[-1]]
-                for p in pars:
-                    d.append(p)
-                lst.append(d)
-                #filenamelst.append(d[0].split('/')[-1])
-                self.filelist[d[0].split('/')[-1]]=s
-                self.associtations_list[d[0].split('/')[-1]]=self.parent.CUBE_A.path +'/'+ d[4]
-            lst = np.array([tuple(l) for l in lst], dtype=[('name','U400')] + [(p,'U50') for p in codenames])
+            if len(filenames)>0:
+                for s,pars in zip(filenames,fileparams):
+                    d = [s.split('/')[-1]]
+                    for p in pars:
+                        d.append(p)
+                    lst.append(d)
+                    #filenamelst.append(d[0].split('/')[-1])
+                    self.filelist[d[0].split('/')[-1]]=s
+                    self.associtations_list[d[0].split('/')[-1]]=self.parent.CUBE_A.path +'/'+ d[4]
+                lst = np.array([tuple(l) for l in lst], dtype=[('name','U400')] + [(p,'U50') for p in codenames])
             data = lst
-        self.table.setdata(data)
-
-
-        self.buttons = {}
-        for i, d in enumerate(data):
-            wdg = QWidget()
-            l = QVBoxLayout()
-            l.addSpacing(3)
-            button = QPushButton(d[0].split('_uncal')[0], self, checkable=True)
-            button.setFixedSize(600, 30)
-            button.setChecked(False)
-            button.clicked[bool].connect(partial(self.click, d[0]))
-            #button.clicked.connect(partial(self.click, d[0]))
-            self.buttons[d[0]] = button
-            l.addWidget(button)
-            l.addSpacing(3)
-            l.setContentsMargins(0, 0, 0, 0)
-            wdg.setLayout(l)
-            self.table.setCellWidget(i, 0, wdg)
+        if len(data)>0:
+            self.table.setdata(data)
+            self.buttons = {}
+            for i, d in enumerate(data):
+                wdg = QWidget()
+                l = QVBoxLayout()
+                l.addSpacing(3)
+                button = QPushButton(d[0].split('_uncal')[0], self, checkable=True)
+                button.setFixedSize(600, 30)
+                button.setChecked(False)
+                button.clicked[bool].connect(partial(self.click, d[0]))
+                #button.clicked.connect(partial(self.click, d[0]))
+                self.buttons[d[0]] = button
+                l.addWidget(button)
+                l.addSpacing(3)
+                l.setContentsMargins(0, 0, 0, 0)
+                wdg.setLayout(l)
+                self.table.setCellWidget(i, 0, wdg)
 
         layout.addWidget(self.table)
 
@@ -1787,7 +1787,9 @@ class expParsWidget(QWidget):
         horizontal_layout = QHBoxLayout(self)
         horizontal_layout.addWidget(QLabel('Source:'))
         self.asn_source = QComboBox()
-        self.asn_source.addItems(['Object', 'Background','Both'])
+        if 1:
+            lst = self.readfolder(self.parent.CUBE_A.path)
+        self.asn_source.addItems(lst) #['Object', 'Background','Both'])
         self.asn_source.setCurrentIndex(0)
         #p = self.asn_source.currentText()
         #print(self.asn_source.itemData[0])
@@ -1803,7 +1805,7 @@ class expParsWidget(QWidget):
 
         horizontal_layout.addWidget(QLabel('Band:'))
         self.asn_band = QComboBox()
-        self.asn_band.addItems(['SHORT(A)', 'MEDIUM(B)', 'LONG(C)','ABC'])
+        self.asn_band.addItems(['SHORT', 'MEDIUM', 'LONG','ABC'])
         self.asn_band.setCurrentIndex(0)
         self.asn_band.setFixedSize(90, 30)
         horizontal_layout.addWidget(self.asn_band)
@@ -1814,7 +1816,7 @@ class expParsWidget(QWidget):
         horizontal_layout = QHBoxLayout(self)
         horizontal_layout.addWidget(QLabel('Filename:'))
         self.cube_filename = QLineEdit()
-        self.cube_filename.setText('band')
+        self.cube_filename.setText('')
         self.cube_filename.setFixedSize(200, 30)
         horizontal_layout.addWidget(self.cube_filename)
         horizontal_layout.addStretch(1)
@@ -1825,6 +1827,22 @@ class expParsWidget(QWidget):
         self.setLayout(layout)
 
         self.setStyleSheet(open('styles.ini').read())
+
+    def readfolder(self, folder='./'):
+        """
+        Read list of names of objects from the folder
+        """
+        lst = []
+        for (dirpath, dirname, filenames) in os.walk(folder):
+            for k, f in enumerate(filenames):
+                if f.endswith('_cal.fits'):
+                    hdulist = fits.open(dirpath+'/'+f)
+                    header = hdulist[0].header
+                    if 'TARGPROP' in header.keys():
+                        obj_name = header['TARGPROP']
+                        if obj_name not in lst:
+                            lst.append(obj_name)
+        return lst
 
 class expRunWidget(QWidget):
     """
@@ -2059,12 +2077,9 @@ class JWST_spec_viewer(QMainWindow):
         output2_dir = './output/detector2/'
         self.stage2 = []
         self.stage2.append(detector2(miri_uncal_file='jw02155001001_04102_00001_mirifulong_uncal.fits', path=input2_dir, output_dir=output2_dir,spec2_cachedir=spec2_cachedir))
-        self.stage2.append(detector2(miri_uncal_file='jw02155001001_04102_00001_mirifulong_uncal.fits', path=input2_dir,
-                                     output_dir=output2_dir, spec2_cachedir=spec2_cachedir))
-        self.stage2.append(detector2(miri_uncal_file='jw02155001001_04102_00001_mirifulong_uncal.fits', path=input2_dir,
-                                     output_dir=output2_dir, spec2_cachedir=spec2_cachedir))
-        self.stage2.append(detector2(miri_uncal_file='jw02155001001_04102_00001_mirifulong_uncal.fits', path=input2_dir,
-                                     output_dir=output2_dir, spec2_cachedir=spec2_cachedir))
+        self.stage2.append(detector2(miri_uncal_file='jw02155001001_04102_00001_mirifulong_uncal.fits', path=input2_dir, output_dir=output2_dir, spec2_cachedir=spec2_cachedir))
+        self.stage2.append(detector2(miri_uncal_file='jw02155001001_04102_00001_mirifulong_uncal.fits', path=input2_dir, output_dir=output2_dir, spec2_cachedir=spec2_cachedir))
+        self.stage2.append(detector2(miri_uncal_file='jw02155001001_04102_00001_mirifulong_uncal.fits', path=input2_dir, output_dir=output2_dir, spec2_cachedir=spec2_cachedir))
 
         #self.H2.readfolder()
         self.initStyles()
