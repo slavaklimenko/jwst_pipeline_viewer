@@ -592,7 +592,7 @@ class detector1():
         dark_step.output_dir = output_dir
         dark_step.save_results = save_results
 
-        # Call using the the output from the previously-run dq_init step
+        # Call using the output from the previously-run dq_init step
         self.data = dark_step.run(input_file)
         if debug:
             print('DARK subtract: Done.')

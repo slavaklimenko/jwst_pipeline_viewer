@@ -458,110 +458,116 @@ class plotPixProfile(pg.PlotWidget):
 
     def plot_profile(self, row=None, col=None, add=True,show_fit=False,sat_limit = 55000,debug=False):
         if add:
-            nint = int(self.parent.exp_pars.nINT.text())
-            # number of group in integration
-            data = self.parent.EXP.data.data[nint, :,row,col]
-            error = np.array(self.parent.EXP.data.err[nint, :, row,col])
-            diffs = np.append([0], np.diff(data))
-            if 1:
-                sat_flag = dqflags.pixel["SATURATED"]
-                dnu_flag = dqflags.pixel["DO_NOT_USE"]
-                pixeldq = self.parent.EXP.data.groupdq[nint, :, row, col]
-                mask_diff = np.where(np.bitwise_and(pixeldq, dnu_flag) + np.bitwise_and(pixeldq, sat_flag))
-                median_diff = diffs.copy()
-                print('pixel dq:', pixeldq)
-                if debug:
-                    print(' median_diff', median_diff)
-                median_diff[mask_diff] = np.nan
-                median_diff[np.nanargmax(np.abs(median_diff), axis=0)] = np.nan
-                median_diffs = np.nanmedian(median_diff, axis=0)
-
-
-            read_noise = self.parent.EXP.readnoisearray[row, col]
-            error += np.sqrt(np.abs(median_diffs) + read_noise ** 2)
-            #print('Err',np.nanmax(self.parent.EXP.data.err))
-            dq_map = self.parent.EXP.data.groupdq[nint, :,row,col]
-
-            x= np.arange(data.shape[0])
-            self.temp_model = pg.PlotCurveItem(x, data)
-            mask = dq_map == 0
-            self.good_groups = pg.ErrorBarItem(x=np.asarray(x), y=data, top=error, bottom=error, beam=2)
-            #self.bad_groups = pg.ErrorBarItem(x=np.asarray(x)[~mask], y=data[~mask], top=error[~mask], bottom=error[~mask],  beam=5)
-            self.plot_scatters = pg.ScatterPlotItem(x[mask], data[mask], symbol='o', size=20, brush='r')
-            mask_CR = dq_map == dqflags.pixel['JUMP_DET']
-            #if np.sum(mask_CR>0):
-            self.plot_scatters_CRs = pg.ScatterPlotItem(x[mask_CR], data[mask_CR], symbol='o', size=20, brush='b')
-            # add fit
-            if show_fit:
-                YINT = self.parent.EXP.itercepts[:,row,col]
-                SIGYINT = self.parent.EXP.itercepts_err[:,row,col]
-                YSLP = self.parent.EXP.slopes[row,col]
-                SIGYSLP = self.parent.EXP.slopes_err[row, col]
-                YSLPLOCAL = self.parent.EXP.local_slopes[:, row, col]
-                FIT,FIT_LOCAL = [],[]
-                pen = pg.mkPen(color='r', style=Qt.DashLine, width=3)
-                if debug:
-                    print('YSLP,SIGYSLP:', YSLP, SIGYSLP)
-                    print('maskCR',mask_CR)
-                    print('maskCR cumsum', np.cumsum(mask_CR))
-                self.slope_model,self.slope_range,self.local_slope_model = [],[],[]
-                kk = -1
-                for k in range(YINT.shape[0]):
-                    mask_k = (np.cumsum(mask_CR)== k)*(dq_map == 0)
-                    part_fit_size = np.sum(mask_k)
-                    if debug:
-                        print(k, 'mask_k ', mask_k)
-                    if part_fit_size > 1:
-                        kk+=1
+            if row <= self.parent.EXP.data.data.shape[2] and row>=0 and col <= self.parent.EXP.data.data.shape[3] and col>=0:
+                nint = int(self.parent.exp_pars.nINT.text())
+                # number of group in integration
+                data = self.parent.EXP.data.data[nint, :,row,col]
+                error = np.array(self.parent.EXP.data.err[nint, :, row,col])
+                diffs = np.append([0], np.diff(data))
+                if 1:
+                    sat_flag = dqflags.pixel["SATURATED"]
+                    dnu_flag = dqflags.pixel["DO_NOT_USE"]
+                    pixeldq = self.parent.EXP.data.groupdq[nint, :, row, col]
+                    mask_diff = np.where(np.bitwise_and(pixeldq, dnu_flag) + np.bitwise_and(pixeldq, sat_flag))
+                    median_diff = diffs.copy()
+                    print('pixel dq:', pixeldq)
+                    median_diffs = 0
+                    if np.sum(pixeldq!=0) != np.size(pixeldq):
                         if debug:
-                            print('YINT,SIGYINT:', YINT[kk], SIGYINT[kk])
-                        x_0 = 0
-                        FIT.append(YINT[kk] + YSLP * (x[mask_k]-x_0))
-                        FIT_LOCAL.append(YINT[kk] + YSLPLOCAL[kk] * (x[mask_k]-x_0))
-                        self.slope_model.append(pg.PlotCurveItem(x[mask_k], (FIT[kk]), pen=pen))
-                        self.local_slope_model.append(pg.PlotCurveItem(x[mask_k], (FIT_LOCAL[kk]), pen=pg.mkPen(color='b', style=Qt.DashLine, width=3)))
-                        if 1:
-                            nn = 50
-                            y_tmp = np.zeros((nn,part_fit_size))
-                            for i in range(nn):
-                                yint_i  = YINT[kk] + (-1+2*np.random.uniform())*SIGYINT[kk]
-                                slp_i = YSLP + (-1+2*np.random.uniform())*SIGYSLP
-                                y_tmp[i,:] = yint_i + slp_i*(x[mask_k] - x_0)
-                            if 0:
-                                plt.subplot()
+                            print(' median_diff', median_diff)
+                        median_diff[mask_diff] = np.nan
+                        median_diff[np.nanargmax(np.abs(median_diff), axis=0)] = np.nan
+                        median_diffs = np.nanmedian(median_diff, axis=0)
+
+
+                read_noise = self.parent.EXP.readnoisearray[row, col]
+                error += np.sqrt(np.abs(median_diffs) + read_noise ** 2)
+                #print('Err',np.nanmax(self.parent.EXP.data.err))
+                dq_map = self.parent.EXP.data.groupdq[nint, :,row,col]
+
+                x= np.arange(data.shape[0])
+                self.temp_model = pg.PlotCurveItem(x, data)
+                mask = dq_map == 0
+                self.good_groups = pg.ErrorBarItem(x=np.asarray(x), y=data, top=error, bottom=error, beam=2)
+                #self.bad_groups = pg.ErrorBarItem(x=np.asarray(x)[~mask], y=data[~mask], top=error[~mask], bottom=error[~mask],  beam=5)
+                self.plot_scatters = pg.ScatterPlotItem(x[mask], data[mask], symbol='o', size=20, brush='r')
+                mask_CR = dq_map == dqflags.pixel['JUMP_DET']
+                #if np.sum(mask_CR>0):
+                self.plot_scatters_CRs = pg.ScatterPlotItem(x[mask_CR], data[mask_CR], symbol='o', size=20, brush='b')
+                # add fit
+                if show_fit:
+                    YINT = self.parent.EXP.itercepts[:,row,col]
+                    SIGYINT = self.parent.EXP.itercepts_err[:,row,col]
+                    YSLP = self.parent.EXP.slopes[row,col]
+                    SIGYSLP = self.parent.EXP.slopes_err[row, col]
+                    YSLPLOCAL = self.parent.EXP.local_slopes[:, row, col]
+                    FIT,FIT_LOCAL = [],[]
+                    print(row,col, 'YSLP',YSLP,'YINT',YINT)
+                    pen = pg.mkPen(color='r', style=Qt.DashLine, width=3)
+                    if debug:
+                        print('YSLP,SIGYSLP:', YSLP, SIGYSLP)
+                        print('maskCR',mask_CR)
+                        print('maskCR cumsum', np.cumsum(mask_CR))
+                    self.slope_model,self.slope_range,self.local_slope_model = [],[],[]
+                    kk = -1
+                    for k in range(YINT.shape[0]):
+                        mask_k = (np.cumsum(mask_CR)== k)*(dq_map == 0)
+                        part_fit_size = np.sum(mask_k)
+                        if debug:
+                            print(k, 'mask_k ', mask_k)
+                        if part_fit_size > 1:
+                            kk+=1
+                            if debug:
+                                print('YINT,SIGYINT:', YINT[kk], SIGYINT[kk])
+                            x_0 = 0
+                            FIT.append(YINT[kk] + YSLP * (x[mask_k]-x_0))
+                            FIT_LOCAL.append(YINT[kk] + YSLPLOCAL[kk] * (x[mask_k]-x_0))
+                            self.slope_model.append(pg.PlotCurveItem(x[mask_k], (FIT[kk]), pen=pen))
+                            self.local_slope_model.append(pg.PlotCurveItem(x[mask_k], (FIT_LOCAL[kk]), pen=pg.mkPen(color='b', style=Qt.DashLine, width=3)))
+                            if 1:
+                                nn = 50
+                                y_tmp = np.zeros((nn,part_fit_size))
                                 for i in range(nn):
-                                    plt.plot(x,y_tmp[i,:])
-                                plt.show()
-                        curve1 = pg.PlotCurveItem(x[mask_k], [np.min(y_tmp[:,i]) for i in range(part_fit_size)], pen=pen)
-                        curve2 = pg.PlotCurveItem(x[mask_k], [np.max(y_tmp[:,i]) for i in range(part_fit_size)], pen=pen)
-                        self.slope_range.append(pg.FillBetweenItem(curve1, curve2,brush=(250,0,50,50)))
+                                    yint_i  = YINT[kk] + (-1+2*np.random.uniform())*SIGYINT[kk]
+                                    slp_i = YSLP + (-1+2*np.random.uniform())*SIGYSLP
+                                    y_tmp[i,:] = yint_i + slp_i*(x[mask_k] - x_0)
+                                if 0:
+                                    plt.subplot()
+                                    for i in range(nn):
+                                        plt.plot(x,y_tmp[i,:])
+                                    plt.show()
+                            curve1 = pg.PlotCurveItem(x[mask_k], [np.min(y_tmp[:,i]) for i in range(part_fit_size)], pen=pen)
+                            curve2 = pg.PlotCurveItem(x[mask_k], [np.max(y_tmp[:,i]) for i in range(part_fit_size)], pen=pen)
+                            self.slope_range.append(pg.FillBetweenItem(curve1, curve2,brush=(250,0,50,50)))
 
 
 
 
 
-            self.vb.addItem(self.temp_model)
-            self.vb.addItem(self.good_groups)
-            self.vb.addItem(self.plot_scatters)
-            self.vb.addItem(self.plot_scatters_CRs)
-            self.vb.setLimits(xMin=-2,xMax=x[-1]+2)
-            if show_fit:
-                for m,r,l in zip(self.slope_model,self.slope_range,self.local_slope_model):
-                    self.vb.addItem(m)
-                    self.vb.addItem(r)
-                    self.vb.addItem(l)
+                self.vb.addItem(self.temp_model)
+                self.vb.addItem(self.good_groups)
+                self.vb.addItem(self.plot_scatters)
+                self.vb.addItem(self.plot_scatters_CRs)
+                self.vb.setLimits(xMin=-2,xMax=x[-1]+2)
+                if show_fit:
+                    for m,r,l in zip(self.slope_model,self.slope_range,self.local_slope_model):
+                        self.vb.addItem(m)
+                        self.vb.addItem(r)
+                        self.vb.addItem(l)
 
-            if np.sum(data>sat_limit):
-                self.parent.show_sat_limit=True
-                pen = pg.mkPen(color='b', style=Qt.DashLine, width=3)
-                self.satur_limit = pg.PlotCurveItem([-2,x[-1]+2], [sat_limit,sat_limit], pen=pen)
-                self.vb.addItem(self.satur_limit)
+                if np.sum(data>sat_limit):
+                    self.parent.show_sat_limit=True
+                    pen = pg.mkPen(color='b', style=Qt.DashLine, width=3)
+                    self.satur_limit = pg.PlotCurveItem([-2,x[-1]+2], [sat_limit,sat_limit], pen=pen)
+                    self.vb.addItem(self.satur_limit)
 
-            self.vb.autoRange()
-            text = 'Pixel: '
-            if col is not None:
-                text += ' {0:.0f} {1:.0f}'.format(col,row)
-            self.legend_model.addItem(self.temp_model, text)
+                self.vb.autoRange()
+                text = 'Pixel: '
+                if col is not None:
+                    text += ' {0:.0f} {1:.0f}'.format(col,row)
+                self.legend_model.addItem(self.temp_model, text)
+            else:
+                print('coords are out of limits of data')
         else:
             try:
                 self.legend_model.removeItem(self.temp_model)
@@ -668,73 +674,75 @@ class plotPixDiffs(pg.PlotWidget):
 
     def plot_pixel_diffs(self, row=None, col=None, add=True):
         if add:
-            nint = int(self.parent.exp_pars.nINT.text())
-            # number of group in integration
-            data = self.parent.EXP.data.data[nint, :,row, col]
-            error = np.array(self.parent.EXP.data.err[nint, :, row, col])
-            diffs = np.append([0],np.diff(data))
-            if 1:
-                sat_flag = dqflags.pixel["SATURATED"]
-                dnu_flag = dqflags.pixel["DO_NOT_USE"]
-                pixeldq = self.parent.EXP.data.groupdq[nint, :, row, col]
-                mask_diff = np.where(np.bitwise_and(pixeldq, dnu_flag)+np.bitwise_and(pixeldq, sat_flag))
-                median_diff = diffs.copy()
-                median_diff[mask_diff] = np.nan
-                median_diff[np.nanargmax(np.abs(median_diff), axis=0)] = np.nan
-                median_diffs = np.nanmedian(median_diff, axis=0)
+            if row <= self.parent.EXP.data.data.shape[2] and row >= 0 and col <= self.parent.EXP.data.data.shape[
+                3] and col >= 0:
+                nint = int(self.parent.exp_pars.nINT.text())
+                # number of group in integration
+                data = self.parent.EXP.data.data[nint, :,row, col]
+                error = np.array(self.parent.EXP.data.err[nint, :, row, col])
+                diffs = np.append([0],np.diff(data))
+                if 1:
+                    sat_flag = dqflags.pixel["SATURATED"]
+                    dnu_flag = dqflags.pixel["DO_NOT_USE"]
+                    pixeldq = self.parent.EXP.data.groupdq[nint, :, row, col]
+                    mask_diff = np.where(np.bitwise_and(pixeldq, dnu_flag)+np.bitwise_and(pixeldq, sat_flag))
+                    median_diff = diffs.copy()
+                    median_diff[mask_diff] = np.nan
+                    median_diff[np.nanargmax(np.abs(median_diff), axis=0)] = np.nan
+                    median_diffs = np.nanmedian(median_diff, axis=0)
 
-            read_noise = self.parent.EXP.readnoisearray[row,col]
-            error+=np.sqrt(np.abs(median_diffs) + read_noise**2)
-            #print('Err',np.nanmax(self.parent.EXP.data.err))
-            dq_map = self.parent.EXP.data.groupdq[nint, :,row, col]
-            x= np.arange(data.shape[0])
-            mask = (x>1)*(dq_map==0)
-            #diffs /=error
-            diffs2err= diffs /error
-            self.plot_line = pg.PlotCurveItem(x, diffs2err)
-            self.plot_scatters = pg.ScatterPlotItem(x[mask], diffs2err[mask],symbol = 'o',size=20,brush='r')
-            self.plot_ebars = pg.ErrorBarItem(x=np.asarray(x)[mask], y=diffs2err[mask], top=1, bottom=1, beam=0.5)
-            mask_CR = dq_map == dqflags.pixel['JUMP_DET']
-            #if np.sum(mask_CR>0):
-            self.plot_scatters_CRs = pg.ScatterPlotItem(x[mask_CR], diffs2err[mask_CR], symbol='o', size=20, brush='b')
+                read_noise = self.parent.EXP.readnoisearray[row,col]
+                error+=np.sqrt(np.abs(median_diffs) + read_noise**2)
+                #print('Err',np.nanmax(self.parent.EXP.data.err))
+                dq_map = self.parent.EXP.data.groupdq[nint, :,row, col]
+                x= np.arange(data.shape[0])
+                mask = (x>1)*(dq_map==0)
+                #diffs /=error
+                diffs2err= diffs /error
+                self.plot_line = pg.PlotCurveItem(x, diffs2err)
+                self.plot_scatters = pg.ScatterPlotItem(x[mask], diffs2err[mask],symbol = 'o',size=20,brush='r')
+                self.plot_ebars = pg.ErrorBarItem(x=np.asarray(x)[mask], y=diffs2err[mask], top=1, bottom=1, beam=0.5)
+                mask_CR = dq_map == dqflags.pixel['JUMP_DET']
+                #if np.sum(mask_CR>0):
+                self.plot_scatters_CRs = pg.ScatterPlotItem(x[mask_CR], diffs2err[mask_CR], symbol='o', size=20, brush='b')
 
-            self.vb.addItem(self.plot_line)
-            self.vb.addItem(self.plot_scatters)
-            self.vb.addItem(self.plot_scatters_CRs)
-            self.vb.addItem(self.plot_ebars)
-            self.vb.setLimits(xMin=-2, xMax=x[-1]+2)
-            pen = pg.mkPen(color='darkgray', style=Qt.DashLine, width=1)
-            self.zero_level = pg.PlotCurveItem([-2, x[-1] + 2], [0, 0], pen=pen)
-            self.vb.addItem(self.zero_level)
+                self.vb.addItem(self.plot_line)
+                self.vb.addItem(self.plot_scatters)
+                self.vb.addItem(self.plot_scatters_CRs)
+                self.vb.addItem(self.plot_ebars)
+                self.vb.setLimits(xMin=-2, xMax=x[-1]+2)
+                pen = pg.mkPen(color='darkgray', style=Qt.DashLine, width=1)
+                self.zero_level = pg.PlotCurveItem([-2, x[-1] + 2], [0, 0], pen=pen)
+                self.vb.addItem(self.zero_level)
 
-            pen = pg.mkPen(color='gray', style=Qt.DashLine, width=3)
-            self.median_diff_level = pg.PlotCurveItem([-2, x[-1] + 2], [median_diffs/error[1], median_diffs/error[1]], pen=pen)
-            self.vb.addItem(self.median_diff_level)
+                pen = pg.mkPen(color='gray', style=Qt.DashLine, width=3)
+                self.median_diff_level = pg.PlotCurveItem([-2, x[-1] + 2], [median_diffs/error[1], median_diffs/error[1]], pen=pen)
+                self.vb.addItem(self.median_diff_level)
 
-            sat_limit = float(self.parent.exp_pars.CRlimit.text())
-            print('pixel diffs:', (diffs-median_diffs)/error)
-            print('')
-            if np.sum((diffs-median_diffs)/error > 5):
-                self.parent.show_cr_limit = True
-                pen = pg.mkPen(color='b', style=Qt.DashLine, width=3)
-                self.crp_limit = pg.PlotCurveItem([-2, x[-1] + 2], [median_diffs/error[1]+sat_limit, median_diffs/error[1]+sat_limit], pen=pen)
-                self.crm_limit = pg.PlotCurveItem([-2, x[-1] + 2], [median_diffs/error[1]-sat_limit, median_diffs/error[1]-sat_limit], pen=pen)
-                self.vb.addItem(self.crp_limit)
-                self.vb.addItem(self.crm_limit)
-                pen = pg.mkPen(color='g', style=Qt.DashLine, width=3)
-                self.crp_limit_3cr = pg.PlotCurveItem([-2, x[-1] + 2], [median_diffs/error[1]+5,median_diffs/error[1]+5], pen=pen)
-                self.vb.addItem(self.crp_limit_3cr)
-                pen = pg.mkPen(color='r', style=Qt.DashLine, width=3)
-                self.crp_limit_2cr = pg.PlotCurveItem([-2, x[-1] + 2], [median_diffs/error[1]+6,median_diffs/error[1]+6], pen=pen)
-                self.vb.addItem(self.crp_limit_2cr)
+                sat_limit = float(self.parent.exp_pars.CRlimit.text())
+                print('pixel diffs:', (diffs-median_diffs)/error)
+                print('')
+                if np.sum((diffs-median_diffs)/error > 5):
+                    self.parent.show_cr_limit = True
+                    pen = pg.mkPen(color='b', style=Qt.DashLine, width=3)
+                    self.crp_limit = pg.PlotCurveItem([-2, x[-1] + 2], [median_diffs/error[1]+sat_limit, median_diffs/error[1]+sat_limit], pen=pen)
+                    self.crm_limit = pg.PlotCurveItem([-2, x[-1] + 2], [median_diffs/error[1]-sat_limit, median_diffs/error[1]-sat_limit], pen=pen)
+                    self.vb.addItem(self.crp_limit)
+                    self.vb.addItem(self.crm_limit)
+                    pen = pg.mkPen(color='g', style=Qt.DashLine, width=3)
+                    self.crp_limit_3cr = pg.PlotCurveItem([-2, x[-1] + 2], [median_diffs/error[1]+5,median_diffs/error[1]+5], pen=pen)
+                    self.vb.addItem(self.crp_limit_3cr)
+                    pen = pg.mkPen(color='r', style=Qt.DashLine, width=3)
+                    self.crp_limit_2cr = pg.PlotCurveItem([-2, x[-1] + 2], [median_diffs/error[1]+6,median_diffs/error[1]+6], pen=pen)
+                    self.vb.addItem(self.crp_limit_2cr)
 
-            self.vb.autoRange()
-            self.vb.setLimits(xMin=-2, xMax=x[-1] + 2)
+                self.vb.autoRange()
+                self.vb.setLimits(xMin=-2, xMax=x[-1] + 2)
 
-            text = 'Pixel: '
-            if col is not None:
-                text += ' {0:.0f} {1:.0f}'.format(col, row)
-            self.legend_model.addItem(self.plot_line, text)
+                text = 'Pixel: '
+                if col is not None:
+                    text += ' {0:.0f} {1:.0f}'.format(col, row)
+                self.legend_model.addItem(self.plot_line, text)
         else:
             try:
                 self.vb.removeItem(self.plot_line)
@@ -1014,7 +1022,7 @@ class EXPlistTable(pg.TableWidget):
             CRlimit = float(self.parent.parent.exp_pars.CRlimit.text())
             RecalcMedian = int(self.parent.parent.exp_pars.CR_recalc_flag.currentIndex())
             flag = self.parent.parent.exp_pars.addCRneighbors.isChecked()
-            debug = 3 #self.parent.parent.exp_pars.debug.isChecked()
+            debug = False #self.parent.parent.exp_pars.debug.isChecked()
             save_res_flag = int(self.parent.parent.exp_pars.save_tmp_res.currentIndex())
             print('Run CR step: add_neighbors=', flag, ' show_debug = ', debug)
             self.parent.parent.EXP.jump_corr_step(debug=debug, limit=CRlimit, flag_4_neighbors=flag,RecalcMedian=RecalcMedian,save_results=bool(save_res_flag))
@@ -1023,7 +1031,7 @@ class EXPlistTable(pg.TableWidget):
         else:
             CRlimit = float(self.parent.parent.exp_pars.CRlimit.text())
             flag = self.parent.parent.exp_pars.addCRneighbors.isChecked()
-            debug = 3 #self.parent.parent.exp_pars.debug.isChecked()
+            debug = False #self.parent.parent.exp_pars.debug.isChecked()
             save_res_flag = int(self.parent.parent.exp_pars.save_tmp_res.currentIndex())
             print('Run second CR step: add_neighbors=', flag, ' show_debug = ', debug)
             self.parent.parent.EXP.reset_dq(flagname='JUMP_DET')
@@ -1086,7 +1094,7 @@ class EXPlistTable(pg.TableWidget):
 
     def read_slopes(self,input_file = None):
         if self.flags['slope_fit_step'] == True:
-            print('Read Slope Fits from local files')
+            print('Read Slope Fits from local files:')
             ramp_fit = self.parent.parent.EXP.ramp_fit
             if input_file == None:
                 input_file = self.parent.parent.EXP.input_file
@@ -1096,13 +1104,18 @@ class EXPlistTable(pg.TableWidget):
 
             # Generate the name of the optional output file
             optional_file = os.path.join(output_dir, '{}fitopt.fits'.format(input_file_base))
+            print('optional_file',optional_file)
             hdulist = fits.open(optional_file)
             intercepts = hdulist['YINT'].data[0, :, :, :]
             intercepts_err = hdulist['SIGYINT'].data[0, :, :, :]
             local_slopes = hdulist['SLOPE'].data[0, :, :, :]
             local_sig_slopes = hdulist['SIGSLOPE'].data[0, :, :, :]
             hdulist.close()
-
+            sci_file = os.path.join('./output/results/', '{}rate.fits'.format(input_file_base))
+            print('sci_file',sci_file)
+            hdulist = fits.open(sci_file)
+            sci_arr =hdulist['SCI'].data[:, :]
+            hdulist.close()
             num_groups = ramp_fit[0].meta.exposure.ngroups
             group_time = ramp_fit[0].meta.exposure.group_time
             print('Time per group:', group_time, ' in s')
@@ -1123,6 +1136,7 @@ class EXPlistTable(pg.TableWidget):
                 input_file = self.parent.parent.EXP.input_file
             input_file_base = os.path.basename(input_file).replace('uncal.fits', '')
             output_dir = './output/results/' #self.parent.parent.EXP.output_dir
+            #output_dir = self.parent.parent.EXP.output_dir
 
             files = os.listdir(output_dir)
             if np.sum(input_file_base in f for f in files):
@@ -1133,6 +1147,11 @@ class EXPlistTable(pg.TableWidget):
                 intercepts_err = hdulist['SIGYINT'].data[0, :, :, :]
                 local_slopes = hdulist['SLOPE'].data[0, :, :, :]
                 local_sig_slopes = hdulist['SIGSLOPE'].data[0, :, :, :]
+                hdulist.close()
+                sci_file = os.path.join('./output/results/', '{}rate.fits'.format(input_file_base))
+                print(sci_file)
+                hdulist = fits.open(sci_file)
+                sci_arr = hdulist['SCI'].data[:, :]
                 hdulist.close()
 
                 optional_file = os.path.join(output_dir, '{}rate.fits'.format(input_file_base))
@@ -1146,7 +1165,13 @@ class EXPlistTable(pg.TableWidget):
                 hdulist.close()
                 ramp_fit_0  = datamodels.open(optional_file)
                 ramp_fit_1 = datamodels.open(optional_file = os.path.join(output_dir, '{}rateints.fits'.format(input_file_base)))
+                hdulist.close()
                 # group_times = np.arange(num_groups) * group_time
+
+                fit_jump_det_file = os.path.join(output_dir, '{}jumpstep.fits'.format(input_file_base))
+                hdulist = fits.open(fit_jump_det_file)
+                group_dq = hdulist['GROUPDQ'].data[:, :,:,:]
+
 
                 self.parent.parent.EXP.itercepts = intercepts
                 self.parent.parent.EXP.itercepts_err = intercepts_err
@@ -1155,6 +1180,7 @@ class EXPlistTable(pg.TableWidget):
                 self.parent.parent.EXP.local_slopes = local_slopes * group_time  # in DN/groups
                 self.parent.parent.EXP.local_slopes_err = local_sig_slopes * group_time  # in DN/groups
                 self.parent.parent.EXP.data.pixeldq = dq
+                self.parent.parent.EXP.data.groupdq = group_dq
                 self.parent.parent.EXP.ramp_fit = ramp_fit_0,ramp_fit_1
                 #self.parent.parent.EXP.ramp_fit[0].data = slopes
                 #self.flags['read_fit_slopes'] = True
@@ -1268,6 +1294,9 @@ class EXPlistTable(pg.TableWidget):
         print('stage2: Read results')
         step_name = self.parent.parent.stage2_commands.read_step_choice.currentText()
         self.parent.parent.stage2.read_step_results(step_name=step_name)
+
+    def stage2_fix_hot_pix(self):
+        self.parent.parent.stage2.select_hot_pix()
 
     def stage2_call_wcs(self):
         print('Call_WCS')
@@ -1637,10 +1666,10 @@ class expRunWidget(QWidget):
         self.rscd_step.clicked[bool].connect(partial(self.RSCDStep, False))
         self.rscd_step.setFixedSize(150, 60)
         horizontal_layout.addWidget(self.rscd_step)
-        self.dark_step = QPushButton('6.DarkSubtract')
-        self.dark_step.clicked[bool].connect(partial(self.DarkStep, False))
-        self.dark_step.setFixedSize(200, 60)
-        horizontal_layout.addWidget(self.dark_step)
+        self.dark_step_win = QPushButton('6.DarkSubtract')
+        self.dark_step_win.clicked[bool].connect(partial(self.DarkStep, False))
+        self.dark_step_win.setFixedSize(200, 60)
+        horizontal_layout.addWidget(self.dark_step_win)
         self.refpix_step = QPushButton('7.ReferencePix')
         self.refpix_step.clicked[bool].connect(partial(self.RefPixStep, False))
         self.refpix_step.setFixedSize(200, 60)
@@ -1663,6 +1692,11 @@ class expRunWidget(QWidget):
         self.run_all_stage1.clicked[bool].connect(partial(self.RunAllStage1))
         self.run_all_stage1.setFixedSize(250, 60)
         horizontal_layout.addWidget(self.run_all_stage1)
+
+        self.run_stage1_obj_in_table = QPushButton('Run1 all')
+        self.run_stage1_obj_in_table.clicked[bool].connect(partial(self.run_stage1_table))
+        self.run_stage1_obj_in_table.setFixedSize(150, 60)
+        horizontal_layout.addWidget(self.run_stage1_obj_in_table)
 
         self.show_single_fit = QPushButton('SaveFit')
         self.show_single_fit.clicked[bool].connect(partial(self.SaveSlopeFit))
@@ -1773,9 +1807,21 @@ class expRunWidget(QWidget):
         self.parent.Exposures.table.slope_fit()
         self.parent.Exposures.table.read_slopes()
         print('Save Fit')
-        self.parent.Exposures.table.save_slope_fit(output_dir='final', copy_add_data=False)
-        print('Run all: done.')
+        #self.parent.Exposures.table.save_slope_fit(output_dir='final', copy_add_data=False)
+        #print('Run all: done.')
 
+    def run_stage1_table(self):
+        table = self.parent.Exposures.table
+        for k, obj in enumerate(self.parent.Exposures.table.data):
+            print(obj['name'], ' - ', k, ' from', np.size(table.data))
+            name = obj['name']
+            self.parent.plot_image.add(name, add=True)
+            self.parent.Exposures.current_name = name
+            self.RunAllStage1()
+            print('Save Fit')
+            # set copy_add_data to False to do not copy tmp data,
+            self.parent.Exposures.table.save_slope_fit(output_dir='final', copy_add_data=False)
+            self.parent.plot_image.add(name, add=False)
 
     def ShowSlopeFit(self, debug=False):
         self.parent.Exposures.table.show_slope_image()
@@ -1842,6 +1888,12 @@ class expPipeline2Widget(QWidget):
         l.addLayout(horizontal_layout)
 
         horizontal_layout = QHBoxLayout(self)
+
+        self.select_jot_pix_step = QPushButton('0.FixHotPix')
+        self.select_jot_pix_step.clicked[bool].connect(partial(self.FixHotPix))
+        self.select_jot_pix_step.setFixedSize(200, 60)
+        horizontal_layout.addWidget(self.select_jot_pix_step)
+
         self.run_wcs_step = QPushButton('1.AssignWCS')
         self.run_wcs_step.clicked[bool].connect(partial(self.AssignWCS))
         self.run_wcs_step.setFixedSize(200, 60)
@@ -1901,14 +1953,19 @@ class expPipeline2Widget(QWidget):
         self.run_all_stage2.setFixedSize(150, 60)
         horizontal_layout.addWidget(self.run_all_stage2)
 
+        self.run_stage2_obj_in_table = QPushButton('Run2 all')
+        self.run_stage2_obj_in_table.clicked[bool].connect(partial(self.run_stage2_table))
+        self.run_stage2_obj_in_table.setFixedSize(150, 60)
+        horizontal_layout.addWidget(self.run_stage2_obj_in_table)
+
         self.read_steps_stage2 = QPushButton('Read step')
         self.read_steps_stage2.clicked[bool].connect(partial(self.Read_steps_stage2))
         self.read_steps_stage2.setFixedSize(150, 60)
         horizontal_layout.addWidget(self.read_steps_stage2)
         self.read_step_choice = QComboBox()
-        flags = ['Initial', 'BkgrSub', 'Flatfield', 'Straylight', 'Fringe','FluxCalib']
+        flags = ['Initial', 'BkgrSub', 'Flatfield', 'Straylight', 'Fringe','FluxCalib','ResFringe']
         self.read_step_choice.addItems(flags)
-        self.read_step_choice.setCurrentIndex(0)
+        self.read_step_choice.setCurrentIndex(5)
         self.read_step_choice.setFixedSize(140, 30)
         horizontal_layout.addWidget(self.read_step_choice)
 
@@ -1925,6 +1982,7 @@ class expPipeline2Widget(QWidget):
     def Init_Stage2(self, mode='stage2'):
         print('Init_Stage2:')
         self.parent.Exposures.table.init_stage2()
+        #self.parent.Exposures.table.read_slopes()
         self.parent.Exposures.table.show_image(mode='stage2')
 
     def Show_Rate_stage2(self, mode='stage2'):
@@ -1934,7 +1992,9 @@ class expPipeline2Widget(QWidget):
     def Compare_maps(self):
         self.parent.Exposures.table.stage2_compare_maps()
 
-
+    def FixHotPix(self, debug=False):
+        print('SelectHotPixels:')
+        self.parent.Exposures.table.stage2_fix_hot_pix()
 
     def AssignWCS(self, debug=False):
         print('AssignWCS:', debug)
@@ -1972,9 +2032,11 @@ class expPipeline2Widget(QWidget):
         print('Run all')
         print('Init_Stage2:')
         self.parent.Exposures.table.init_stage2()
-        self.parent.Exposures.table.show_image(mode='stage2')
+        #self.parent.Exposures.table.show_image(mode='stage2')
         print('AssignWCS')
         self.parent.Exposures.table.stage2_call_wcs()
+        print('Select Hot Pixels')
+        self.parent.Exposures.table.stage2_fix_hot_pix()
         print('Bkgr_Subtraction')
         self.parent.Exposures.table.stage2_background_subtraction()
         print('Flat_Field')
@@ -1987,12 +2049,25 @@ class expPipeline2Widget(QWidget):
         self.parent.Exposures.table.stage2_fringe_flat_correction()
         print('Flux_calibration')
         self.parent.Exposures.table.stage2_flux_calibration()
+        print('Residual flux correction')
+        self.parent.Exposures.table.stage2_residual_fringe_correction()
         print('Run all: done.')
 
     def Read_steps_stage2(self):
         print('Read step')
         self.parent.Exposures.table.stage2_read_steps()
         self.parent.Exposures.table.show_image(mode='stage2')
+
+
+    def run_stage2_table(self):
+        table = self.parent.Exposures.table
+        for k, obj in enumerate(self.parent.Exposures.table.data):
+            print(obj['name'], ' - ', k,' from',np.size(table.data))
+            name = obj['name']
+            self.parent.plot_image.add(name, add=True)
+            self.parent.Exposures.current_name = name
+            self.Run_all_stage2()
+            self.parent.plot_image.add(name, add=False)
 
 
 class JWSTviewer(QMainWindow):
@@ -2079,3 +2154,10 @@ class JWSTviewer(QMainWindow):
             #self.draw()
             self.showMaximized()
             self.show()
+
+
+if __name__ == '__main__':
+
+    app = QApplication(sys.argv)
+    ex = JWSTviewer()
+    sys.exit(app.exec_())

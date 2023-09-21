@@ -351,14 +351,14 @@ class detector3():
                 f_dit_pos = header['PATT_NUM']
                 hdulist.close()
                 if f_targ_name == source and channel in f_channel and f_band in band:
-                    exp_list.append(f)
+                    exp_list.append(f.split('/')[-1])
             if subfilename == '':
                 asn_name = input_dir + '/'+ source + '_'+channel + bandname[band] + '.json'
             else:
                 asn_name = input_dir + '/' + source + subfilename + '.json'
             print('ASN_FILE',asn_name, [el for el in exp_list])
             self.writel3asn(exp_list, asn_name, source + '_'+channel + bandname[band])
-            self.tmp_asn_file = asn_name
+            self.local_asn_file = asn_name
             return asn_name
 
 

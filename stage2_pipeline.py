@@ -185,7 +185,8 @@ class detector2():
         map2mapfilename['Flatfield'] = '*flatfieldstep.fits'
         map2mapfilename['Straylight'] = '*straylightstep.fits'
         map2mapfilename['Fringe'] = '*fringestep.fits'
-        map2mapfilename['FluxCalib'] = '*_cal.fits'
+        map2mapfilename['FluxCalib'] = '*photomstep.fits'
+        map2mapfilename['ResFringe'] = '*residual_fringe.fits'
 
         sstring = self.output_dir + map2mapfilename[step_name]
         filenames = sorted(glob.glob(sstring))
@@ -197,12 +198,184 @@ class detector2():
         if newmapfile != None:
             print('load ',newmapfile)
             self.init_rate_files(input_file=newmapfile)
-            if step_name == 'FluxCalib':
+            if step_name == 'ResFringe':
                 self.calfiles = self.data
 
 
+    def fix_hot_pix_step(self, input_file=None, debug=True, output_dir = './output/results/',ref_file = None, dither_file=None):
+        '''
+        Mask hot pipxels as bad.
+        '''
 
-    def assignwcsstep(self, input_file=None, debug=False, output_dir=None):
+        filename = output_dir + input_file #self.rate_file
+        ratefile = datamodels.open(filename)
+        hdulist = fits.open(filename)
+        rate_header = hdulist[0].header
+
+        filename = output_dir + ref_file  # self.rate_file
+        reffile = datamodels.open(filename)
+        hdulist = fits.open(filename)
+        ref_header = hdulist[0].header
+
+        filename = output_dir + dither_file  # self.rate_file
+        dithfile = datamodels.open(filename)
+        hdulist = fits.open(filename)
+        dith_header = hdulist[0].header
+
+        data = ratefile.data
+        dq = ratefile.dq
+        data_ref = reffile.data
+        dq_ref = reffile.dq
+        data_dith = dithfile.data
+        dq_dith = dithfile.dq
+        fig,ax = plt.subplots(1,4,sharex=True, sharey=True)
+        fig2, ax2 = plt.subplots()
+        p = data.flatten()
+        p_ref = data_ref.flatten()
+        threshold_pix_val = 2
+        plt.subplots()
+        plt.hist(data.flatten(),log=True, bins=np.linspace(-10, 100, 101),alpha=0.2)
+        plt.hist(data_dith.flatten(),log=True, bins=np.linspace(-10, 100, 101),alpha=0.2)
+
+        def check_hot_pix(data,dq,limit):
+            mask = data>limit
+            arg = np.argwhere(data>limit)
+            for i in range(arg.shape[0]):
+                x,y = arg[i,0],arg[i,1]
+                if x<data.shape[0]-1 and y < data.shape[1]-1 and x>1 and y>1:
+                    #print(x,y)
+                    f = data[x,y]
+                    flux_mean,npix = 0,0
+                    for j,k in zip([x,x,x-1,x+1],[y-1,y+1,y,y]):
+                        if dq[j,k]==0:
+                            flux_mean += data[j,k]
+                            npix +=1
+                    if npix>0:
+                        flux_mean/=npix
+                    #elif npix == 0:
+                    #    mask[x, y] = False
+                    #else:
+                    #    print(x, y)
+                    if data[x,y]<3*flux_mean:
+                        mask[x,y] = False
+                    if np.bitwise_and(dq[x,y],0) and np.bitwise_and(dq[x,y],4):
+                        d = dq[x,y]
+                        mask[x, y] = False
+
+            return mask
+
+        def check_hot_pix_negative(data,dq,limit):
+            mask = data<limit
+            arg = np.argwhere(data<limit)
+            for i in range(arg.shape[0]):
+                x,y = arg[i,0],arg[i,1]
+                if x<data.shape[0]-1 and y < data.shape[1]-1 and x>1 and y>1:
+                    f = data[x,y]
+                    flux_mean,npix = 0,0
+                    for j,k in zip([x,x,x-1,x+1],[y-1,y+1,y,y]):
+                        if dq[j,k]==0:
+                            flux_mean += data[j,k]
+                            npix +=1
+                    if npix>0:
+                        flux_mean/=npix
+                    if np.abs(data[x,y])<np.abs(2*flux_mean):
+                        mask[x,y] = False
+                    elif npix == 0:
+                        mask[x, y] = False
+                    else:
+                        print(x, y)
+                    if dq[x,y] != 0 and  dq[x,y] != 4:
+                        mask[x, y] = False
+            return mask
+
+        hot_pixels_list = check_hot_pix(data, dq, threshold_pix_val) #(data > threshold_pix_val)*((dq==0) + (dq==4))
+        hot_pixels_ref_list = check_hot_pix(data_ref, dq_ref, threshold_pix_val) #(data_ref > threshold_pix_val)*((dq_ref==0) + (dq_ref==4))
+        hot_pixels_dith_list = check_hot_pix(data_dith, dq_dith, threshold_pix_val) #(data_dith > threshold_pix_val)*((dq_dith==0) + (dq_dith==4))
+
+
+
+
+
+
+
+        ar = np.zeros_like(data)
+        vmin,vmax = 0,threshold_pix_val
+        ar[hot_pixels_list] = data[hot_pixels_list]
+        ax[0].imshow(ar, vmin=vmin, vmax=vmax)
+        #ax2.hist(ar[ar>threshold_pix_val].flatten(),bins=np.linspace(0,20,21),alpha=0.3)
+        ar = np.zeros_like(data)
+        ar[hot_pixels_dith_list] = data_ref[hot_pixels_dith_list]
+        ax[1].imshow(ar, vmin=vmin, vmax=vmax)
+        #ax2.hist(ar[ar>threshold_pix_val].flatten(),bins=np.linspace(0,20,21),alpha=0.3)
+
+        ar = np.zeros_like(data)
+        ar[hot_pixels_ref_list] = data_ref[hot_pixels_ref_list]
+        ax[2].imshow(ar, vmin=vmin, vmax=vmax)
+
+        ar = np.zeros_like(data)
+        ar[hot_pixels_ref_list*hot_pixels_list*hot_pixels_dith_list] = data_dith[hot_pixels_ref_list*hot_pixels_list*hot_pixels_dith_list]
+        ax[3].imshow(ar, vmin=vmin, vmax=vmax)
+        print('N of hot pix', np.sum(hot_pixels_ref_list*hot_pixels_list*hot_pixels_dith_list), ' of ',np.sum(hot_pixels_ref_list))
+        ax2.hist(ar[ar>threshold_pix_val].flatten(),bins=np.linspace(0,20,101),alpha=0.3)
+        ax2.hist(data_dith.flatten(), bins=np.linspace(-10, 20, 101), alpha=0.3)
+
+        #plt.hist(p[~np.isnan(p)],log=True,bins=np.linspace(-1,100,200))
+        if 1:
+            CHAN,BAND =rate_header['CHANNEL'],rate_header['BAND']
+            mask = hot_pixels_ref_list*hot_pixels_list*hot_pixels_dith_list
+            hdu = fits.PrimaryHDU(mask.astype(int))
+            hdul = fits.HDUList([hdu])
+            header = hdul[0].header
+            header['TELESCOP'] = 'JWST'
+            header['INSTRUME'] = 'MIRI'
+            header['CHANNEL'] = CHAN
+            header['BAND'] = BAND
+            header['AUTHOR'] = 'V.KLIMENKO'
+            header['COMMENT'] = 'MASK OF SINGLE HOT PIXELS IN MIRI DETECTORS'
+            hdul.writeto('./data/hot_pixels_'+CHAN+'_'+BAND+ '.fits',overwrite=True)
+
+        plt.show()
+        p =1
+
+    def show_hot_pix_maps(self,debug=True):
+        output_dir = './data/'
+
+        hdulist = fits.open(output_dir+'hot_pixels_34_LONG.fits')
+        mlong = hdulist[0].data[:, :]
+        hdulist = fits.open(output_dir+'hot_pixels_34_MEDIUM.fits')
+        mmed= hdulist[0].data[:, :]
+        hdulist = fits.open(output_dir + 'hot_pixels_34_SHORT.fits')
+        mshort = hdulist[0].data[:, :]
+        if debug:
+            fig,ax = plt.subplots(1,3,sharey=True,sharex=True)
+            ax[0].imshow(mlong)
+            ax[1].imshow(mmed)
+            ax[2].imshow(mshort)
+            plt.show()
+    def select_hot_pix(self,output_dir='./data/',debug=True):
+        band = self.data.meta.instrument.band
+        channel = self.data.meta.instrument.channel
+        if channel == '34':
+            filename = 'hot_pixels_34_'+band+'.fits'
+            hdulist = fits.open(output_dir + filename)
+            mask_hot_pix = hdulist[0].data[:, :]
+            hdulist.close()
+        elif channel == '12':
+            filename = 'hot_pixels_12_'+band+'.fits'
+            hdulist = fits.open(output_dir + filename)
+            mask_hot_pix = hdulist[0].data[:, :]
+            hdulist.close()
+        print('read hot_pix_map from',  filename)
+        self.data.dq = np.bitwise_or(self.data.dq,mask_hot_pix)
+        self.data.data[mask_hot_pix.astype(bool)] = np.nan
+        if debug:
+            fig,ax = plt.subplots(1,2,sharex=True,sharey=True)
+            ax[0].imshow(mask_hot_pix)
+            ax[1].imshow(self.data.data,vmin=0,vmax=4)
+            plt.show()
+
+
+    def assignwcsstep(self, input_file=None, debug=False, output_dir=None,save_results=False):
         '''
         This step populates the Data Quality (DQ) mask that is associated with the data file.
         '''
@@ -211,10 +384,9 @@ class detector2():
         if input_file == None:
             input_file = self.rate_file
 
-
         wcs_step = AssignWcsStep()
         wcs_step.output_dir = output_dir
-        wcs_step.save_results = True
+        wcs_step.save_results = save_results
 
         # Call the run() method on the uncal file
         self.data = wcs_step.run(input_file)
@@ -229,7 +401,7 @@ class detector2():
         print('WCS step done')
 
     # direct subtraction of bkg_exp from sci_exp
-    def background_subtraction(self, input_file=None, debug=True, output_dir=None):
+    def background_subtraction(self, input_file=None, debug=True, output_dir=None,save_results=False):
         if output_dir == None:
             output_dir = self.output_dir
         if input_file == None:
@@ -247,13 +419,13 @@ class detector2():
 
         bkgr_sbtr_step = BackgroundStep()
         bkgr_sbtr_step.output_dir = output_dir
-        bkgr_sbtr_step.save_results = False
+        bkgr_sbtr_step.save_results = save_results
 
         bgfiles= bkgr_sbtr_step(input_sci_exp_list,input_bkg_exp_list)
 
 
     # This step divides the array data by the pixel flatfield reference file. (for MIRI MRS the reference flatfield is currently unity everywhere )
-    def flat_field_step(self, input_file=None, debug=False, output_dir=None):
+    def flat_field_step(self, input_file=None, debug=False, output_dir=None,save_results=False):
         '''
         This step populates the Data Quality (DQ) mask that is associated with the data file.
         '''
@@ -265,13 +437,13 @@ class detector2():
 
         flat_field_step = FlatFieldStep()
         flat_field_step.output_dir = output_dir
-        flat_field_step.save_results = True
+        flat_field_step.save_results = save_results
 
         # Call the run() method on the uncal file
         self.data = flat_field_step.run(input_file)
         print('FLAT FIELD step done')
 
-    def source_type_identification(self, input_file=None, debug=True, output_dir=None):
+    def source_type_identification(self, input_file=None, debug=True, output_dir=None,save_results=False):
         if output_dir == None:
             output_dir = self.output_dir
         if input_file == None:
@@ -279,7 +451,7 @@ class detector2():
 
         source_type_id_step = SourceTypeStep()
         source_type_id_step.output_dir = output_dir
-        source_type_id_step.save_results = True
+        source_type_id_step.save_results = save_results
 
         # Call using the output from the previously-run dq_init step
         self.data = source_type_id_step.run(input_file)
@@ -287,7 +459,7 @@ class detector2():
             print('Source type:', self.data.meta.target.source_type)
             print('Source identification step: Done.')
 
-    def stray_light_step(self, input_file=None, debug=True, output_dir=None):
+    def stray_light_step(self, input_file=None, debug=True, output_dir=None,save_results=False):
         '''
         The MIRI MRS has been observed to have appreciable straylight at short wavelengths in ground-test data,
         and this step is therefore designed to model and subtract this component from the detector data
@@ -303,14 +475,14 @@ class detector2():
 
         stray_ligth_step = StraylightStep()
         stray_ligth_step.output_dir = output_dir
-        stray_ligth_step.save_results = True
+        stray_ligth_step.save_results = save_results
 
         # Call using the the output from the previously-run dq_init step
         self.data = stray_ligth_step.run(input_file)
         if debug:
             print('Stray light step: Done.')
 
-    def fringe_flat_step(self, input_file=None, debug=True, output_dir=None):
+    def fringe_flat_step(self, input_file=None, debug=True, output_dir=None,save_results=False):
         '''
           This crucial step is the first pipeline correction for the strong periodic amplitude modulation (i.e., fringing)
           that occurs in the MIRI detectors due to internal reflections within the detectors.
@@ -325,14 +497,14 @@ class detector2():
 
         fringe_flat_step = FringeStep()
         fringe_flat_step.output_dir = output_dir
-        fringe_flat_step.save_results = True
+        fringe_flat_step.save_results = save_results
 
         # Call using the the output from the previously-run dq_init step
         self.data = fringe_flat_step.run(input_file)
         if debug:
             print('FRINGE STEP: Done.')
 
-    def res_fringe_step(self, input_file=None, debug=True, output_dir=None):
+    def res_fringe_step(self, input_file=None, debug=True, output_dir=None,save_results=True):
         '''
           For spatially unresolved (point) sources or extended sources with structure, applying the fringe flat will undoubtedly leave
           residual fringes since these produce different fringe patterns on the detector than accounted for by the fringe flat.
@@ -350,13 +522,26 @@ class detector2():
         #res_fringe_flat_step.ignore_region_min = []
         #res_fringe_flat_step.ignore_region_max = []
         res_fringe_flat_step.output_dir = output_dir
-        res_fringe_flat_step.save_results = True
+        res_fringe_flat_step.save_results = save_results
 
         # Call using the the output from the previously-run dq_init step
         self.data = res_fringe_flat_step.run(input_file)
+
+        # Rename residual_fringe to cal files
+        # Look for our _residual_fringe.fits files produced by the photometric calibration step
+        sstring = self.output_dir + self.name +  '*residual_fringe.fits'
+        self.residual_fringe = sorted(glob.glob(sstring))
+        # And print them out so that we can see them
+        self.calfiles = self.residual_fringe.copy()
+        for ii in range(0, len(self.residual_fringe)):
+            self.calfiles[ii] = str.replace(self.residual_fringe[ii], 'residual_fringe', 'cal')
+            example_file = fits.open(self.residual_fringe[ii])
+            example_file.writeto(self.calfiles[ii], overwrite=True)
+            example_file.close()
+
         if debug:
-            print('FRINGE STEP: Done.')
-    def flux_calibration_step(self, input_file=None, debug=True, output_dir=None):
+            print('RES FRINGE STEP: Done.')
+    def flux_calibration_step(self, input_file=None, debug=True, output_dir=None,save_results=False):
         '''
         Correction of science data values for detector non-linearity.
         The correction is represented by an nth-order polynomial for each pixel in the detector (not selected as "NO_LIN_CORRECTION" or "SATURATED"),
@@ -370,21 +555,12 @@ class detector2():
 
         photom_step = PhotomStep()
         photom_step.output_dir = output_dir
-        photom_step.save_results = True
+        photom_step.save_results = save_results
 
         # Call using the the output from the previously-run dq_init step
         self.data = photom_step.run(input_file)
-        # Rename photomstep to cal files
-        # Look for our photomstep.fits files produced by the photometric calibration step
-        sstring = self.output_dir + self.name +  '*photomstep.fits'
-        self.photomfiles = sorted(glob.glob(sstring))
-        # And print them out so that we can see them
-        self.calfiles = self.photomfiles.copy()
-        for ii in range(0, len(self.photomfiles)):
-            self.calfiles[ii] = str.replace(self.photomfiles[ii], 'photomstep', 'cal')
-            example_file = fits.open(self.photomfiles[ii])
-            example_file.writeto(self.calfiles[ii],overwrite=True)
-            example_file.close()
+
+
         if debug:
             print('PHOTOM step: Done.')
 
@@ -476,6 +652,10 @@ if __name__ == '__main__':
     input_dir = './output/tmp'
     spec2_cachedir = './temp/spec2/'
     exp1 = detector2(miri_uncal_file=miri_uncal_file, path = input_dir, output_dir=output_dir,spec2_cachedir=spec2_cachedir)
+    #input_file =  'jw02155001001_04102_00001_mirifulong_rate.fits' #N of hot pix 983  of  1051
+    input_file = 'jw02155001001_04102_00004_mirifulong_rate.fits'  # N of hot pix 983  of  1051
+    exp1.fix_hot_pix_step(input_file='jw02155001001_04106_00002_mirifushort_rate.fits',ref_file = "jw02155009001_02105_00004_mirifushort_rate.fits", dither_file='jw02155001001_04106_00003_mirifushort_rate.fits')
+    exp1.show_hot_pix_maps()
     exp1.compare_maps()
     plt.show()
     exp1.assignwcsstep()

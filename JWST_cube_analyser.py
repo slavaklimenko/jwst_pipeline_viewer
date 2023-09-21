@@ -42,6 +42,9 @@ from pyqtgraph.Qt import QtCore, QtGui
 from stdatamodels.jwst import datamodels
 import csv
 from PyQt5.QtWidgets import (QApplication)
+from astropy import modeling
+from scipy import signal
+import scipy.signal
 
 output_dir = './output/detector3/'
 input_dir = './output/detector2/'
@@ -135,6 +138,21 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
         self.label_filename = QLabel("Filename:", self.ui.graphicsView.viewport())
         self.label_filename.move(1325, 15)
 
+    def add_scale_stick(self):
+        if self.cube_name == 'A':
+            wcs1 = self.parent.CUBE_A.data.wcs
+            #lam_world, x_world, y_world = self.parent.CUBE_A.conv_world_coord(t=self.lam, x=int(self.x), y=int(self.y))
+        elif self.cube_name == 'B':
+            wcs1 = self.parent.CUBE_B.data.wcsPlotCurveItem
+        delta_x =  wcs1['CDELT1']
+        delta_y = wcs1['CDELT2']
+        scale = 1/3600
+        stick = [[25,25+scale/delta_x],[10,10]]
+        self.scale_bar = pg.PlotCurveItem(size=50, pen=pg.mkPen('white', width=5))
+        self.scale_bar.setData(stick[0], stick[1])
+        #self.scale_bar.setSymbol('o')
+        self.vb.addItem(self.scale_bar)
+
 
     def initstatus(self):
         self.s_status = True
@@ -154,16 +172,12 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
                     filename = self.parent.Cubes_A.filelist[name]
                     self.parent.CUBE_A.add_cube(cubename=filename)
                     self.parent.CUBE_A.init_cube()
-                    channel = self.parent.CUBE_A.data.channel
-                    band = self.parent.CUBE_A.data.band
                     self.data = self.parent.CUBE_A.data.data
                     self.data_tot = self.parent.CUBE_A.data
                 elif self.cube_name == 'B':
                     filename = self.parent.Cubes_B.filelist[name]
                     self.parent.CUBE_B.add_cube(cubename=filename)
                     self.parent.CUBE_B.init_cube()
-                    channel = self.parent.CUBE_B.data.channel
-                    band = self.parent.CUBE_B.data.band
                     self.data = self.parent.CUBE_B.data.data
                     self.data_tot = self.parent.CUBE_B.data
                 self.label_filename.setText(filename.split('/')[-1].split('s3d')[0])
@@ -181,11 +195,13 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
                 if 1:
                     self.roi_list = []
                     if self.cube_name == 'A':
-                        roi_colors = ['lightgreen','red']
+                        roi_colors = ['lightgreen','red','magenta']
                     elif self.cube_name == 'B':
-                        roi_colors = ['purple','yellow']
-                    self.roi_list.append(pg.EllipseROI([15, 15], [10, 10], pen=pg.mkPen(roi_colors[0], width=3)))
-                    self.roi_list.append(pg.CircleROI([30, 30], [10, 10], pen=pg.mkPen(roi_colors[1], width=2), movable=True, resizable=True))
+                        roi_colors = ['purple','yellow','magenta']
+                    self.roi_list.append(pg.EllipseROI([15, 15], [10, 10], pen=pg.mkPen(roi_colors[0], width=5)))
+                    self.roi_list.append(pg.CircleROI([30, 30], [10, 10], pen=pg.mkPen(roi_colors[1], width=5), movable=True, resizable=True))
+                    #self.roi_list.append(pg.RectROI([15, 15], [10, 10], pen=pg.mkPen(roi_colors[2], width=3)))
+                    self.roi_list[-1].addRotateHandle([1, 0], [0.5, 0.5])
                     #self.roi_list = rois
                     #self.roi_mask = {}
                     #rois.append(pg.EllipseROI([20, 20], [12, 12], pen=(9, 2)))
@@ -205,7 +221,6 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
                             possy.shape = rows,cols
                             mpossx = roi.getArrayRegion(arr=possx, img=self.imageItem , axes=(1,0)).astype(int)
                             mpossx2 = roi.getArrayRegion(arr=possx, img=self.imageItem , axes=(1,0)).astype(float)
-                            print(mpossx2)
                             mpossx1 = mpossx[np.nonzero(mpossx)]  # get the x pos from ROI
                             mpossy = roi.getArrayRegion(arr=possy, img = self.imageItem , axes=(1,0)).astype(int)
                             mpossy1 = mpossy[np.nonzero(mpossy)]  # get the y pos from ROI
@@ -239,34 +254,58 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
                             #d= data_roi.mean(axis=(1,2))
                             #roi.curve.setData(data_roi.mean(axis=(1,2)))
                             roi.curve.setData(data_roi.mean(axis=(1, 2)))
-                            #self.parent.plot_spectrum.plot_spec(data=d,add=False)
-                            #self.parent.plot_spectrum.plot_spec(data=d,pen=roi.pen)
+
 
                         if np.sum(roi.roi_mask)>0:
-                            num_pixels=np.sum(roi.roi_mask)
                             roi_selected_flux=np.zeros(self.data.shape[0])
+                            roi_selected_flux_err = np.zeros(self.data.shape[0])
+                            roi_mean_w_flux = np.zeros(self.data.shape[0])
+                            roi_mean_w_flux_err = np.zeros(self.data.shape[0])
+                            roi_max_flux = np.zeros(self.data.shape[0])
+                            roi_max_flux_err = np.zeros(self.data.shape[0])
                             for i in range(self.data.shape[0]):
                                 d = self.data[i,:,:]
                                 d = d[roi.roi_mask]
-                                roi_selected_flux[i] = np.nansum(d)/num_pixels
+                                d = d[~np.isnan(d)]
+                                if np.sum([~np.isnan(d)])>0:
+                                    derr = (self.data_tot.err[i, :, :])[roi.roi_mask]
+                                    derr = derr[~np.isnan(derr)]
+                                    w = np.power(derr, 2)
+                                    num_pixels = np.size(d)
+                                    roi_selected_flux[i] = np.nansum(d)
+                                    roi_selected_flux_err[i] = np.power(np.sum(w),0.5)
+                                    j = np.argwhere(d==np.max(d))[0]
+                                    roi_max_flux[i] = d[j]
+                                    roi_max_flux_err[i] = derr[j]
+                                else:
+                                    roi_selected_flux[i] = -999
+                                    roi_selected_flux_err[i] = 1
+                                    roi_max_flux[i] = -999
+                                    roi_max_flux_err[i] = 1
                             roi.curve.setData(roi_selected_flux)
+                            if self.parent.exp_pars.norm_flag_roi.currentText() == 'yes':
+                                normalize = True
+                            else:
+                                normalize = False
                             if roi == self.roi_list[0]:
                                 if self.cube_name == 'A':
-                                    self.parent.plot_spectrum.plot_specA1(data=roi_selected_flux, add=False)
-                                    self.parent.plot_spectrum.plot_specA1(data=roi_selected_flux, pen=roi.pen)
+                                    self.parent.plot_spectrum.plot_specA1(data=roi_selected_flux,err=roi_selected_flux_err, add=False,show_err_bar=True)
+                                    self.parent.plot_spectrum.plot_specA1(data=roi_selected_flux,err=roi_selected_flux_err,  pen='gray',normalize=normalize,label='mean',show_err_bar=True)
+                                    self.parent.plot_spectrum.plot_specAmax(data=roi_mean_w_flux, add=False)
+                                    self.parent.plot_spectrum.plot_specAmax(data=roi_max_flux,  err=roi_max_flux_err, normalize=normalize,label='max')
                                     self.parent.plot_hist1.plot_hist(data=self.data_tot, roi_mask=roi.roi_mask, timeind=self.time, add=False)
                                     self.parent.plot_hist1.plot_hist(data=self.data_tot, roi_mask=roi.roi_mask, timeind=self.time,pen=roi.pen)
                                 if self.cube_name == 'B':
-                                    self.parent.plot_spectrum.plot_specB1(data=roi_selected_flux, add=False)
-                                    self.parent.plot_spectrum.plot_specB1(data=roi_selected_flux, pen=roi.pen)
+                                    self.parent.plot_spectrum.plot_specB1(data=roi_selected_flux,err=roi_selected_flux_err, add=False,show_err_bar=True)
+                                    self.parent.plot_spectrum.plot_specB1(data=roi_selected_flux, err=roi_selected_flux_err,pen=roi.pen,normalize=normalize,show_err_bar=True)
                                     self.parent.plot_hist3.plot_hist(data=self.data_tot, roi_mask=roi.roi_mask,
                                                                      timeind=self.time, add=False)
                                     self.parent.plot_hist3.plot_hist(data=self.data_tot, roi_mask=roi.roi_mask,
                                                                      timeind=self.time, pen=roi.pen,brush='purple')
                             elif roi == self.roi_list[1]:
                                 if self.cube_name == 'A':
-                                    self.parent.plot_spectrum.plot_specA2(data=roi_selected_flux, add=False)
-                                    self.parent.plot_spectrum.plot_specA2(data=roi_selected_flux,pen=roi.pen)
+                                    self.parent.plot_spectrum.plot_specA2(data=roi_selected_flux, add=False,show_err_bar=True)
+                                    self.parent.plot_spectrum.plot_specA2(data=roi_selected_flux,pen=roi.pen,err=roi_selected_flux_err,normalize=normalize,show_err_bar=True)
                                     self.parent.plot_hist2.plot_hist(data=self.data_tot, roi_mask=roi.roi_mask,
                                                                      timeind=self.time, add=False)
                                     self.parent.plot_hist2.plot_hist(data=self.data_tot, roi_mask=roi.roi_mask,
@@ -279,9 +318,27 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
                                                                       timeind=self.time, add=False)
                                     self.parent.plot_hist4.plot_hist2(data=self.data_tot, roi_mask=roi.roi_mask,
                                                                       timeind=self.time, pen=roi.pen)
+                                    if self.parent.exp_commands.show_roi_1_minus_2.isChecked() == True:
+                                        roi1,roi2 = self.roi_list[0],self.roi_list[1]
+                                        mask_2m1 = roi2.roi_mask ^ (roi2.roi_mask*roi1.roi_mask)
+                                        if np.sum(mask_2m1)>0 and np.sum(mask_2m1)!=np.sum(roi2.roi_mask):
+                                            roi_diff_flux,roi_diff_flux_err = np.zeros(self.data.shape[0]),np.zeros(self.data.shape[0])
+                                            for i in range(self.data.shape[0]):
+                                                d =  self.data[i,:,:]
+                                                d = d[mask_2m1]
+                                                d = d[~np.isnan(d)]
+                                                derr = (self.data_tot.err[i, :, :])[mask_2m1]
+                                                derr = derr[~np.isnan(derr)]
+                                                w = np.power(derr, 2)
+                                                roi_diff_flux[i] = np.nansum(d)
+                                                roi_diff_flux_err[i] = np.power(np.sum(w), 0.5)
+                                            self.parent.plot_spectrum.plot_specA2m1(data=roi_diff_flux, add=False, show_err_bar=True)
+                                            self.parent.plot_spectrum.plot_specA2m1(data=roi_diff_flux,err=roi_diff_flux_err,normalize=normalize,show_err_bar=True)
+
+
                                 if self.cube_name == 'B':
                                     self.parent.plot_spectrum.plot_specB2(data=roi_selected_flux, add=False)
-                                    self.parent.plot_spectrum.plot_specB2(data=roi_selected_flux, pen=roi.pen)
+                                    self.parent.plot_spectrum.plot_specB2(data=roi_selected_flux, pen=roi.pen,normalize=normalize)
                                     self.parent.plot_hist4.plot_hist(data=self.data_tot, roi_mask=roi.roi_mask,
                                                                      timeind=self.time, add=False)
                                     self.parent.plot_hist4.plot_hist(data=self.data_tot, roi_mask=roi.roi_mask,
@@ -321,14 +378,15 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
                     elif self.cube_name == 'B':
                         x1, y1 = self.parent.CUBE_B.conv_pix_2_world_coord(x_world=gal1[0], y_world=gal1[1])
                         x2, y2 = self.parent.CUBE_B.conv_pix_2_world_coord(x_world=gal2[0], y_world=gal2[1])
-                    self.gal1 = pg.ScatterPlotItem(size=20, pen=pg.mkPen('orange', width=1))
-                    self.gal2 = pg.ScatterPlotItem(size=20, pen=pg.mkPen('orange', width=1))
-                    self.gal1.setSymbol('s')
+                    self.gal1 = pg.ScatterPlotItem(size=20, pen=pg.mkPen('red', width=3))
+                    self.gal2 = pg.ScatterPlotItem(size=20, pen=pg.mkPen('red', width=3))
                     self.gal1.setData([x1], [y1])
-                    self.gal2.setSymbol('s')
+                    self.gal1.setSymbol('star')
                     self.gal2.setData([x2], [y2])
+                    self.gal2.setSymbol('star')
                     self.vb.addItem(self.gal1)
                     self.vb.addItem(self.gal2)
+                    self.add_scale_stick()
 
 
         else:
@@ -351,6 +409,82 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
             except:
                 pass
 
+    def add_Roi(self,add=False):
+        if add:
+            self.roi_add = pg.RectROI([25, 25], [10, 5], pen=pg.mkPen('blue', width=3))
+            self.roi_add.addRotateHandle([1, 0], [0.5, 0.5])
+            self.vb.addItem(self.roi_add)
+            if 1:
+                def updateRoi(roi):
+                    if roi is None:
+                        return
+                    arr1 = roi.getArrayRegion(data=self.data, img=self.imageItem, axes=(2, 1))
+                    if 1:  # set_roi_mask
+                        (t, time) = self.timeIndex(self.timeLine)
+                        mask = np.array(np.zeros((self.data.shape[1], self.data.shape[2])), dtype='bool')
+                        rows, cols = self.data.shape[1], self.data.shape[2]
+                        m = np.mgrid[:rows, :cols]
+                        possx = m[0, :, :]  # make the x pos array
+                        possy = m[1, :, :]  # make the y pos array
+                        possx.shape = rows, cols
+                        possy.shape = rows, cols
+                        mpossx = roi.getArrayRegion(data=possx, img=self.imageItem, axes=(1, 0)).astype(int)
+                        mpossy = roi.getArrayRegion(data=possy, img=self.imageItem, axes=(1, 0)).astype(int)
+                        #mask_mposs = (mpossx > 0) * (mpossy > 0)
+                        mask_mposs =~np.isnan(self.data[time, mpossx, mpossy])
+                        mpossx1 = mpossx[mask_mposs] # get the x pos from ROI
+                        mpossy1 = mpossy[mask_mposs]  # get the y pos from ROI
+                        mask[mpossx1, mpossy1] = True  # self.data[0,mpossx, mpossy]>0
+                        roi.roi_mask = mask
+                        if 1:
+                            bottom_line = [mpossy[:,0],mpossx[:,0]]
+                            mask_bottom_line = ~np.isnan(self.data[time, bottom_line[1], bottom_line[0]])
+                            bottom_line[0] = (bottom_line[0])[mask_bottom_line]
+                            bottom_line[1] = (bottom_line[1])[mask_bottom_line]
+                            if np.sum(mask_bottom_line)>0:
+                                mask_mposs = (mpossx>0)*(mpossy>0)
+                                mpossx1 = mpossx[mask_mposs].flatten()
+                                mpossy1 = mpossy[mask_mposs].flatten()
+                                posA,posB = [bottom_line[0][0],bottom_line[1][0]],[bottom_line[0][-1],bottom_line[1][-1]]
+                                alpha = np.arcsin((posB[1]-posA[1])/np.power((posB[0]-posA[0])**2+(posB[1]-posA[1])**2,0.5))
+                                print('alpha',alpha,alpha/3.14*180)
+
+                                def conv_coord(x0,y0,xc,yc,theta):
+                                    dx = x0-xc
+                                    dy = y0-yc
+                                    x1 = dx*np.cos(theta) + dy*np.sin(theta)
+                                    y1 = -dx*np.sin(theta) + dy*np.cos(theta)
+                                    return np.array(x1).astype(int), np.array(y1).astype(int)
+                                #XX,YY = conv_coord(mpossy1,mpossx1,posA[0],posA[1],alpha)
+                                XX, YY = conv_coord(mpossy1, mpossx1, mpossy1[0], mpossx1[0], alpha)
+                                roi.align_coord = [XX,YY]
+                                roi.slit_array = np.zeros((np.max(XX)+1,np.max(YY)+1))
+
+                                #print('time slit',time)
+                                for i in range(np.size(XX)):
+                                    roi.slit_array[XX[i],YY[i]] = self.data[time, mpossx1[i], mpossy1[i]]
+                                if 0:
+                                    print(XX,YY)
+                                    fig,ax = plt.subplots()
+                                    ax.plot(XX,YY,'o')
+                                    ax.plot(mpossy1,mpossx1,'o')
+                                    ax.plot([posA[0],posB[0]], [posA[1],posB[1]], '-')
+                                    ax.set_xlim(0,40)
+                                    ax.set_ylim(0, 40)
+                                    plt.show()
+
+                    updateRoiPlot(roi)
+
+                def updateRoiPlot(roi):
+                    if np.nansum(roi.slit_array) > 0:
+                        slit_profile = np.array([np.nansum(roi.slit_array[i,:])/np.sum(~np.isnan(roi.slit_array[i,:])) for i in range(roi.slit_array.shape[0])])
+                        if self.cube_name == 'A':
+                            self.parent.plot_slit.plot_slit(data=slit_profile, add=False)
+                            self.parent.plot_slit.plot_slit(data=slit_profile, add=True)
+
+                self.roi_add.sigRegionChanged.connect(updateRoi)
+        else:
+            self.vb.removeItem(self.roi_add)
     def add_from_file(self, name='Median',filename='test_cube', add=True):
         if add:
             print('add cube name:',filename)
@@ -672,7 +806,7 @@ class plotImage(pg.ImageView): #(pg.PlotWidget):
                                                    spec2_cachedir=spec2_cachedir)
                 print('add stage2 name:', exp_name)
                 f = rate_filename['expname']
-                self.parent.stage2[Nscreen-1].read_step_results(step_name='FluxCalib')
+                self.parent.stage2[Nscreen-1].read_step_results(step_name='ResFringe')
                 print('Show image of' + self.parent.stage2[Nscreen-1].name)
                 data = self.parent.stage2[Nscreen-1].data.data
                 zmin, zmax = np.nanquantile(data.flatten(), 0.05), np.nanquantile(data.flatten(), 0.95)
@@ -906,21 +1040,43 @@ class plotSpec(pg.PlotWidget):
 
 
 
-    def plot_specA1(self, data=None, add=True,pen=pg.mkPen(color='white', style=Qt.DashLine, width=1)):
+    def plot_specA1(self, data=None, err=None, add=True,pen=pg.mkPen(color='white', style=Qt.DashLine, width=1),normalize=False,show_err_bar=False,label='A1'):
         if add:
             wavel = self.parent.CUBE_A.data.wavelength
             if np.size(data) == np.size(wavel):
-                pen = pen
-                self.plot_lineA1 = pg.PlotCurveItem(wavel, data,pen=pen)
+                if normalize:
+                    norm = np.mean(data[10:40])
+                    data = data / norm
+                    err = err / norm
+                self.plot_lineA1 = pg.PlotCurveItem(wavel, data,pen='lightgreen')
+                self.plot_errbarA1 = pg.ErrorBarItem(x=wavel,y=data,height=err,pen=pen, beam=1/6000)
                 self.vb.addItem(self.plot_lineA1)
+                self.legend_model.addItem(self.plot_lineA1, label)
+                if show_err_bar:
+                    self.vb.addItem(self.plot_errbarA1)
                 pen = pg.mkPen(color='darkgray', style=Qt.DashLine, width=1)
                 #self.zero_level = pg.PlotCurveItem([wavel[0]-2, wavel[-1] + 2], [0, 0], pen=pen)
                 self.zero_level = pg.PlotCurveItem([0, 30], [0, 0], pen=pen)
                 self.vb.addItem(self.zero_level)
 
+                #NGC = np.loadtxt('/home/slava/science/codes/python/jwst/input/NGC19.txt',delimiter=',')
+                #NGC = np.loadtxt('/home/slava/science/data/SPITZER/AO0235/cassis_yaaar_spcfw_15121152t.dat')
+                NGC = np.loadtxt('/home/slava/science/data/SPITZER/AO0235/cassis_yaaar_spcfw_15121152t-copy-red_norm.dat')
+                x,y = NGC[:,0], NGC[:,1]
+                mask = (x>wavel[10])*(x<wavel[40])
+                self.show_template = False
+                if np.sum(mask)>0:
+                    self.show_template = True
+                    norm = 1/np.mean(y[mask])*np.mean(data[10:40])
+                    self.plot_NGC = pg.PlotCurveItem(x,y*norm, pen='lightgreen')
+                    self.vb.addItem(self.plot_NGC)
+                    self.legend_model.addItem(self.plot_NGC, 'Template')
+
                 self.lr = pg.LinearRegionItem(values=[5,5])
                 self.lr.setZValue(-10)
                 self.vb.addItem(self.lr)
+
+
                 def update_lr():
                     (timeind, time) = self.parent.plot_3dcubeA.timeIndex(self.parent.plot_3dcubeA.timeLine)
                     (l,x,y) = self.parent.CUBE_A.conv_world_coord(t=time, x=10, y=10)
@@ -947,6 +1103,15 @@ class plotSpec(pg.PlotWidget):
         else:
             try:
                 self.vb.removeItem(self.plot_lineA1)
+                if show_err_bar:
+                    self.vb.removeItem(self.plot_errbarA1)
+                self.legend_model.removeItem(self.plot_lineA1)
+                if self.show_template:
+                    self.show_template = False
+                    self.vb.removeItem(self.plot_NGC)
+                    self.legend_model.removeItem(self.plot_NGC)
+
+
 
                 self.vb.removeItem(self.zero_level)
                 self.vb.removeItem(self.lr)
@@ -956,48 +1121,145 @@ class plotSpec(pg.PlotWidget):
             except:
                 pass
 
-    def plot_specA2(self, data=None, add=True,pen=pg.mkPen(color='white', style=Qt.DashLine, width=1)): #pg.mkPen(color='gray', style=Qt.DashLine, width=3)
+
+    def plot_specAmax(self, data=None, err=None,add=True,pen=pg.mkPen(color='royalblue', style=Qt.DashLine, width=1),normalize=False,show_err_bar=False,label='Amax'):
         if add:
             wavel = self.parent.CUBE_A.data.wavelength
             if np.size(data) == np.size(wavel):
+                if normalize:
+                    norm = np.mean(data[10:40])
+                    data = data / norm
+                    err = err / norm
+                self.plot_lineAmax = pg.PlotCurveItem(wavel, data,pen=pen)
+                self.plot_errbarAmax = pg.ErrorBarItem(x=wavel, y=data, height=err, pen=pen)
+                self.vb.addItem(self.plot_lineAmax)
+                self.legend_model.addItem(self.plot_lineAmax, label)
+                if show_err_bar:
+                    self.vb.addItem(self.plot_errbarAmax)
 
-                pen = pen
-                self.plot_lineA2 = pg.PlotCurveItem(wavel, data,pen=pen)
-                self.vb.addItem(self.plot_lineA2)
-                self.lines = self.listDataItems()
-                #self.vb.autoRange()
-                #self.vb.setLimits(xMin=wavel[0]*0.98, xMax=wavel[-1]*1.02)
+                self.lr = pg.LinearRegionItem(values=[5,5])
+                self.lr.setZValue(-10)
+                self.vb.addItem(self.lr)
+                def update_lr():
+                    (timeind, time) = self.parent.plot_3dcubeA.timeIndex(self.parent.plot_3dcubeA.timeLine)
+                    (l,x,y) = self.parent.CUBE_A.conv_world_coord(t=time, x=10, y=10)
+                    self.lr.setRegion(rgn=[l,l])
+
+                update_lr()
+
+
+
+
+
+
+
         else:
             try:
-                self.vb.removeItem(self.plot_lineA2)
+                self.vb.removeItem(self.plot_lineAmax)
+                self.legend_model.removeItem(self.plot_lineAmax)
+                if show_err_bar:
+                    self.vb.removeItem(self.plot_errbarAmax)
+
+                self.vb.removeItem(self.lr)
+
+
 
             except:
                 pass
 
-    def plot_specB1(self, data=None, add=True, pen=pg.mkPen(color='white', style=Qt.DashLine,
-                                                            width=1)):  # pg.mkPen(color='gray', style=Qt.DashLine, width=3)
+    def plot_specA2(self, data=None, err=None, add=True, pen=pg.mkPen(color='royalblue', style=Qt.DashLine, width=1),
+                     normalize=False, show_err_bar=False, label='A2'):
+        if add:
+            wavel = self.parent.CUBE_A.data.wavelength
+            if np.size(data) == np.size(wavel):
+                if normalize:
+                    norm = np.mean(data[10:40])
+                    data = data / norm
+                    err = err / norm
+                self.plot_lineA2 = pg.PlotCurveItem(wavel, data, pen=pen)
+                self.plot_errbarA2 = pg.ErrorBarItem(x=wavel, y=data, height=err, pen=pen)
+                self.vb.addItem(self.plot_lineA2)
+                self.legend_model.addItem(self.plot_lineA2, label)
+                if show_err_bar:
+                    self.vb.addItem(self.plot_errbarA2)
+
+        else:
+            try:
+                self.vb.removeItem(self.plot_lineA2)
+                self.legend_model.removeItem(self.plot_lineA2)
+                if show_err_bar:
+                    self.vb.removeItem(self.plot_errbarA2)
+                #self.vb.removeItem(self.plot_lineA2m1)
+                #self.vb.removeItem(self.plot_errbarA2m1)
+
+
+            except:
+                pass
+
+    def plot_specA2m1(self, data=None, err=None, add=True, pen=pg.mkPen(color='royalblue', style=Qt.SolidLine, width=2),
+                    normalize=False, show_err_bar=False, label='A2-A1'):
+        if add:
+            wavel = self.parent.CUBE_A.data.wavelength
+            if np.size(data) == np.size(wavel):
+                if normalize:
+                    norm = np.mean(data[10:40])
+                    data = data / norm
+                    err = err / norm
+                self.plot_lineA2m1 = pg.PlotCurveItem(wavel, data, pen=pen)
+                self.plot_errbarA2m1 = pg.ErrorBarItem(x=wavel, y=data, height=err, pen=pen)
+                self.vb.addItem(self.plot_lineA2m1)
+                self.legend_model.addItem(self.plot_lineA2m1, label)
+                if show_err_bar:
+                    self.vb.addItem(self.plot_errbarA2m1)
+
+        else:
+            try:
+                self.vb.removeItem(self.plot_lineA2m1)
+                self.legend_model.removeItem(self.plot_lineA2m1)
+                if show_err_bar:
+                    self.vb.removeItem(self.plot_errbarA2m1)
+
+
+
+            except:
+                pass
+
+
+    def plot_specB1(self, data=None, err=None, add=True, pen=pg.mkPen(color='white', style=Qt.DashLine,
+                                                            width=1),normalize=True,show_err_bar=False):  # pg.mkPen(color='gray', style=Qt.DashLine, width=3)
         if add:
             wavel = self.parent.CUBE_B.data.wavelength
             if np.size(data) == np.size(wavel):
-                pen = pen
+                if normalize:
+                    norm = np.mean(data[10:40])
+                    data = data / norm
+                    err = err/norm
                 self.plot_lineB1 = pg.PlotCurveItem(wavel, data, pen=pen)
+                self.plot_errbarB1 = pg.ErrorBarItem(x=wavel, y=data, height=err, pen=pen)
                 self.vb.addItem(self.plot_lineB1)
+                if show_err_bar:
+                    self.vb.addItem(self.plot_errbarB1)
 
                 #self.vb.autoRange()
                 #self.vb.setLimits(xMin=wavel[0] * 0.98, xMax=wavel[-1] * 1.02)
         else:
             try:
                 self.vb.removeItem(self.plot_lineB1)
+                if show_err_bar:
+                    self.vb.removeItem(self.plot_errbarB1)
+
 
             except:
                 pass
 
     def plot_specB2(self, data=None, add=True, pen=pg.mkPen(color='white', style=Qt.DashLine,
-                                                            width=1)):  # pg.mkPen(color='gray', style=Qt.DashLine, width=3)
+                                                            width=1),normalize=True):  # pg.mkPen(color='gray', style=Qt.DashLine, width=3)
         if add:
             wavel = self.parent.CUBE_B.data.wavelength
             if np.size(data) == np.size(wavel):
-                pen = pen
+                if normalize:
+                    norm = np.mean(data[10:40])
+                    data = data / norm
                 self.plot_lineB2 = pg.PlotCurveItem(wavel, data, pen=pen)
                 self.vb.addItem(self.plot_lineB2)
 
@@ -1050,13 +1312,14 @@ class plotHist(pg.PlotWidget):
                 self.vb.addItem(self.zero_level)
                 if med_mode== 'median':
                     median = np.sum(d / derr ** 2) / np.sum(1 / derr ** 2)
-                    median_error = 1 / np.sum(1 / derr ** 2)
+                    median_error = np.sqrt( 1 / np.sum(1 / derr ** 2))
+                    mean = np.sum(d) / np.size(d)
                     c2 =  pg.PlotCurveItem([median+ median_error,median+ median_error], [0,np.max(y)],  pen=pen)
                     c1 = pg.PlotCurveItem([median-median_error, median-median_error], [0, np.max(y)], pen=pen)
                     #c3 = pg.PlotCurveItem([median, median], [0, np.max(y)], pen='grey')
                     self.fill1 = pg.FillBetweenItem(c1, c2,brush=brush)
-                    self.mean_line = pg.PlotCurveItem([median, median], [0, 1.2*np.max(y)], pen='grey')
-                    self.median_line = pg.PlotCurveItem([np.median(d), np.median(d)], [0, 1.5*np.max(y)], pen='blue')
+                    self.mean_line = pg.PlotCurveItem([mean, mean], [0, 1.5*np.max(y)], pen='red')
+                    self.median_line = pg.PlotCurveItem([median, median], [0, 1.5*np.max(y)], pen='lightgreen')
                     self.vb.addItem(self.fill1)
                     self.vb.addItem(self.mean_line)
                     self.vb.addItem(self.median_line)
@@ -1101,6 +1364,83 @@ class plotHist(pg.PlotWidget):
                 self.vb.removeItem(self.median_line2)
             except:
                 pass
+
+
+class plotSlit(pg.PlotWidget):
+    def __init__(self, parent):
+        self.parent = parent
+        pg.PlotWidget.__init__(self, background=(29, 29, 29), labels={'left': 'Flux (MJy/sr*Npix)', 'bottom': 'Spatial axis [pix]'})
+        #self.initstatus()
+        self.vb = self.getViewBox()
+        self.image = None
+        self.text = None
+        self.grid = image()
+        cdict = cm.get_cmap('viridis')
+        cmap = np.array(cdict.colors)
+        cmap[-1] = [1, 0.4, 0]
+        map = pg.ColorMap(np.linspace(0, 1, cdict.N), cmap, mode='rgb')
+        self.colormap = map.getLookupTable(0.0, 1.0, 256, alpha=False)
+        self.legend = pg.LegendItem(offset=(-70, 30))
+        self.legend.setParentItem(self.vb)
+        self.legend_model = pg.LegendItem(offset=(-70, -30))
+        self.legend_model.setParentItem(self.vb)
+        self.setTitle("Slit profile", color="olive", size="10pt")
+        self.lines = self.listDataItems()
+
+    def plot_slit(self, data=None, add=True,pen=pg.mkPen(color='white', style=Qt.DashLine, width=1)): #pg.mkPen(color='gray', style=Qt.DashLine, width=3)
+        if add:
+            if np.sum(data) > 0:
+                x = np.arange(data.shape[0])
+                self.plot_slit_profile = pg.PlotCurveItem(x, data,  pen=pen)
+                self.vb.addItem(self.plot_slit_profile)
+                if 1:
+                    from specutils.spectra import Spectrum1D
+                    from specutils.fitting import fit_lines
+                    from astropy import units as u
+                    from astropy.modeling import models
+                    from scipy.interpolate import interp1d
+                    (timeind, time) = self.parent.plot_3dcubeA.timeIndex(self.parent.plot_3dcubeA.timeLine)
+                    lambda_local = self.parent.CUBE_A.data.wavelength[timeind]
+                    def miri_psf_pix(lam):
+                        #interpolation of miri psf https://jwst-docs.stsci.edu/jwst-mid-infrared-instrument/miri-performance/miri-point-spread-functions
+                        f = np.loadtxt('./data/miri_psf_pix.dat')
+
+                        print(f[:,0])
+                        f1d = interp1d(f[:,0],f[:,1],fill_value='extrapolate')
+                        print('miri psf =',f1d(lam))
+                        return f1d(lam)
+                    miri_psf_fwhm = miri_psf_pix(lambda_local)
+                    miri_psf_stddev = miri_psf_fwhm/2.355
+                    spectrum = Spectrum1D(flux=data * u.Jy, spectral_axis=x * u.um)
+                    # Fit the spectrum and calculate the fitted flux values (``y_fit``)
+                    g_init = models.Gaussian1D(amplitude=3. * u.Jy, mean=np.nanargmax(data) * u.um, stddev=miri_psf_stddev * u.um)
+                    g_init.stddev.fixed = True #tied = tie_disp
+                    g_init.mean.fixed = True #tied = tie_disp
+                    g_fit = fit_lines(spectrum, g_init)
+                    y_fit = g_fit(np.linspace(x[0],x[-1],100) * u.um)
+                    self.plot_model2 = pg.PlotCurveItem(np.linspace(x[0],x[-1],100), y_fit, pen=pg.mkPen(color='yellow', style=Qt.DashLine, width=1))
+
+                    fitter = modeling.fitting.LevMarLSQFitter()
+                    model = modeling.models.Gaussian1D()  # depending on the data you need to give some initial values
+                    fitted_model = fitter(model, x, data)
+                    self.plot_model = pg.PlotCurveItem(x,fitted_model(x), pen='red')
+
+                    self.vb.addItem(self.plot_model)
+                    self.vb.addItem(self.plot_model2)
+                self.zero_level = pg.PlotCurveItem([np.min(x),np.max(x)], [0,0], pen='white')
+                self.vb.addItem(self.zero_level)
+
+        else:
+            try:
+                self.vb.removeItem(self.plot_slit_profile)
+                self.vb.removeItem(self.zero_level)
+                self.vb.removeItem(self.plot_model)
+                self.vb.removeItem(self.plot_model2)
+
+            except:
+                pass
+
+
 
 
 class CUBElistTable(pg.TableWidget):
@@ -1187,12 +1527,36 @@ class CUBElistTable(pg.TableWidget):
         master_extract1d_flag = int(self.parent.parent.exp_pars.master_extract1d_flag.currentIndex())
 
         channel = self.parent.parent.exp_pars.asn_channel.currentText()
-        asn_file = self.parent.parent.CUBE_A.tmp_asn_file
+        asn_file = self.parent.parent.CUBE_A.local_asn_file
         print('Built cube from asn files:')
         self.parent.parent.CUBE_A.build_cube(input_file=asn_file, channel = channel, master_bkgr_flag = master_bkgr_flag ,
                                            master_res_bkgr_flag = master_res_bkgr_flag, master_outlier_flag = master_outlier_flag,
                                            master_resample_spec_flag=master_resample_spec_flag, master_extract1d_flag = master_extract1d_flag)
 
+    def build_3dcube_12_channels(self):
+        source = self.parent.parent.exp_pars.asn_source.currentText()
+        master_bkgr_flag = int(self.parent.parent.exp_pars.master_bkgr_flag.currentIndex())
+        master_res_bkgr_flag = int(self.parent.parent.exp_pars.master_res_bkgr_flag.currentIndex())
+        master_outlier_flag = int(self.parent.parent.exp_pars.master_outlier_flag.currentIndex())
+        master_resample_spec_flag = int(self.parent.parent.exp_pars.master_resample_spec_flag.currentIndex())
+        master_extract1d_flag = int(self.parent.parent.exp_pars.master_extract1d_flag.currentIndex())
+
+        print('source', source)
+        for channel in ['1','2','3','4']:
+            for band in ['SHORT', 'MEDIUM','LONG']:
+                cube_filename = self.parent.parent.exp_pars.cube_filename.text()
+                print('ASN file params:', source, channel, band, cube_filename)
+                input_dir = self.parent.parent.CUBE_A.path
+                self.parent.parent.CUBE_A.create_association(input_dir=input_dir, source=source, channel=channel,
+                                                                     band=band, subfilename=cube_filename)
+
+                asn_file = self.parent.parent.CUBE_A.local_asn_file
+                print('Build cube:')
+                self.parent.parent.CUBE_A.build_cube(input_file=asn_file, channel=channel, master_bkgr_flag=master_bkgr_flag,
+                                                     master_res_bkgr_flag=master_res_bkgr_flag,
+                                                     master_outlier_flag=master_outlier_flag,
+                                                     master_resample_spec_flag=master_resample_spec_flag,
+                                                     master_extract1d_flag=master_extract1d_flag)
 
     def extract_roi(self, cube_name = '(A)'):
         if cube_name == '(A)':
@@ -1209,19 +1573,35 @@ class CUBElistTable(pg.TableWidget):
         for ir,roi in enumerate(cube.roi_list):
             if np.sum(roi.roi_mask) > 0:
                 num_pixels = np.sum(roi.roi_mask)
-                roi_selected_flux = np.zeros(cube.data.shape[0])
-                roi_selected_flux_error = np.zeros(cube.data.shape[0])
+                roi_mean_w_flux = np.zeros(cube.data.shape[0])
+                roi_mean_w_f_error = np.zeros(cube.data.shape[0])
+                roi_mean =  np.zeros(cube.data.shape[0])
+                y = np.zeros(cube.data.shape[0])
+                y_err = np.zeros(cube.data.shape[0])
                 for i in range(cube.data.shape[0]):
                     d = data.data[i, :, :]
                     mask = (roi.roi_mask)*(~np.isnan(d))
                     d = d[mask]
                     derr = data.err[i, :, :]
                     derr = derr[mask]
-                    roi_selected_flux[i] = np.nansum(d/derr**2) / np.nansum(1/derr**2)
-                    roi_selected_flux_error[i] = 1/np.nansum(1/derr**2)
+                    w = np.power(derr,2)
+                    y[i] = np.nansum(d, axis=0)
+                    y_err[i] =  np.power(np.nansum(w, axis=0), 0.5)
+                    roi_mean_w_flux[i] = np.nansum(d/derr**2) / np.nansum(1/derr**2)
+                    roi_mean_w_f_error[i] = 1/np.nansum(1/derr**2)
+
+                    roi_mean[i] = np.nansum(d) / np.size(d)
+                if 1:
+                    fig,ax = plt.subplots()
+                    ax.errorbar(x=np.arange(np.size(y)),y=y,yerr=y_err,label='w_weighted',lw =2)
+                    ax.errorbar(x=np.arange(np.size(y)),y=roi_mean_w_flux,yerr=roi_mean_w_f_error, label='mean weighted',ls = '--')
+                    ax.plot(roi_mean, label = 'mean')
+                    ax.legend()
+                    plt.show()
                 filename = './output/detector3/roi_spectra/'+name+'_'+cube_name+'_'+roi_name[ir]+'.spec1d'
                 with open(filename, 'w') as fout:
-                    for x,y,e in zip(wavel,roi_selected_flux,roi_selected_flux_error):
+                    #for x,y,e in zip(wavel,roi_mean_w_flux,roi_mean_w_f_error):
+                    for x, y, e in zip(wavel, y, y_err):
                         fout.write('%.4e %.4e %.4e \n' %(x,y,e))
                 fout.close()
 
@@ -1244,18 +1624,21 @@ class CUBElistTable(pg.TableWidget):
             elif mode == 'B2':
                 roi_mask = self.parent.parent.plot_3dcubeB.roi_list[1].roi_mask
                 (timeind, time) = self.parent.parent.plot_3dcubeB.timeIndex(self.parent.parent.plot_3dcubeB.timeLine)
+            elif mode == 'S1':
+                roi_mask = self.parent.parent.plot_3dcubeA.roi_add.roi_mask
+                (timeind, time) = self.parent.parent.plot_3dcubeA.timeIndex(self.parent.parent.plot_3dcubeA.timeLine)
 
             x, y = np.where(roi_mask > 0)
             lam = time
             lam_array = np.zeros_like(x) + lam
             print('roi pixels at lambda=',lam)
-            if mode in ['A1', 'A2']:
+            if mode in ['A1', 'A2','S1']:
                 lam_world, x_world,y_world = self.parent.parent.CUBE_A.conv_world_coord(t=lam_array, x=y, y=x)
             elif mode in ['B1', 'B2']:
                 lam_world, x_world, y_world = self.parent.parent.CUBE_B.conv_world_coord(t=lam_array, x=y, y=x)
             if self.flags['show_ROI'] == False:
                 self.flags['show_ROI'] = True
-                if mode in ['A1','A2']:
+                if mode in ['A1','A2','S1']:
                     self.parent.parent.plot_3dcubeA.selectPixels(add=self.flags['show_ROI'], x=y, y=x, color='m',type='cr_multi')
                 elif mode in ['B1','B2']:
                     self.parent.parent.plot_3dcubeB.selectPixels(add=self.flags['show_ROI'], x=y, y=x, color='m',
@@ -1320,7 +1703,7 @@ class CUBElistTable(pg.TableWidget):
 
             else:
                 self.flags['show_ROI'] = False
-                if mode in ['A1', 'A2']:
+                if mode in ['A1', 'A2','S1']:
                     self.parent.parent.plot_3dcubeA.selectPixels(add=False, type='cr_multi')
                 elif mode in ['B1', 'B2']:
                     self.parent.parent.plot_3dcubeB.selectPixels(add=False, type='cr_multi')
@@ -1441,10 +1824,16 @@ class CUBElistTable(pg.TableWidget):
                     if mode == 'A1':
                         self.parent.parent.plot_hist1.plot_hist(data=data, roi_mask=roi_mask, timeind=time, add=True)
 
+
+    def show_roi_slit_command(self,add=True,rad=1):
+        if add:
+            self.parent.parent.roi_slit.show()
+        self.parent.parent.plot_3dcubeA.add_Roi(add=add)
+
+
     def calc_median_cube(self,add=True,radius = 3,mode='mean-weighted',save_cube=True,debug =True):
         if add:
             print('kernel radius = ',radius)
-            import scipy.signal
             cube = self.parent.parent.CUBE_B
             data =cube.data.data
             err = cube.data.err
@@ -1468,15 +1857,19 @@ class CUBElistTable(pg.TableWidget):
                 slice = data[i,:,:]
                 slice_err = err[i,:,:]
                 slice_dq = dq[i,:,:]
-                p = slice[slice_dq==0]
+                slice[np.isnan(slice)] = 0
+                slice_err[np.isnan(slice)] = 1e-10
+                slice_one_array = np.ones_like(slice)
+                slice_one_array[slice == 0] = 0
 
                 if 1:
-                    mean_data[i,:,:] = scipy.signal.convolve2d(slice, filter_kernel,
-                                                  mode='same', boundary='fill', fillvalue=0)/np.sum(filter_kernel)
-                    mean_2_data[i, :, :] = scipy.signal.convolve2d(slice/slice_err, filter_kernel,
-                                                                 mode='same', boundary='fill', fillvalue=0) / scipy.signal.convolve2d(1/slice_err, filter_kernel,
-                                                                 mode='same', boundary='fill', fillvalue=0)
-                    mean_err[i, :, :] = 1/ scipy.signal.convolve2d(1 / slice_err,filter_kernel,mode='same',boundary='fill',fillvalue=0)
+                    npixels = scipy.signal.convolve2d(slice_one_array, filter_kernel, mode='same', boundary='fill', fillvalue=0)
+                    mean_data[i,:,:] = scipy.signal.convolve2d(slice, filter_kernel, mode='same', boundary='fill', fillvalue=0)/npixels
+                    mean_data[i, :, :][slice == 0] = 0
+                    #mean_2_data[i, :, :] = scipy.signal.convolve2d(slice/slice_err**2, filter_kernel,
+                    #                                             mode='same', boundary='fill', fillvalue=0) / scipy.signal.convolve2d(1/slice_err**2, filter_kernel,
+                    #                                             mode='same', boundary='fill', fillvalue=0)
+                    mean_err[i, :, :] = np.power(scipy.signal.convolve2d(slice_err**2,filter_kernel,mode='same',boundary='fill',fillvalue=0),0.5)/npixels
 
                 if 0:
                     for j in range(data.shape[1]):
@@ -1496,6 +1889,24 @@ class CUBElistTable(pg.TableWidget):
                             else:
                                 mean_data[i,j, k] = np.nan
                                 mean_err[i,j, k] = np.nan
+
+
+            win = signal.windows.hann(20)
+
+            for i in range(data.shape[1]):
+                for j in range(data.shape[2]):
+                    if i == 20 and j ==20:
+                        fig2, ax2 = plt.subplots()
+                        ax2.plot(mean_data[:,i,j],label='init',lw=2)
+                    mask = (np.arange(data.shape[0])>10 )*(np.arange(data.shape[0])<data.shape[0]-10 )
+                    convloved = signal.convolve(mean_data[:,i,j], win, mode='same')/ sum(win)
+                    mean_data[:, i, j][mask] = convloved[mask]
+                    if i == 20 and j == 20:
+                        ax2.plot(mean_data[:, i, j], label='smoothed',ls='--',lw=2)
+                        ax2.legend()
+
+                    mean_err[:, i, j] = signal.convolve(mean_err[:, i, j], win, mode='same') / sum(win)
+
             if debug:
                 fig,ax = plt.subplots(1,4)
                 ax[0].imshow(data[0,:,:])
@@ -1507,20 +1918,20 @@ class CUBElistTable(pg.TableWidget):
                 ax[3].legend()
 
 
-
-                fig2, ax2 = plt.subplots(1, 4)
-                ax2[0].imshow(data[0, :, :])
-                ax2[1].imshow(mean_2_data[0, :, :])
-                ax2[2].imshow(data[0, :, :] - mean_2_data[0, :, :])
-                ax2[3].hist(data[0,:,:].flatten()-mean_2_data[0,:,:].flatten(),label='subtracted-weighted')
-                ax2[3].hist(data[0,:,:].flatten(),label='initial')
-                ax2[3].legend()
+                if 0:
+                    fig2, ax2 = plt.subplots(1, 4)
+                    ax2[0].imshow(data[0, :, :])
+                    ax2[1].imshow(mean_2_data[0, :, :])
+                    ax2[2].imshow(data[0, :, :] - mean_2_data[0, :, :])
+                    ax2[3].hist(data[0,:,:].flatten()-mean_2_data[0,:,:].flatten(),label='subtracted-weighted',alpha=0.5)
+                    ax2[3].hist(data[0,:,:].flatten(),label='initial',alpha=0.5)
+                    ax2[3].legend()
 
                 plt.show()
             if save_cube:
                 filename = './output/detector3/cash/median_cube.fits'
                 hdu1 = fits.open(cube.cubename)
-                hdu1['SCI'].data = mean_2_data
+                hdu1['SCI'].data = mean_data
                 hdu1['ERR'].data = mean_err
                 hdu1.writeto(filename,overwrite=True)
                 self.parent.parent.plot_3dcube_median.add_from_file(self, filename=filename, add=True)
@@ -1823,6 +2234,17 @@ class expParsWidget(QWidget):
         layout.addLayout(horizontal_layout)
 
 
+        horizontal_layout = QHBoxLayout(self)
+        horizontal_layout.addWidget(QLabel('Roi Norm:'))
+        self.norm_flag_roi = QComboBox()
+        self.norm_flag_roi.addItems(['no', 'yes'])
+        self.norm_flag_roi.setCurrentIndex(0)
+        self.norm_flag_roi.setFixedSize(90, 30)
+        horizontal_layout.addWidget(self.norm_flag_roi)
+        horizontal_layout.addStretch(1)
+        layout.addLayout(horizontal_layout)
+
+
         layout.addStretch(1)
         self.setLayout(layout)
 
@@ -1863,56 +2285,37 @@ class expRunWidget(QWidget):
         l.addWidget(QLabel('Commands:'))
 
         horizontal_layout = QHBoxLayout(self)
-        self.create_asn = QPushButton('Create AssFile')
-        self.create_asn.clicked[bool].connect(partial(self.create_ASN_file))
-        self.create_asn.setFixedSize(200, 60)
-        horizontal_layout.addWidget(self.create_asn)
+        #self.create_asn = QPushButton('Create AssFile')
+        #self.create_asn.clicked[bool].connect(partial(self.create_ASN_file))
+        #self.create_asn.setFixedSize(200, 60)
+        #horizontal_layout.addWidget(self.create_asn)
         self.build_cube = QPushButton('Build cube')
         self.build_cube.clicked[bool].connect(partial(self.call_build_3dCube))
         self.build_cube.setFixedSize(200, 60)
         horizontal_layout.addWidget(self.build_cube)
+        self.build_cube_12ch = QPushButton('Build 12cubes')
+        self.build_cube_12ch.clicked[bool].connect(partial(self.call_build_cube_12_ch))
+        self.build_cube_12ch.setFixedSize(200, 60)
+        horizontal_layout.addWidget(self.build_cube_12ch)
         self.update_cubes_list = QPushButton('Update_List')
         self.update_cubes_list.clicked[bool].connect(partial(self.update_CubeList))
         self.update_cubes_list.setFixedSize(200, 60)
         horizontal_layout.addWidget(self.update_cubes_list)
-        horizontal_layout.addStretch(1)
-        l.addLayout(horizontal_layout)
 
-        horizontal_layout = QHBoxLayout(self)
-        l.addLayout(horizontal_layout)
-        self.select_roi = QPushButton('Select ROI')
-        self.select_roi.clicked[bool].connect(partial(self.ShowROI, 'slope'))
-        self.select_roi.setFixedSize(200, 60)
-        horizontal_layout.addWidget(self.select_roi)
-        self.roi_type = QComboBox()
-        self.roi_type.addItems(['green','red','purple','yellow'])
-        self.roi_type.setCurrentIndex(0)
-        self.roi_type.setFixedSize(90, 30)
-        horizontal_layout.addWidget(self.roi_type)
-        self.show_roi = QPushButton('Show Detector', self, checkable=True)
-        self.show_roi.setChecked(False)
-        self.show_roi.clicked[bool].connect(partial(self.ShowDetectorROI))
-        self.show_roi.setFixedSize(200, 60)
-        horizontal_layout.addWidget(self.show_roi)
-        self.extract_1d_roi = QPushButton('Extract ROI')
-        self.extract_1d_roi.clicked[bool].connect(partial(self.extract_Roi))
-        self.extract_1d_roi.setFixedSize(200, 60)
-        horizontal_layout.addWidget(self.extract_1d_roi)
-        self.extract_1d_roi_cube = QComboBox()
-        self.extract_1d_roi_cube.addItems(['(A)', '(B)'])
-        self.extract_1d_roi_cube.setCurrentIndex(0)
-        self.extract_1d_roi_cube.setFixedSize(60, 30)
-        horizontal_layout.addWidget(self.extract_1d_roi_cube)
+        self.save_local_cube = QPushButton('Save Cube', self, checkable=True)
+        self.save_local_cube.setChecked(False)
+        self.save_local_cube.clicked[bool].connect(partial(self.SaveLocalCube))
+        self.save_local_cube.setFixedSize(200, 60)
+        horizontal_layout.addWidget(self.save_local_cube)
         horizontal_layout.addStretch(1)
+        l.addLayout(horizontal_layout)
         layout.addLayout(l)
 
+        l = QVBoxLayout(self)
+        l.addWidget(QLabel('Background model:'))
         horizontal_layout = QHBoxLayout(self)
-        self.show_disp_roi = QPushButton('ShowHistROI', self, checkable=True)
-        self.show_disp_roi.setChecked(False)
-        self.show_disp_roi.clicked[bool].connect(partial(self.ShowROIDispersion))
-        self.show_disp_roi.setFixedSize(200, 60)
-        horizontal_layout.addWidget(self.show_disp_roi)
-
+        l.addLayout(horizontal_layout)
+        horizontal_layout = QHBoxLayout(self)
         self.calc_median_flux = QPushButton('CalcMedian', self, checkable=True)
         self.calc_median_flux.setChecked(False)
         self.calc_median_flux.clicked[bool].connect(partial(self.CalcMedCube))
@@ -1935,33 +2338,78 @@ class expRunWidget(QWidget):
         horizontal_layout.addWidget(self.name_cube_subtracted)
         horizontal_layout.addStretch(1)
         l.addLayout(horizontal_layout)
+        layout.addLayout(l)
 
+        l = QVBoxLayout(self)
+        l.addWidget(QLabel('Spectrum extraction:'))
         horizontal_layout = QHBoxLayout(self)
-        self.save_local_cube = QPushButton('Save Cube', self, checkable=True)
-        self.save_local_cube.setChecked(False)
-        self.save_local_cube.clicked[bool].connect(partial(self.SaveLocalCube))
-        self.save_local_cube.setFixedSize(200, 60)
-        horizontal_layout.addWidget(self.save_local_cube)
+        l.addLayout(horizontal_layout)
+        self.select_roi = QPushButton('Select ROI')
+        self.select_roi.clicked[bool].connect(partial(self.ShowROI, 'slope'))
+        self.select_roi.setFixedSize(200, 60)
+        horizontal_layout.addWidget(self.select_roi)
+        self.roi_type = QComboBox()
+        self.roi_type.addItems(['green', 'red', 'purple', 'yellow', 'blue'])
+        self.roi_type.setCurrentIndex(0)
+        self.roi_type.setFixedSize(90, 30)
+        horizontal_layout.addWidget(self.roi_type)
+        self.show_roi = QPushButton('Show Detector', self, checkable=True)
+        self.show_roi.setChecked(False)
+        self.show_roi.clicked[bool].connect(partial(self.ShowDetectorROI))
+        self.show_roi.setFixedSize(200, 60)
+        horizontal_layout.addWidget(self.show_roi)
         horizontal_layout.addStretch(1)
         l.addLayout(horizontal_layout)
 
+        horizontal_layout = QHBoxLayout(self)
+        self.show_disp_roi = QPushButton('ShowHistROI', self, checkable=True)
+        self.show_disp_roi.setChecked(False)
+        self.show_disp_roi.clicked[bool].connect(partial(self.ShowROIDispersion))
+        self.show_disp_roi.setFixedSize(200, 60)
+        horizontal_layout.addWidget(self.show_disp_roi)
+        self.extract_1d_roi = QPushButton('Extract ROI')
+        self.extract_1d_roi.clicked[bool].connect(partial(self.extract_Roi))
+        self.extract_1d_roi.setFixedSize(200, 60)
+        horizontal_layout.addWidget(self.extract_1d_roi)
+        self.extract_1d_roi_cube = QComboBox()
+        self.extract_1d_roi_cube.addItems(['(A)', '(B)'])
+        self.extract_1d_roi_cube.setCurrentIndex(0)
+        self.extract_1d_roi_cube.setFixedSize(60, 30)
+        horizontal_layout.addWidget(self.extract_1d_roi_cube)
+        self.show_roi_slit = QPushButton('Show Slit', self, checkable=True)
+        self.show_roi_slit.setChecked(False)
+        self.show_roi_slit.clicked[bool].connect(partial(self.ShowSlit))
+        self.show_roi_slit.setFixedSize(200, 60)
+        horizontal_layout.addWidget(self.show_roi_slit)
+        self.show_roi_1_minus_2 = QPushButton('Show A1/A2', self, checkable=True)
+        self.show_roi_1_minus_2.setChecked(False)
+        self.show_roi_1_minus_2.clicked[bool]
+        self.show_roi_1_minus_2.setFixedSize(200, 60)
+        horizontal_layout.addWidget(self.show_roi_1_minus_2)
+        horizontal_layout.addStretch(1)
+        l.addLayout(horizontal_layout)
         layout.addLayout(l)
-
-
 
         layout.addStretch(1)
         self.setLayout(layout)
+
+
+
 
         self.setStyleSheet(open('styles.ini').read())
 
 
     def create_ASN_file(self):
-        print('create_asn:')
         self.parent.Cubes_A.table.create_asn_file()
 
     def call_build_3dCube(self):
+        print('create_asn:')
+        self.parent.Cubes_A.table.create_asn_file()
         print('build cube:')
         self.parent.Cubes_A.table.build_3dcube()
+
+    def call_build_cube_12_ch(self):
+        self.parent.Cubes_A.table.build_3dcube_12_channels()
 
     def update_CubeList(self):
         print('update list:')
@@ -1974,6 +2422,17 @@ class expRunWidget(QWidget):
             self.parent.Cubes_A.table.extract_roi(cube_name=cube)
         elif cube == '(B)':
             self.parent.Cubes_B.table.extract_roi(cube_name=cube)
+
+    def ShowSlit(self):
+        self.parent.Cubes_A.table.show_roi_slit_command(add=self.parent.exp_commands.show_roi_slit.isChecked())
+
+        if 0:
+            def CalcMedCube(self):
+                self.parent.Cubes_A.table.calc_median_cube(add=self.parent.exp_commands.calc_median_flux.isChecked(),
+                                                           radius=int(self.parent.exp_commands.mean_kernel_rad.text()))
+
+                filename = './output/detector3/cash/median_cube.fits'
+                self.parent.plot_3dcube_median.show()
 
     def set_DQ_map(self, debug = False):
         print('set_DQ_map, debug:', debug)
@@ -2016,6 +2475,7 @@ class expRunWidget(QWidget):
         rois['red']=  'A2'
         rois['purple']=  'B1'
         rois['yellow'] =  'B2'
+        rois['blue'] =  'S1'
         self.parent.Cubes_A.table.show_roi(mode = rois[roi_type])
     def ShowDetectorROI(self):
         roi_type = self.roi_type.currentText()
@@ -2052,7 +2512,8 @@ class expRunWidget(QWidget):
                 tmp = np.array(self.parent.CUBE_A.data.data)
                 if self.parent.CUBE_A.flags['subtract_bkgr'] == False:
                     self.parent.CUBE_A.flags['subtract_bkgr'] = True
-                    self.parent.CUBE_A.data.data -= median_cube.data.data
+
+                    self.parent.CUBE_A.data.data[~np.isnan(self.parent.CUBE_A.data.data)] -= median_cube.data.data[~np.isnan(self.parent.CUBE_A.data.data)]
                     if debug:
                         fig, ax = plt.subplots(1, 2)
                         ax[0].imshow(tmp[10, :, :])
@@ -2061,6 +2522,8 @@ class expRunWidget(QWidget):
     def SaveLocalCube(self):
         first_cube = self.name_cube_subtracted.currentText()
         self.parent.Cubes_A.table.save_local_cube_code(cube_name=first_cube)
+
+
 
 class JWST_spec_viewer(QMainWindow):
 
@@ -2106,6 +2569,7 @@ class JWST_spec_viewer(QMainWindow):
                 self.plot_hist2 = plotHist(self)
                 self.plot_hist3 = plotHist(self)
                 self.plot_hist4 = plotHist(self)
+                self.plot_slit = plotSlit(self)
 
             self.plot_spectrum = plotSpec(self)
             self.Cubes_A = chooseExpWidget(self, closebutton=False,cube_choice='A')
@@ -2134,6 +2598,12 @@ class JWST_spec_viewer(QMainWindow):
                 self.roi_hist.addWidget(self.plot_hist2)
                 self.roi_hist.addWidget(self.plot_hist3)
                 self.roi_hist.addWidget(self.plot_hist4)
+            if 1:
+                self.roi_slit = QSplitter(Qt.Horizontal)
+                self.roi_slit.addWidget(self.plot_slit)
+
+
+
 
             #self.splitter_image.addWidget(self.spec_image1)
             self.splitter_image.addWidget(self.plot_3dcubeB)
