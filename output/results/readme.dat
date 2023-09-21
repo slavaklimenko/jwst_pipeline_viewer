@@ -1,0 +1,1 @@
+#pfiles from detector1 folder are copied to results folder. Then pipeline2 reads files from this folder
