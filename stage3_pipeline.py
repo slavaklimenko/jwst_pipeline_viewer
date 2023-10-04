@@ -98,6 +98,7 @@ class detector3():
             self.data.dq = hdu1['DQ'].data
             self.data.wmap = hdu1['WMAP'].data
             self.data.hdrtab = hdu1['HDRTAB'].data
+
             self.data.asdf = hdu1['ASDF'].data
             header = hdu1[0].header
             self.data.objname =  header['TARGPROP']

@@ -1113,9 +1113,9 @@ class EXPlistTable(pg.TableWidget):
             hdulist.close()
             sci_file = os.path.join('./output/results/', '{}rate.fits'.format(input_file_base))
             print('sci_file',sci_file)
-            hdulist = fits.open(sci_file)
-            sci_arr =hdulist['SCI'].data[:, :]
-            hdulist.close()
+            #hdulist = fits.open(sci_file)
+            #sci_arr =hdulist['SCI'].data[:, :]
+            #hdulist.close()
             num_groups = ramp_fit[0].meta.exposure.ngroups
             group_time = ramp_fit[0].meta.exposure.group_time
             print('Time per group:', group_time, ' in s')
@@ -1150,9 +1150,9 @@ class EXPlistTable(pg.TableWidget):
                 hdulist.close()
                 sci_file = os.path.join('./output/results/', '{}rate.fits'.format(input_file_base))
                 print(sci_file)
-                hdulist = fits.open(sci_file)
-                sci_arr = hdulist['SCI'].data[:, :]
-                hdulist.close()
+                #hdulist = fits.open(sci_file)
+                #sci_arr = hdulist['SCI'].data[:, :]
+                #hdulist.close()
 
                 optional_file = os.path.join(output_dir, '{}rate.fits'.format(input_file_base))
                 hdulist = fits.open(optional_file)
@@ -1283,6 +1283,8 @@ class EXPlistTable(pg.TableWidget):
         self.parent.parent.stage2.__init__(miri_uncal_file=exp_name, path=path, output_dir=output2_dir,spec2_cachedir=spec2_cachedir)
         if self.parent.parent.stage2.data != None:
             self.current_pipeline_stage = 'stage2'
+        instrument = self.parent.parent.stage2.data.meta.instrument.detector
+        return instrument
 
     def stage2_compare_maps(self):
         print('stage2: compare maps')
@@ -2031,27 +2033,30 @@ class expPipeline2Widget(QWidget):
     def Run_all_stage2(self):
         print('Run all')
         print('Init_Stage2:')
-        self.parent.Exposures.table.init_stage2()
+        detector = self.parent.Exposures.table.init_stage2()
         #self.parent.Exposures.table.show_image(mode='stage2')
-        print('AssignWCS')
-        self.parent.Exposures.table.stage2_call_wcs()
-        print('Select Hot Pixels')
-        self.parent.Exposures.table.stage2_fix_hot_pix()
-        print('Bkgr_Subtraction')
-        self.parent.Exposures.table.stage2_background_subtraction()
-        print('Flat_Field')
-        self.parent.Exposures.table.stage2_flat_field()
-        print('Source_identification')
-        self.parent.Exposures.table.stage2_source_identification()
-        print('StrayLight')
-        self.parent.Exposures.table.stage2_stray_light()
-        print('Fringe Flat correction')
-        self.parent.Exposures.table.stage2_fringe_flat_correction()
-        print('Flux_calibration')
-        self.parent.Exposures.table.stage2_flux_calibration()
-        print('Residual flux correction')
-        self.parent.Exposures.table.stage2_residual_fringe_correction()
-        print('Run all: done.')
+        if detector != 'MIRIMAGE':
+            print('AssignWCS')
+            self.parent.Exposures.table.stage2_call_wcs()
+            print('Select Hot Pixels')
+            self.parent.Exposures.table.stage2_fix_hot_pix()
+            print('Bkgr_Subtraction')
+            self.parent.Exposures.table.stage2_background_subtraction()
+            print('Flat_Field')
+            self.parent.Exposures.table.stage2_flat_field()
+            print('Source_identification')
+            self.parent.Exposures.table.stage2_source_identification()
+            print('StrayLight')
+            self.parent.Exposures.table.stage2_stray_light()
+            print('Fringe Flat correction')
+            self.parent.Exposures.table.stage2_fringe_flat_correction()
+            print('Flux_calibration')
+            self.parent.Exposures.table.stage2_flux_calibration()
+            print('Residual flux correction')
+            self.parent.Exposures.table.stage2_residual_fringe_correction()
+            print('Run all: done.')
+        else:
+            print('Error: You try to run pipilimne stage2 for IMAGE data')
 
     def Read_steps_stage2(self):
         print('Read step')

@@ -352,7 +352,7 @@ class detector2():
             ax[1].imshow(mmed)
             ax[2].imshow(mshort)
             plt.show()
-    def select_hot_pix(self,output_dir='./data/',debug=True):
+    def select_hot_pix(self,output_dir='./data/',debug=False):
         band = self.data.meta.instrument.band
         channel = self.data.meta.instrument.channel
         if channel == '34':
