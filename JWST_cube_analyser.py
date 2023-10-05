@@ -1194,7 +1194,8 @@ class plotSpec(pg.PlotWidget):
 
                 #NGC = np.loadtxt('/home/slava/science/codes/python/jwst/input/NGC19.txt',delimiter=',')
                 #NGC = np.loadtxt('/home/slava/science/data/SPITZER/AO0235/cassis_yaaar_spcfw_15121152t.dat')
-                NGC = np.loadtxt('/media/slava/14999070-ec17-4bcc-993d-c556030e9642/home/slava/science/data/SPITZER/AO0235/cassis_yaaar_spcfw_15121152t-copy-red_norm.dat')
+                #NGC = np.loadtxt('/media/slava/14999070-ec17-4bcc-993d-c556030e9642/home/slava/science/data/SPITZER/AO0235/cassis_yaaar_spcfw_15121152t-copy-red_norm.dat')
+                NGC = np.loadtxt('./data/reference_spectrum.dat')
                 x,y = NGC[:,0], NGC[:,1]
                 mask = (x>wavel[10])*(x<wavel[40])
                 self.show_template = False
