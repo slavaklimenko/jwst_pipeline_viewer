@@ -3,8 +3,8 @@ import glob
 import sys
 #Modify the path to a directory on your machine
 import os
-os.environ["CRDS_PATH"] = "/home/slava/science/codes/python/jwst/data"
-os.environ["CRDS_SERVER_URL"] = "https://jwst-crds.stsci.edu"
+#os.environ["CRDS_PATH"] = "/home/slava/science/codes/python/jwst/data"
+#os.environ["CRDS_SERVER_URL"] = "https://jwst-crds.stsci.edu"
 import time
 import shutil
 import warnings
@@ -56,11 +56,37 @@ from stcal import dqflags # Utilities for working with the data quality (DQ) arr
 from jwst.datamodels import dqflags
 
 #define input/output
-output_dir = './output/detector2/'
-input_dir = './output/results'
-miri_uncal_file= 'jw02155001001_04102_00001_mirifulong_uncal.fits'
-input_file_base = os.path.basename(miri_uncal_file).replace('uncal.fits', '')
-
+#output_dir = './output/detector2/'
+#input_dir = './output/results'
+#miri_uncal_file= 'jw02155001001_04102_00001_mirifulong_uncal.fits'
+#input_file_base = os.path.basename(miri_uncal_file).replace('uncal.fits', '')
+def read_settings(init_file='init.dat'):
+    init_settings = {}
+    with open(init_file) as f:
+        for k, line in enumerate(f):
+            values = [s for s in line.split()]
+            if line[0] != '#':
+                if values[0] == 'input1_dir:':
+                    input_dir = values[1]
+                    init_settings['input1_dir'] = values[1]
+                if values[0] == 'input2_dir:':
+                    init_settings['input2_dir'] = values[1]
+                if values[0] == 'spec2_cachedir:':
+                    init_settings['spec2_cachedir'] = values[1]
+                if values[0] == 'output1_dir:':
+                    init_settings['output1_dir'] = values[1]
+                if values[0] == 'output2_dir:':
+                    init_settings['output2_dir'] = values[1]
+                if values[0] == 'CRDS_PATH:':
+                    init_settings['CRDS_PATH'] = values[1]
+                if values[0] == 'CRDS_SERVER_URL:':
+                    init_settings['CRDS_SERVER_URL'] = values[1]
+    return init_settings
+settings =  read_settings()
+os.environ["CRDS_PATH"] = settings['CRDS_PATH']
+os.environ["CRDS_SERVER_URL"] = settings['CRDS_SERVER_URL']
+output_dir = settings['output2_dir'] #')./output/detector1/'
+input_dir = settings['input2_dir'] #./input/detector1/'
 
 
 class detector2():
@@ -453,7 +479,7 @@ class detector2():
         source_type_id_step.output_dir = output_dir
         source_type_id_step.save_results = save_results
 
-        # Call using the output from the previously-run dq_init step
+        # Call using the output from thSource_identificatione previously-run dq_init step
         self.data = source_type_id_step.run(input_file)
         if debug:
             print('Source type:', self.data.meta.target.source_type)

@@ -21,7 +21,7 @@ from scipy.interpolate import interp1d, interp2d, RectBivariateSpline, Rbf
 from scipy.interpolate import RBFInterpolator
 from scipy.optimize import bisect
 import sys
-sys.path.append('/home/slava/science/codes/python')
+#sys.path.append('/home/slava/science/codes/python')
 from stage1_pipeline import *
 from stage1_pipeline import detector1
 from stage2_pipeline import *
@@ -43,11 +43,11 @@ from pyqtgraph.Qt import QtCore, QtGui
 from stdatamodels.jwst import datamodels
 import csv
 
-output_dir = './output/detector1/'
-output2_dir = './output/detector2/'
-input_dir = './input/detector1/'
-miri_uncal_file= 'jw02155001001_04102_00001_mirifulong_uncal.fits'
-input_file_base = os.path.basename(miri_uncal_file).replace('uncal.fits', '')
+#output_dir = './output/detector1/'
+#output2_dir = './output/detector2/'
+#input_dir = './input/detector1/'
+#miri_uncal_file= 'jw02155001001_04102_00001_mirifulong_uncal.fits'
+#input_file_base = os.path.basename(miri_uncal_file).replace('uncal.fits', '')
 
 class image():
     """
@@ -396,20 +396,6 @@ class plotImage(pg.ImageView): #(pg.PlotWidget):
     #def keyPressEvent(self, event):
     #    super(plotGrid, self).keyPressEvent(event)
     #    key = event.key()
-
-   #     if not event.isAutoRepeat():
-   #         if event.key() == Qt.Key_S:
-   #             self.s_status = True
-
-    #def keyReleaseEvent(self, event):
-    #    super(plotGrid, self).keyReleaseEvent(event)
-    #    key = event.key()
-#        if not event.isAutoRepeat():
-#            if event.key() == Qt.Key_S:
-#                self.s_status = True
-#                self.parent.plot_exc.add_temp([], add=False)
-
-
 
 class plotPixProfile(pg.PlotWidget):
     def __init__(self, parent):
@@ -1331,17 +1317,6 @@ class EXPlistTable(pg.TableWidget):
     def stage2_flux_calibration(self):
         print('Source ID Step - Stage 2')
         self.parent.parent.stage2.flux_calibration_step()
-#
-#    def columnIndex(self, columnname):
-#        return [self.horizontalHeaderItem(x).text() for x in range(self.columnCount())].index(columnname)
-#
-#    def cell_value(self, columnname, row=None):
-#        if row is None:
-#            row = self.currentItem().row()
-#
-#        cell = self.item(row, self.columnIndex(columnname)).text()  # get cell at row, col#
-#
-#        return cell
 
 class chooseExpWidget(QWidget):
     """
@@ -1360,17 +1335,6 @@ class chooseExpWidget(QWidget):
 
         self.table = EXPlistTable(self)
         self.filelist = {}
-        #data = self.parent.EXP.data.makelist(pars=['z_dla', 'CO__val'], sys=self.parent.H2.H2.all(species='CO'), view='numpy')
-        if 0:
-            pars= ['name']
-            filenames = ['jw02155001001_04102_00001_mirifulong_uncal.fits','jw02155001001_04102_00001_mirifushort_uncal.fits']
-            #filenames = ['jw021550010010410200001mirifulong_uncal.fits']
-            lst = []
-            for s in filenames:
-                d = [s]
-                lst.append(d)
-            lst = np.array([tuple(l) for l in lst], dtype=[('name','U100')])
-            data = lst
         if 1:
             filenames,fileparams,codenames = self.readfolder(self.parent.EXP.path)
             lst = []
@@ -1386,16 +1350,13 @@ class chooseExpWidget(QWidget):
         # highilite rows
         #self.table.setSelectionBehavior(QTableView.SelectRows);
 
-        #indexes = self.table.selectionModel().selectedRows()
-        #for index in sorted(indexes):
-        #    print('Row %d is selected' % index.row())
         self.buttons = {}
         for i, d in enumerate(data):
             wdg = QWidget()
             l = QVBoxLayout()
             l.addSpacing(3)
             button = QPushButton(d[0].split('_uncal')[0], self, checkable=True)
-            button.setFixedSize(600, 30)
+            button.resize(600, 30)
             #button.setChecked(False)
             button.clicked[bool].connect(partial(self.click, d[0]))
             #button.clicked.connect(partial(self.click, d[0]))
@@ -1415,7 +1376,7 @@ class chooseExpWidget(QWidget):
 
         if closebutton and 1:
             self.okButton = QPushButton("Close")
-            self.okButton.setFixedSize(110, 30)
+            self.okButton.resize(110, 30)
             self.okButton.clicked[bool].connect(self.ok)
             hbox = QHBoxLayout()
             hbox.addWidget(self.okButton)
@@ -1429,6 +1390,7 @@ class chooseExpWidget(QWidget):
         """
         Read list of models from the folder
         """
+        print('load files from folder:',folder)
         self.tablefiles = {}
         if 1:
             lst = []
@@ -1437,12 +1399,16 @@ class chooseExpWidget(QWidget):
                 print(dirpath, dirname, filenames)
                 for k,f in enumerate(filenames):
                     if f.endswith('_uncal.fits'):
-                        print(k,'from', len(filenames))
-                        lst.append(dirpath.split('/')[-1]+'/'+f)
-                        params.append(self.readfile(pathotofile=dirpath,filename=f))
-                        self.tablefiles[f] = f
+                        str = dirpath+'/'+f
+                        hdu = fits.open(dirpath+'/'+f)
+                        if hdu[0].header['DETECTOR'] != 'MIRIMAGE':
+                            lst.append(dirpath.split('/')[-1]+'/'+f)
+                            params.append(self.readfile(pathotofile=dirpath,filename=f))
+                            self.tablefiles[f] = f
+                            print(f,params[-1])
+                        else:
+                            print('ERROR: you tried to load the IMAGE.fits file')
         codenames = ['PROGRAM','OBSERUN','TARGPROP','BAND','CHANNEL']
-
         return lst,params,codenames
 
     def readfile(self,pathotofile = '',filename = ''):
@@ -1507,13 +1473,13 @@ class expParsWidget(QWidget):
         l.addWidget(QLabel('Intergration:'))
         self.nINT = QLineEdit()
         self.nINT.setText(str(0))
-        self.nINT.setFixedSize(90, 30)
+        self.nINT.resize(90, 30)
         l.addWidget(self.nINT)
 
         l.addWidget(QLabel('Group:'))
         self.nGROUP = QLineEdit()
         self.nGROUP.setText(str(1))
-        self.nGROUP.setFixedSize(90, 30)
+        self.nGROUP.resize(90, 30)
         l.addWidget(self.nGROUP)
         l.addStretch(1)
         layout.addLayout(l)
@@ -1543,7 +1509,7 @@ class expParsWidget(QWidget):
         horizontal_layout.addWidget(QLabel('CR limit:'))
         self.CRlimit = QLineEdit()
         self.CRlimit.setText(str(5.0))
-        self.CRlimit.setFixedSize(90, 30)
+        self.CRlimit.resize(90, 30)
         horizontal_layout.addWidget(self.CRlimit)
         self.addCRneighbors = QCheckBox('4NeighPix')
         self.addCRneighbors.setChecked(True)
@@ -1552,13 +1518,13 @@ class expParsWidget(QWidget):
         self.CR_recalc_flag = QComboBox()
         self.CR_recalc_flag.addItems(['No','Yes'])
         self.CR_recalc_flag.setCurrentIndex(1)
-        self.CR_recalc_flag.setFixedSize(90, 30)
+        self.CR_recalc_flag.resize(90, 30)
         horizontal_layout.addWidget(self.CR_recalc_flag)
         horizontal_layout.addWidget(QLabel('SaveRes:'))
         self.save_tmp_res = QComboBox()
         self.save_tmp_res.addItems(['No','Yes'])
         self.save_tmp_res.setCurrentIndex(0)
-        self.save_tmp_res.setFixedSize(90, 30)
+        self.save_tmp_res.resize(90, 30)
         horizontal_layout.addWidget(self.save_tmp_res)
 
         horizontal_layout.addStretch(1)
@@ -1570,11 +1536,6 @@ class expParsWidget(QWidget):
         self.setLayout(layout)
 
         self.setStyleSheet(open('styles.ini').read())
-
-
-
-
-
 
 class expRunWidget(QWidget):
     """
@@ -1597,11 +1558,11 @@ class expRunWidget(QWidget):
         horizontal_layout = QHBoxLayout(self)
         self.show_image = QPushButton('Show Image')
         self.show_image.clicked[bool].connect(partial(self.show_Image,'image'))
-        self.show_image.setFixedSize(200, 60)
+        self.show_image.resize(200, 60)
         horizontal_layout.addWidget(self.show_image)
         self.show_slope = QPushButton('Show Slope')
         self.show_slope.clicked[bool].connect(partial(self.show_Image,'slope'))
-        self.show_slope.setFixedSize(200, 60)
+        self.show_slope.resize(200, 60)
         horizontal_layout.addWidget(self.show_slope)
         horizontal_layout.addStretch(1)
         l.addLayout(horizontal_layout)
@@ -1609,34 +1570,34 @@ class expRunWidget(QWidget):
         horizontal_layout = QHBoxLayout(self)
         self.set_dq_map = QPushButton('Read DQ')
         self.set_dq_map.clicked[bool].connect(partial(self.set_DQ_map, False))
-        self.set_dq_map.setFixedSize(150, 60)
+        self.set_dq_map.resize(150, 60)
         horizontal_layout.addWidget(self.set_dq_map)
         self.show_dq = QPushButton('Show DQ')
         self.show_dq.clicked[bool].connect(partial(self.show_DQ_map, False))
-        self.show_dq.setFixedSize(150, 60)
+        self.show_dq.resize(150, 60)
         horizontal_layout.addWidget(self.show_dq)
         self.dq_categories = QComboBox()
         flags = [*dqflags.pixel]
         self.dq_categories.addItems(['all']+flags)
         self.dq_categories.setCurrentIndex(2)
-        self.dq_categories.setFixedSize(90, 30)
+        self.dq_categories.resize(90, 30)
         horizontal_layout.addWidget(self.dq_categories)
         horizontal_layout.addWidget(QLabel('Show:'))
         self.show_linear_step = QPushButton('DNU')
         self.show_linear_step.clicked[bool].connect(partial(self.show_DNUpixels))
-        self.show_linear_step.setFixedSize(70, 60)
+        self.show_linear_step.resize(70, 60)
         horizontal_layout.addWidget(self.show_linear_step)
         self.show_sat_pixels = QPushButton('SatPix')
         self.show_sat_pixels.clicked[bool].connect(partial(self.show_SATpixels))
-        self.show_sat_pixels.setFixedSize(100, 60)
+        self.show_sat_pixels.resize(100, 60)
         horizontal_layout.addWidget(self.show_sat_pixels)
         self.show_single_jumps = QPushButton('CR')
         self.show_single_jumps.clicked[bool].connect(partial(self.ShowFirstCR, False))
-        self.show_single_jumps.setFixedSize(70, 60)
+        self.show_single_jumps.resize(70, 60)
         horizontal_layout.addWidget(self.show_single_jumps)
         self.show_sec_jumps = QPushButton('MultiCR')
         self.show_sec_jumps.clicked[bool].connect(partial(self.ShowSecondCR, False))
-        self.show_sec_jumps.setFixedSize(100, 60)
+        self.show_sec_jumps.resize(100, 60)
         horizontal_layout.addWidget(self.show_sec_jumps)
 
         horizontal_layout.addStretch(1)
@@ -1645,19 +1606,19 @@ class expRunWidget(QWidget):
         horizontal_layout = QHBoxLayout(self)
         self.saturation = QPushButton('1.Saturation')
         self.saturation.clicked[bool].connect(partial(self.SaturationStep, False))
-        self.saturation.setFixedSize(200, 60)
+        self.saturation.resize(200, 60)
         horizontal_layout.addWidget(self.saturation)
         self.first_last_step = QPushButton('2.First&Last')
         self.first_last_step.clicked[bool].connect(partial(self.FirstLastStep, False))
-        self.first_last_step.setFixedSize(150, 60)
+        self.first_last_step.resize(150, 60)
         horizontal_layout.addWidget(self.first_last_step)
         self.reset_step = QPushButton('3.ResetAnomaly')
         self.reset_step.clicked[bool].connect(partial(self.ResetStep, False))
-        self.reset_step.setFixedSize(250, 60)
+        self.reset_step.resize(250, 60)
         horizontal_layout.addWidget(self.reset_step)
         self.linear_step = QPushButton('4.LinearCorr')
         self.linear_step.clicked[bool].connect(partial(self.LinearStep, False))
-        self.linear_step.setFixedSize(200, 60)
+        self.linear_step.resize(200, 60)
         horizontal_layout.addWidget(self.linear_step)
         horizontal_layout.addStretch(1)
         l.addLayout(horizontal_layout)
@@ -1666,19 +1627,19 @@ class expRunWidget(QWidget):
         horizontal_layout = QHBoxLayout(self)
         self.rscd_step = QPushButton('5.RSCD')
         self.rscd_step.clicked[bool].connect(partial(self.RSCDStep, False))
-        self.rscd_step.setFixedSize(150, 60)
+        self.rscd_step.resize(150, 60)
         horizontal_layout.addWidget(self.rscd_step)
         self.dark_step_win = QPushButton('6.DarkSubtract')
         self.dark_step_win.clicked[bool].connect(partial(self.DarkStep, False))
-        self.dark_step_win.setFixedSize(200, 60)
+        self.dark_step_win.resize(200, 60)
         horizontal_layout.addWidget(self.dark_step_win)
         self.refpix_step = QPushButton('7.ReferencePix')
         self.refpix_step.clicked[bool].connect(partial(self.RefPixStep, False))
-        self.refpix_step.setFixedSize(200, 60)
+        self.refpix_step.resize(200, 60)
         horizontal_layout.addWidget(self.refpix_step)
         self.jump_step = QPushButton('8. Jump Detection')
         self.jump_step.clicked[bool].connect(partial(self.JumpStep,False))
-        self.jump_step.setFixedSize(250, 60)
+        self.jump_step.resize(250, 60)
         horizontal_layout.addWidget(self.jump_step)
         horizontal_layout.addStretch(1)
         l.addLayout(horizontal_layout)
@@ -1687,26 +1648,26 @@ class expRunWidget(QWidget):
         horizontal_layout = QHBoxLayout(self)
         self.slope_fit_step = QPushButton('9. SlopeFit')
         self.slope_fit_step.clicked[bool].connect(partial(self.SlopeFitStep))
-        self.slope_fit_step.setFixedSize(250, 60)
+        self.slope_fit_step.resize(250, 60)
         horizontal_layout.addWidget(self.slope_fit_step)
 
         self.run_all_stage1 = QPushButton('Run stage(1)')
         self.run_all_stage1.clicked[bool].connect(partial(self.RunAllStage1))
-        self.run_all_stage1.setFixedSize(250, 60)
+        self.run_all_stage1.resize(250, 60)
         horizontal_layout.addWidget(self.run_all_stage1)
 
         self.run_stage1_obj_in_table = QPushButton('Run1 all')
         self.run_stage1_obj_in_table.clicked[bool].connect(partial(self.run_stage1_table))
-        self.run_stage1_obj_in_table.setFixedSize(150, 60)
+        self.run_stage1_obj_in_table.resize(150, 60)
         horizontal_layout.addWidget(self.run_stage1_obj_in_table)
 
         self.show_single_fit = QPushButton('SaveFit')
         self.show_single_fit.clicked[bool].connect(partial(self.SaveSlopeFit))
-        self.show_single_fit.setFixedSize(200, 60)
+        self.show_single_fit.resize(200, 60)
         horizontal_layout.addWidget(self.show_single_fit)
         self.show_jump_fit = QPushButton('ReadFit')
         self.show_jump_fit.clicked[bool].connect(partial(self.ReadSlopeFit, False))
-        self.show_jump_fit.setFixedSize(200, 60)
+        self.show_jump_fit.resize(200, 60)
         horizontal_layout.addWidget(self.show_jump_fit)
         horizontal_layout.addStretch(1)
         l.addLayout(horizontal_layout)
@@ -1861,29 +1822,29 @@ class expPipeline2Widget(QWidget):
         horizontal_layout = QHBoxLayout(self)
         self.init_rate = QPushButton('Init')
         self.init_rate.clicked[bool].connect(partial(self.Init_Stage2))
-        self.init_rate.setFixedSize(200, 60)
+        self.init_rate.resize(200, 60)
         horizontal_layout.addWidget(self.init_rate)
 
         self.init_rate = QPushButton('Show Rate')
         self.init_rate.clicked[bool].connect(partial(self.Show_Rate_stage2))
-        self.init_rate.setFixedSize(200, 60)
+        self.init_rate.resize(200, 60)
         horizontal_layout.addWidget(self.init_rate)
 
         self.show_comparison = QPushButton('Compare maps')
         self.show_comparison.clicked[bool].connect(partial(self.Compare_maps))
-        self.show_comparison.setFixedSize(200, 60)
+        self.show_comparison.resize(200, 60)
         horizontal_layout.addWidget(self.show_comparison)
         self.compare_init_map_choice = QComboBox()
         flags = ['Initial','BkgrSub','Flatfield','Straylight','Fringe','Photom','ResFringe']
         self.compare_init_map_choice.addItems(flags)
         self.compare_init_map_choice.setCurrentIndex(0)
-        self.compare_init_map_choice.setFixedSize(150, 30)
+        self.compare_init_map_choice.resize(150, 30)
         horizontal_layout.addWidget(self.compare_init_map_choice)
         self.compare_sec_map_choice = QComboBox()
         flags = ['Initial', 'BkgrSub', 'Flatfield', 'Straylight', 'Fringe','Photom','ResFringe']
         self.compare_sec_map_choice.addItems(flags)
         self.compare_sec_map_choice.setCurrentIndex(0)
-        self.compare_sec_map_choice.setFixedSize(140, 30)
+        self.compare_sec_map_choice.resize(140, 30)
         horizontal_layout.addWidget(self.compare_sec_map_choice)
 
         horizontal_layout.addStretch(1)
@@ -1893,28 +1854,28 @@ class expPipeline2Widget(QWidget):
 
         self.select_jot_pix_step = QPushButton('0.FixHotPix')
         self.select_jot_pix_step.clicked[bool].connect(partial(self.FixHotPix))
-        self.select_jot_pix_step.setFixedSize(200, 60)
+        self.select_jot_pix_step.resize(200, 60)
         horizontal_layout.addWidget(self.select_jot_pix_step)
 
         self.run_wcs_step = QPushButton('1.AssignWCS')
         self.run_wcs_step.clicked[bool].connect(partial(self.AssignWCS))
-        self.run_wcs_step.setFixedSize(200, 60)
+        self.run_wcs_step.resize(200, 60)
         horizontal_layout.addWidget(self.run_wcs_step)
 
 
         self.run_bkgr_sub = QPushButton('(2.Bkgr Subtr)')
         self.run_bkgr_sub.clicked[bool].connect(partial(self.Bkgr_Subtraction))
-        self.run_bkgr_sub.setFixedSize(200, 60)
+        self.run_bkgr_sub.resize(200, 60)
         horizontal_layout.addWidget(self.run_bkgr_sub)
 
         self.run_flat_field = QPushButton('3.FlatField')
-        self.run_flat_field.clicked[bool].connect(partial(self.Flat_Field, False))
-        self.run_flat_field.setFixedSize(150, 60)
+        self.run_flat_field.clicked[bool].connect(partial(self.Flat_Field ))
+        self.run_flat_field.resize(150, 60)
         horizontal_layout.addWidget(self.run_flat_field)
 
         self.run_source_id = QPushButton('4.SourceID')
-        self.run_source_id.clicked[bool].connect(partial(self.Source_identification, False))
-        self.run_source_id.setFixedSize(150, 60)
+        self.run_source_id.clicked[bool].connect(partial(self.Source_identification))
+        self.run_source_id.resize(150, 60)
         horizontal_layout.addWidget(self.run_source_id)
 
         horizontal_layout.addStretch(1)
@@ -1923,25 +1884,25 @@ class expPipeline2Widget(QWidget):
         horizontal_layout = QHBoxLayout(self)
         self.run_stray_light = QPushButton('5.StrayLight')
         self.run_stray_light.clicked[bool].connect(partial(self.StrayLight))
-        self.run_stray_light.setFixedSize(200, 60)
+        self.run_stray_light.resize(200, 60)
         horizontal_layout.addWidget(self.run_stray_light)
 
         self.run_fringe_corr = QPushButton('6.Fringe Corr')
-        self.run_fringe_corr.clicked[bool].connect(partial(self.Fringe_correction, False))
-        self.run_fringe_corr.setFixedSize(200, 60)
+        self.run_fringe_corr.clicked[bool].connect(partial(self.Fringe_correction))
+        self.run_fringe_corr.resize(200, 60)
         horizontal_layout.addWidget(self.run_fringe_corr)
 
 
 
         self.run_flux_calib = QPushButton('7.Flux calib')
-        self.run_flux_calib.clicked[bool].connect(partial(self.Flux_calibration, False))
-        self.run_flux_calib.setFixedSize(150, 60)
+        self.run_flux_calib.clicked[bool].connect(partial(self.Flux_calibration))
+        self.run_flux_calib.resize(150, 60)
         horizontal_layout.addWidget(self.run_flux_calib)
 
 
         self.run_res_fringe_corr = QPushButton('8.ResFringe')
         self.run_res_fringe_corr.clicked[bool].connect(partial(self.Residual_Fringe_correction))
-        self.run_res_fringe_corr.setFixedSize(200, 60)
+        self.run_res_fringe_corr.resize(200, 60)
         horizontal_layout.addWidget(self.run_res_fringe_corr)
 
 
@@ -1952,23 +1913,23 @@ class expPipeline2Widget(QWidget):
 
         self.run_all_stage2 = QPushButton('Run stage(2)')
         self.run_all_stage2.clicked[bool].connect(partial(self.Run_all_stage2))
-        self.run_all_stage2.setFixedSize(150, 60)
+        self.run_all_stage2.resize(150, 60)
         horizontal_layout.addWidget(self.run_all_stage2)
 
         self.run_stage2_obj_in_table = QPushButton('Run2 all')
         self.run_stage2_obj_in_table.clicked[bool].connect(partial(self.run_stage2_table))
-        self.run_stage2_obj_in_table.setFixedSize(150, 60)
+        self.run_stage2_obj_in_table.resize(150, 60)
         horizontal_layout.addWidget(self.run_stage2_obj_in_table)
 
         self.read_steps_stage2 = QPushButton('Read step')
         self.read_steps_stage2.clicked[bool].connect(partial(self.Read_steps_stage2))
-        self.read_steps_stage2.setFixedSize(150, 60)
+        self.read_steps_stage2.resize(150, 60)
         horizontal_layout.addWidget(self.read_steps_stage2)
         self.read_step_choice = QComboBox()
         flags = ['Initial', 'BkgrSub', 'Flatfield', 'Straylight', 'Fringe','FluxCalib','ResFringe']
         self.read_step_choice.addItems(flags)
         self.read_step_choice.setCurrentIndex(5)
-        self.read_step_choice.setFixedSize(140, 30)
+        self.read_step_choice.resize(140, 30)
         horizontal_layout.addWidget(self.read_step_choice)
 
         horizontal_layout.addStretch(1)
@@ -1998,16 +1959,16 @@ class expPipeline2Widget(QWidget):
         print('SelectHotPixels:')
         self.parent.Exposures.table.stage2_fix_hot_pix()
 
-    def AssignWCS(self, debug=False):
-        print('AssignWCS:', debug)
+    def AssignWCS(self):
+        print('AssignWCS')
         self.parent.Exposures.table.stage2_call_wcs()
 
     def Bkgr_Subtraction(self, debug=False, group=None):
         print('Bkgr_Subtraction, debug:', debug)
         self.parent.Exposures.table.stage2_background_subtraction()
 
-    def Flat_Field(self, debug=False):
-        print('Flat_Field, debug:', debug)
+    def Flat_Field(self):
+        print('Flat_Field')
         self.parent.Exposures.table.stage2_flat_field()
 
     def Source_identification(self):
@@ -2018,7 +1979,7 @@ class expPipeline2Widget(QWidget):
         print('StrayLight')
         self.parent.Exposures.table.stage2_stray_light()
 
-    def Fringe_correction(self, debug=False):
+    def Fringe_correction(self):
         print('Fringe Flat correction')
         self.parent.Exposures.table.stage2_fringe_flat_correction()
 
@@ -2026,7 +1987,7 @@ class expPipeline2Widget(QWidget):
         print('Residual Fringe correction')
         self.parent.Exposures.table.stage2_residual_fringe_correction()
 
-    def Flux_calibration(self, debug=False):
+    def Flux_calibration(self):
         print('Flux_calibration')
         self.parent.Exposures.table.stage2_flux_calibration()
 
@@ -2080,10 +2041,6 @@ class JWSTviewer(QMainWindow):
     def __init__(self):
         super().__init__()
         self.read_settings()
-        #input1_dir = '/home/slava/science/data/JWST/ID2155/J0235/UNCALIB/JWST'
-        #input2_dir = './output/results/'
-        #spec2_cachedir = './temp/spec2/'
-        #utput2_dir = './output/detector2/'
 
         self.EXP = detector1(input_file='jw02155001001_04102_00001_mirifulong_uncal.fits', path=self.init_settings['input1_dir'], output_dir=self.init_settings['output1_dir'])
         self.stage2 = detector2(miri_uncal_file='jw02155001001_04102_00001_mirifulong_uncal.fits', path=self.init_settings['input2_dir'], output_dir=self.init_settings['output2_dir'],

@@ -1,7 +1,7 @@
 #Modify the path to a directory on your machine
 import os
-os.environ["CRDS_PATH"] = "/home/slava/science/codes/python/jwst/data"
-os.environ["CRDS_SERVER_URL"] = "https://jwst-crds.stsci.edu"
+#os.environ["CRDS_PATH"] = "/home/slava/science/codes/python/jwst/data"
+#os.environ["CRDS_SERVER_URL"] = "https://jwst-crds.stsci.edu"
 
 # Packages that allow us to get information about objects:
 import asdf
@@ -52,11 +52,34 @@ from jwst.assign_wcs import AssignWcsStep
 import jwst
 print(jwst.__version__)
 
-#define input/output
-output_dir = './output/detector1/'
-input_dir = './input/detector1/'
-miri_uncal_file= 'jw02155001001_04102_00001_mirifulong_uncal.fits'
-input_file_base = os.path.basename(miri_uncal_file).replace('uncal.fits', '')
+def read_settings(init_file='init.dat'):
+    init_settings = {}
+    with open(init_file) as f:
+        for k, line in enumerate(f):
+            values = [s for s in line.split()]
+            if line[0] != '#':
+                if values[0] == 'input1_dir:':
+                    input_dir = values[1]
+                    init_settings['input1_dir'] = values[1]
+                if values[0] == 'input2_dir:':
+                    init_settings['input2_dir'] = values[1]
+                if values[0] == 'spec2_cachedir:':
+                    init_settings['spec2_cachedir'] = values[1]
+                if values[0] == 'output1_dir:':
+                    init_settings['output1_dir'] = values[1]
+                if values[0] == 'output2_dir:':
+                    init_settings['output2_dir'] = values[1]
+                if values[0] == 'CRDS_PATH:':
+                    init_settings['CRDS_PATH'] = values[1]
+                if values[0] == 'CRDS_SERVER_URL:':
+                    init_settings['CRDS_SERVER_URL'] = values[1]
+    return init_settings
+settings =  read_settings()
+os.environ["CRDS_PATH"] = settings['CRDS_PATH']
+os.environ["CRDS_SERVER_URL"] = settings['CRDS_SERVER_URL']
+output_dir = settings['output1_dir'] #')./output/detector1/'
+input_dir = settings['input1_dir'] #./input/detector1/'
+#miri_uncal_file= 'jw02155001001_04102_00001_mirifulong_uncal.fits'
 
 #functions
 def download_files(files, output_directory, force=False):
@@ -617,7 +640,6 @@ class detector1():
 
         if debug:
             # Define the reference pixel step output filename
-            refpix_output_file = os.path.join(output_dir, '{}refpixstep.fits'.format(input_file_base))
             show_image(self.data.data[0, 5, :, :], vmin=-1, vmax=10000, title="Difference with/without using side refpix")
             print('REF PIX correction: Done.')
             plt.show()
@@ -654,60 +676,6 @@ class detector1():
                 pdq[mask] = np.bitwise_or(pdq[mask],dqflags.pixel['JUMP_DET'])
         self.data.pixeldq = pdq
 
-        if 0:
-            jump = self.data
-            jump_output_file = os.path.join(output_dir, '{}jumpstep.fits'.format(input_file_base))
-            # How many total jump flags were added? Note that some pixels
-            # will have more than one group flagged with a jump.
-            jump_flags = np.where(jump.groupdq & dqflags.pixel['JUMP_DET'] > 0)
-            print('{} jump flags detected.'.format(len(jump_flags[0])))
-
-            # Create a 4-dimensional map of the jump flags
-            jump_map = (jump.groupdq & dqflags.pixel['JUMP_DET'] > 0)
-
-            # Collapse down to a 2D map of the number of flagged jumps in each pixel
-            jump_map_2d = np.sum(jump_map[0, :, :, :], axis=0)
-
-            # Determine how many pixels have jump flags
-            jump_map_indexes = np.where(jump_map_2d > 0)
-            impacted_pix = np.sum(jump_map_2d > 0)
-            total_pix = 2048 * 2048
-            print(('{} pixels ({:.2f}% of the detector) have been flagged with '
-                   'at least one jump.'.format(impacted_pix, 100. * impacted_pix / total_pix)))
-            # The jump map is 4-dimensional, just like the science data
-            print('jump_map.shape', jump_map.shape)
-
-            # Create an array of group numbers to plot against
-            group_indexes = np.arange(jump_map.shape[1]).astype(int)
-
-            # Pick one pixel with a flagged jump, and find the group(s) with the jump flags
-            j_index = 5112
-            jumpy = jump_map_indexes[0][j_index]
-            jumpx = jump_map_indexes[1][j_index]
-            jump_grp = jump_map[0, :, jumpy, jumpx]
-            print('Jump located in group(s) {} of pixel ({}, {})'.format(group_indexes[jump_grp], jumpx, jumpy))
-
-            # Plot the signal up the ramp for this pixel
-            plot_jump(jump.data[0, :, jumpy, jumpx], jump_grp, xpixel=jumpx, ypixel=jumpy)
-
-            plt.show()
-
-            indexes_to_plot = [200, 401, 600, 1202, 1400, 8112, 7888, 5555, 2222]
-            jump_data = np.zeros((jump.shape[1], len(indexes_to_plot)))
-            jump_grps = np.zeros((jump.shape[1], len(indexes_to_plot))).astype(bool)
-            jump_locs = []
-            for counter, idx in enumerate(indexes_to_plot):
-                # integ, grp, y, x = jump_flags[idx]
-                y = jump_map_indexes[0][idx]
-                x = jump_map_indexes[1][idx]
-                grp = jump_map[0, :, y, x]
-
-                jump_data[:, counter] = jump.data[0, :, y, x]
-                jump_grps[:, counter] = grp
-                jump_locs.append((x, y))
-            plot_jumps(jump_data, jump_grps, jump_locs)
-            plt.show()
-        #return jump
 
     def slope_fitting_step(self, input_file=None, debug=True, output_dir=None,save_results=False):
         '''
@@ -739,43 +707,7 @@ class detector1():
         # Call using the dark instance from the previously-run
         # jump step
         self.ramp_fit = ramp_fit_step.run(input_file)
-        if 0:
-            rampfit_output_file = os.path.join(output_dir, '{}_0_rampfitstep.fits'.format(input_file_base))
-            print(ramp_fit[0].shape, ramp_fit[1].shape)
 
-            # Generate the name of the optional output file
-            optional_file = os.path.join(output_dir, '{}fitopt.fits'.format(input_file_base))
-            # Open the file and examine the extensions
-            hdulist = fits.open(optional_file)
-            print(hdulist.info())
-            intercepts = hdulist['YINT'].data[0, 0, :, :]
-            hdulist.close()
-
-            # Get the exposure time associated with each group
-            num_groups = ramp_fit[0].meta.exposure.ngroups
-            group_time = ramp_fit[0].meta.exposure.group_time
-            group_times = np.arange(num_groups) * group_time
-            # Reconstruct linear ramps from the slope and intercept values
-            indexes_to_plot = [200, 401, 600, 1202, 1400, 8112, 7888, 5555, 2222]
-            jump = ramp_fit.data
-            lin_ramps = np.zeros((jump.shape[1], len(indexes_to_plot)))
-            for counter, idx in enumerate(indexes_to_plot):
-                y = jump_map_indexes[0][idx]
-                x = jump_map_indexes[1][idx]
-                grp = jump_map[0, :, y, x]
-
-                rate = ramp_fit[0].data[y, x]
-                intercept = intercepts[y, x]
-                lin_ramps[:, counter] = intercept + (rate * group_times)
-            # Reconstruct the linear ramp for the single pixel we showed after the jump step
-            lin_data = intercepts[jumpy, jumpx] + (ramp_fit[0].data[jumpy, jumpx] * group_times)
-            # Plot again the single pixel from the jump step, along with its
-            # reconstructed best-fit linear fit
-            plot_jump(jump.data[0, :, jumpy, jumpx], jump_grp, xpixel=jumpx,
-                      ypixel=jumpy, slope=lin_data)
-            plt.show()
-            show_image(ramp_fit[0].data, -1, 1)
-            plt.show()
 
     def plot_image(self,ngroup = 1,vmin = 3000,vmax=5000):
         fig,ax = plt.subplots(1,2,figsize=(18,9))
