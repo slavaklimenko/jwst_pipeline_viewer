@@ -2741,7 +2741,7 @@ class expRunWidget(QWidget):
         l.addLayout(horizontal_layout)
 
         horizontal_layout = QHBoxLayout(self)
-        self.set_roi_radius = QPushButton('SetRoi_R', self, checkable=False)
+        self.set_roi_radius = QPushButton('SetRoi_R') #, self, checkable=False)
         #self.set_roi_radius.setChecked(False)
         self.set_roi_radius.clicked[bool].connect(self.SetRoi_radius)
         #self.set_roi_radius.setFixedSize(200, 60)
@@ -2848,7 +2848,7 @@ class expRunWidget(QWidget):
         self.parent.Cubes_A.table.show_gradient_command(add=self.parent.exp_commands.show_gradient.isChecked(),level=1-level,local=local)
 
 
-    def SetRoi_radius(self,roi_type=None,roi_size=None):
+    def SetRoi_radius(self,add=True, roi_type=None,roi_size=None):
         print('')
         if roi_type == None:
             roi_type = self.roi_type.currentText()
