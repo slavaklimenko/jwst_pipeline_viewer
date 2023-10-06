@@ -311,16 +311,16 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
                             if roi == self.roi_list[0]:
                                 if self.cube_name == 'A':
                                     self.parent.plot_spectrum.plot_specA1(data=roi_selected_flux,err=roi_selected_flux_err, add=False,show_err_bar=True)
-                                    self.parent.plot_spectrum.plot_specA1(data=roi_selected_flux,err=roi_selected_flux_err,  pen='gray',normalize=normalize,label='mean',show_err_bar=True,smoothing=False)
+                                    self.parent.plot_spectrum.plot_specA1(data=roi_selected_flux,err=roi_selected_flux_err,  pen='gray',normalize=normalize,label='CubeA - green',show_err_bar=True,smoothing=False)
                                     self.parent.plot_spectrum.plot_specAmax(data=roi_mean_w_flux, add=False)
-                                    self.parent.plot_spectrum.plot_specAmax(data=roi_max_flux,  err=roi_max_flux_err, normalize=normalize,label='max')
+                                    self.parent.plot_spectrum.plot_specAmax(data=roi_max_flux,  err=roi_max_flux_err, normalize=normalize,label='CubeA:maxF-pixel')
                                     self.parent.plot_hist1.plot_hist(data=self.data_tot, roi_mask=roi.roi_mask, timeind=self.time, add=False)
                                     self.parent.plot_hist1.plot_hist(data=self.data_tot, roi_mask=roi.roi_mask, timeind=self.time,pen=roi.pen)
                                 if self.cube_name == 'B':
                                     self.parent.plot_spectrum.plot_specB1(data=roi_selected_flux,err=roi_selected_flux_err, add=False,show_err_bar=True)
                                     self.parent.plot_spectrum.plot_specB1(data=roi_selected_flux, err=roi_selected_flux_err,pen=roi.pen,normalize=normalize,show_err_bar=True,smoothing=False)
                                     self.parent.plot_spectrum.plot_specB_median(add=False)
-                                    self.parent.plot_spectrum.plot_specB_median(pen=pg.mkPen('red', width=1.5),normalize=normalize,npixels = np.sum(roi.roi_mask),smoothing=False)
+                                    self.parent.plot_spectrum.plot_specB_median(pen=pg.mkPen('cyan', width=1.5),normalize=normalize,npixels = np.sum(roi.roi_mask),smoothing=False)
                                     self.parent.plot_hist3.plot_hist(data=self.data_tot, roi_mask=roi.roi_mask,
                                                                      timeind=self.time, add=False)
                                     self.parent.plot_hist3.plot_hist(data=self.data_tot, roi_mask=roi.roi_mask,
@@ -328,7 +328,7 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
                             elif roi == self.roi_list[1]:
                                 if self.cube_name == 'A':
                                     self.parent.plot_spectrum.plot_specA2(data=roi_selected_flux, add=False,show_err_bar=True)
-                                    self.parent.plot_spectrum.plot_specA2(data=roi_selected_flux,pen=roi.pen,err=roi_selected_flux_err,normalize=normalize,show_err_bar=True)
+                                    self.parent.plot_spectrum.plot_specA2(data=roi_selected_flux,pen=roi.pen,err=roi_selected_flux_err,normalize=normalize,show_err_bar=True,label='CubeA - red')
                                     self.parent.plot_hist2.plot_hist(data=self.data_tot, roi_mask=roi.roi_mask,
                                                                      timeind=self.time, add=False)
                                     self.parent.plot_hist2.plot_hist(data=self.data_tot, roi_mask=roi.roi_mask,
@@ -592,7 +592,7 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
             except:
                 pass
 
-    def updateRoiRadius(self,roi):
+    def updateRoiRadius(self,roi,roi_size=5,debug=False):
         def updateRoi(roi):
             if roi is None:
                 return
@@ -622,7 +622,12 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
             self.data = self.parent.CUBE_B.data.data
         data_mean = np.nanmean(self.data,axis=0)
         pos = np.argwhere(data_mean == np.nanmax(data_mean))[0]
-        size = 2*int(self.parent.exp_commands.roi_radius.text())
+        if debug:
+            plt.subplots()
+            plt.imshow(data_mean)
+            plt.title(str(pos))
+            plt.show()
+        size = 2*roi_size
         s = roi.size()
         print('center roi (max):', pos, ' size=',size)
         roi.setSize(size=(size,size))
@@ -1202,7 +1207,7 @@ class plotSpec(pg.PlotWidget):
                 if np.sum(mask)>0:
                     self.show_template = True
                     norm = 1/np.mean(y[mask])*np.mean(data[10:40])
-                    self.plot_NGC = pg.PlotCurveItem(x,y*norm, pen='lightgreen')
+                    self.plot_NGC = pg.PlotCurveItem(x,y*norm, pen='pink')
                     self.vb.addItem(self.plot_NGC)
                     self.legend_model.addItem(self.plot_NGC, 'Template')
 
@@ -1256,7 +1261,7 @@ class plotSpec(pg.PlotWidget):
                 pass
 
 
-    def plot_specAmax(self, data=None, err=None,add=True,pen=pg.mkPen(color='royalblue', style=Qt.DashLine, width=1),normalize=False,show_err_bar=False,label='Amax'):
+    def plot_specAmax(self, data=None, err=None,add=True,pen=pg.mkPen(color='royalblue', style=Qt.DashLine, width=1),normalize=False,show_err_bar=False,label='CubeA:max-pixel'):
         if add:
             wavel = self.parent.CUBE_A.data.wavelength
             if np.size(data) == np.size(wavel):
@@ -1363,7 +1368,7 @@ class plotSpec(pg.PlotWidget):
 
 
     def plot_specB1(self, data=None, err=None, add=True, pen=pg.mkPen(color='white', style=Qt.DashLine,
-                                                            width=1),normalize=True,show_err_bar=False,smoothing=True):  # pg.mkPen(color='gray', style=Qt.DashLine, width=3)
+                                                            width=1),normalize=True,show_err_bar=False,smoothing=True,label='CubeB - Purple'):  # pg.mkPen(color='gray', style=Qt.DashLine, width=3)
         if add:
             wavel = self.parent.CUBE_B.data.wavelength
             if np.size(data) == np.size(wavel):
@@ -1377,6 +1382,7 @@ class plotSpec(pg.PlotWidget):
                 self.plot_lineB1 = pg.PlotCurveItem(wavel, data, pen=pen)
                 self.plot_errbarB1 = pg.ErrorBarItem(x=wavel, y=data, height=err, pen=pen)
                 self.vb.addItem(self.plot_lineB1)
+                self.legend_model.addItem(self.plot_lineB1, label)
                 if show_err_bar:
                     self.vb.addItem(self.plot_errbarB1)
 
@@ -1385,6 +1391,7 @@ class plotSpec(pg.PlotWidget):
         else:
             try:
                 self.vb.removeItem(self.plot_lineB1)
+                self.legend_model.removeItem(self.plot_lineB1)
                 if show_err_bar:
                     self.vb.removeItem(self.plot_errbarB1)
 
@@ -1393,7 +1400,7 @@ class plotSpec(pg.PlotWidget):
                 pass
 
     def plot_specB2(self, data=None, add=True, pen=pg.mkPen(color='white', style=Qt.DashLine,
-                                                            width=1),normalize=True,smoothing=True):  # pg.mkPen(color='gray', style=Qt.DashLine, width=3)
+                                                            width=1),normalize=True,smoothing=True, label='CubeB: Yellow'):  # pg.mkPen(color='gray', style=Qt.DashLine, width=3)
         if add:
             wavel = self.parent.CUBE_B.data.wavelength
             if np.size(data) == np.size(wavel):
@@ -1405,19 +1412,21 @@ class plotSpec(pg.PlotWidget):
                     data = signal.convolve(data, win, mode='same') / sum(win)
                 self.plot_lineB2 = pg.PlotCurveItem(wavel, data, pen=pen)
                 self.vb.addItem(self.plot_lineB2)
+                self.legend_model.addItem(self.plot_lineB2, label)
 
                 #self.vb.autoRange()
                 #self.vb.setLimits(xMin=wavel[0] * 0.98, xMax=wavel[-1] * 1.02)
         else:
             try:
                 self.vb.removeItem(self.plot_lineB2)
+                self.legend_model.removeItem(self.plot_lineB2)
 
             except:
                 pass
 
 
     def plot_specB_median(self, data=None, add=True, pen=pg.mkPen(color='white', style=Qt.DashLine,
-                                                            width=1),normalize=True,smoothing=True,npixels=1):  # pg.mkPen(color='gray', style=Qt.DashLine, width=3)
+                                                            width=1),normalize=True,smoothing=True,npixels=1,label='CubeB - Average'):  # pg.mkPen(color='gray', style=Qt.DashLine, width=3)
         if add:
             wavel = self.parent.CUBE_B.data.wavelength
             flux = self.parent.CUBE_B.data.data
@@ -1433,12 +1442,14 @@ class plotSpec(pg.PlotWidget):
                     data = signal.convolve(data, win, mode='same') / sum(win)
                 self.plot_lineB_median = pg.PlotCurveItem(wavel, data, pen=pen)
                 self.vb.addItem(self.plot_lineB_median)
+                self.legend_model.addItem(self.plot_lineB_median, label)
 
                 #self.vb.autoRange()
                 #self.vb.setLimits(xMin=wavel[0] * 0.98, xMax=wavel[-1] * 1.02)
         else:
             try:
                 self.vb.removeItem(self.plot_lineB_median)
+                self.legend_model.removeItem(self.plot_lineB_median)
 
             except:
                 pass
@@ -1467,12 +1478,12 @@ class plotHist(pg.PlotWidget):
         if add:
             if np.sum(roi_mask) > 0:
                 num_pixels = np.sum(roi_mask)
-                d = data.data[timeind, :, :]
+                d = data.data[timeind, :, :].copy()
                 d = d[roi_mask]
-                d = d[~np.isnan(d)]
-                derr = data.err[timeind, :, :]
+                derr = data.err[timeind, :, :].copy()
                 derr = derr[roi_mask]
-                derr = derr[~np.isnan(derr)]
+                d = d[(~np.isnan(d))*(~np.isnan(derr))]
+                derr = derr[(~np.isnan(d))*(~np.isnan(derr))]
 
                 y, x = np.histogram(d[~np.isnan(d)])
                 self.plot_hist_roi = pg.PlotCurveItem(x, y, stepMode=True, fillLevel=0, pen=pen)
@@ -1728,7 +1739,7 @@ class CUBElistTable(pg.TableWidget):
                                                      master_resample_spec_flag=master_resample_spec_flag,
                                                      master_extract1d_flag=master_extract1d_flag)
 
-    def extract_roi(self, cube_name = '(A)'):
+    def extract_roi(self, cube_name = '(A)',debug=False):
         if cube_name == '(A)':
             cube = self.parent.parent.plot_3dcubeA
             data = self.parent.parent.CUBE_A.data
@@ -1761,7 +1772,7 @@ class CUBElistTable(pg.TableWidget):
                     roi_mean_w_f_error[i] = 1/np.nansum(1/derr**2)
 
                     roi_mean[i] = np.nansum(d) / np.size(d)
-                if 1:
+                if debug:
                     fig,ax = plt.subplots()
                     ax.errorbar(x=np.arange(np.size(y)),y=y,yerr=y_err,label='w_weighted',lw =2)
                     ax.errorbar(x=np.arange(np.size(y)),y=roi_mean_w_flux,yerr=roi_mean_w_f_error, label='mean weighted',ls = '--')
@@ -2008,7 +2019,6 @@ class CUBElistTable(pg.TableWidget):
 
     def calc_median_cube(self,add=True,radius = 3,mode='mean-weighted',save_cube=True,debug =True, method = '3Dsmothing'):
         '''
-
         :param add:
         :param radius:
         :param mode:
@@ -2050,7 +2060,6 @@ class CUBElistTable(pg.TableWidget):
                         #                                             mode='same', boundary='fill', fillvalue=0) / scipy.signal.convolve2d(1/slice_err**2, filter_kernel,
                         #                                             mode='same', boundary='fill', fillvalue=0)
                         mean_err[i, :, :] = np.power(scipy.signal.convolve2d(slice_err**2,filter_kernel,mode='same',boundary='fill',fillvalue=0),0.5)/npixels
-
                         #calc_manually
                         if 0:
                             for j in range(data.shape[1]):
@@ -2071,22 +2080,22 @@ class CUBElistTable(pg.TableWidget):
                                         mean_data[i,j, k] = np.nan
                                         mean_err[i,j, k] = np.nan
 
-                    # calculate wavelength smoothing
-                    if method == '3Dsmothing':
-                        show_smoothed_spec = False
-                        win = signal.windows.hann(20)
-                        for i in range(data.shape[1]):
-                            for j in range(data.shape[2]):
-                                if i == 20 and j ==20 and show_smoothed_spec:
-                                    fig2, ax2 = plt.subplots()
-                                    ax2.plot(mean_data[:,i,j],label='init',lw=2)
-                                mask = (np.arange(data.shape[0])>10 )*(np.arange(data.shape[0])<data.shape[0]-10 )
-                                convloved = signal.convolve(mean_data[:,i,j], win, mode='same')/ sum(win)
-                                mean_data[:, i, j][mask] = convloved[mask]
-                                if i == 20 and j == 20 and show_smoothed_spec:
-                                    ax2.plot(mean_data[:, i, j], label='smoothed',ls='--',lw=2)
-                                    ax2.legend()
-                                mean_err[:, i, j] = signal.convolve(mean_err[:, i, j], win, mode='same') / sum(win)
+            # calculate wavelength smoothing
+                if method == '3Dsmothing':
+                    show_smoothed_spec = False
+                    win = signal.windows.hann(20)
+                    for i in range(data.shape[1]):
+                        for j in range(data.shape[2]):
+                            if i == 20 and j ==20 and show_smoothed_spec:
+                                fig2, ax2 = plt.subplots()
+                                ax2.plot(mean_data[:,i,j],label='init',lw=2)
+                            mask = (np.arange(data.shape[0])>10 )*(np.arange(data.shape[0])<data.shape[0]-10 )
+                            convloved = signal.convolve(mean_data[:,i,j], win, mode='same')/ sum(win)
+                            mean_data[:, i, j][mask] = convloved[mask]
+                            if i == 20 and j == 20 and show_smoothed_spec:
+                                ax2.plot(mean_data[:, i, j], label='smoothed',ls='--',lw=2)
+                                ax2.legend()
+                            mean_err[:, i, j] = signal.convolve(mean_err[:, i, j], win, mode='same') / sum(win)
                 if debug:
                     fig,ax = plt.subplots(1,4)
                     ax[0].imshow(data[0,:,:])
@@ -2096,16 +2105,6 @@ class CUBElistTable(pg.TableWidget):
                     ax[3].hist(data[0,:,:].flatten(),label='initial',alpha=0.5)
                     ax[3].hist(mean_data[0, :, :].flatten(), label='model',alpha=0.5)
                     ax[3].legend()
-
-
-                    if 0:
-                        fig2, ax2 = plt.subplots(1, 4)
-                        ax2[0].imshow(data[0, :, :])
-                        ax2[1].imshow(mean_2_data[0, :, :])
-                        ax2[2].imshow(data[0, :, :] - mean_2_data[0, :, :])
-                        ax2[3].hist(data[0,:,:].flatten()-mean_2_data[0,:,:].flatten(),label='subtracted-weighted',alpha=0.5)
-                        ax2[3].hist(data[0,:,:].flatten(),label='initial',alpha=0.5)
-                        ax2[3].legend()
 
                     plt.show()
 
@@ -2169,6 +2168,57 @@ class CUBElistTable(pg.TableWidget):
                     ax[3].legend()
                     plt.show()
 
+            elif method == 'Circle':
+                print('Method of construction of the Background model', method)
+                cube = self.parent.parent.CUBE_A
+
+                data = cube.data.data
+                err = cube.data.err
+
+                mean_image = np.nanmean(data, axis=0)
+                cen_x,cen_y = int(mean_image.shape[0]/2),int(mean_image.shape[1]/2)
+                rows, cols = data.shape[1], data.shape[2]
+                m = np.mgrid[:rows, :cols]
+                possx = m[0, :, :]
+                possy = m[1, :, :]
+                mask = (np.abs(possx - cen_x)<10)*(np.abs(possy - cen_y)<10)
+                [cen_x,cen_y] = np.argwhere(mean_image == np.nanmax(mean_image[mask]))[0]
+                #mask = (np.abs(possx - cen_x)>4)*(np.abs(possy - cen_y)>4)*(np.abs(possx - cen_x)<10)*(np.abs(possy - cen_y)<10)
+                radial_c = np.power(np.power((possx - cen_x),2) +np.power((possy - cen_y),2) ,0.5)
+                mask = (radial_c>4)*(radial_c<10)
+                mean_spec = np.zeros(data.shape[0])
+                mean_spec_err = np.zeros(data.shape[0])
+                for i in range(mean_spec.shape[0]):
+                    mean_spec[i] = np.nanmean(((data[i,:,:])[mask]).flatten())
+                    mean_spec_err[i] = np.nanstd(((data[i, :, :])[mask]).flatten())
+                mean_data = data.copy()
+                mean_err = err.copy()
+                for i in range(data.shape[1]):
+                    for j in range(data.shape[2]):
+                        mean_data[:,i,j] = mean_spec
+                        mean_err[:,i,j] = mean_spec_err
+
+
+                if debug:
+                    fig, ax = plt.subplots(1, 4)
+                    ax[0].imshow(data[0, :, :])
+                    if 1:
+                        circle1 = plt.Circle((cen_y,cen_x), 5, color='yellow',lw=2,fill=False)
+                        circle2 = plt.Circle((cen_y,cen_x), 11, color='red',lw=2,fill=False)
+                        ax[0].add_patch(circle1)
+                        ax[0].add_patch(circle2)
+                    ax[0].set_title('DATA')
+                    ax[1].imshow(mean_data[0, :, :])
+                    ax[1].set_title('MODEL')
+                    ax[2].imshow(data[0, :, :] - mean_data[0, :, :])
+                    ax[2].set_title('DATA-MODEL')
+                    ax[3].hist(data[0, :, :].flatten() - mean_data[0, :, :].flatten(), label='subtracted')
+                    ax[3].hist(data[0, :, :].flatten(), label='initial', alpha=0.5)
+                    ax[3].hist(mean_data[0, :, :].flatten(), label='model', alpha=0.5)
+                    ax[3].legend()
+                    plt.show()
+
+
             if save_cube:
                 filename = './output/detector3/cash/median_cube.fits'
                 hdu1 = fits.open(cube.cubename)
@@ -2182,20 +2232,36 @@ class CUBElistTable(pg.TableWidget):
         if cube_name == 'A':
             cube = self.parent.parent.CUBE_A
             data = self.parent.parent.CUBE_A.data
-            wavel = self.parent.parent.CUBE_A.data.wavelength
-            name = self.parent.parent.CUBE_A.cubename.split('/')[-1].split('.')[0]
+            #wavel = self.parent.parent.CUBE_A.data.wavelength
+            #name = self.parent.parent.CUBE_A.cubename.split('/')[-1].split('.')[0]
+            bkgr_subtr_flag = self.parent.parent.CUBE_A.flags['subtract_bkgr']
         elif cube_name == 'B':
             cube = self.parent.parent.CUBE_B
             data = self.parent.parent.CUBE_B.data
-            wavel = self.parent.parent.CUBE_B.data.wavelength
-            name = self.parent.parent.CUBE_B.cubename.split('/')[-1].split('.')[0]
+            #wavel = self.parent.parent.CUBE_B.data.wavelength
+            #name = self.parent.parent.CUBE_B.cubename.split('/')[-1].split('.')[0]
+            bkgr_subtr_flag = self.parent.parent.CUBE_B.flags['subtract_bkgr']
 
-
-        filename = cube.cubename.split('.fits')[0]+'_bkgr_subtr.fits'
+        new_cube_filename =  self.parent.parent.exp_pars.new_cube_filename.text()
+        bkgr_sub_method = 'False'
+        if bkgr_subtr_flag:
+            bkgr_sub_method = self.parent.parent.exp_commands.calc_median_mode.currentText()
+        if new_cube_filename=='':
+            filename = cube.cubename.split('_s3d.fits')[0]+'_bkgr_subtr_'+bkgr_sub_method+'_s3d.fits'
+        else:
+            filename = new_cube_filename + '_s3d.fits'
         hdu1 = fits.open(cube.cubename)
         hdu1['SCI'].data = data.data
         hdu1['ERR'].data = data.err
+
+        hdu1[0].header['BKGR_SUB_BY_AUTHOR'] = bkgr_sub_method
         hdu1.writeto(filename,overwrite=True)
+        hdu1.close()
+        specname = filename.split('_s3d.fits')[0]+'_x1d.fits'
+        hdu1 = fits.open(cube.cubename.split('_s3d.fits')[0]+'_x1d.fits')
+        hdu1.writeto(specname,overwrite=True)
+        hdu1.close()
+
         print('new cube is seved in', filename)
 
 
@@ -2318,6 +2384,8 @@ class chooseExpWidget(QWidget):
             s_outlir = header['S_OUTLIR']
         if 'BKGSUB' in header.keys():
             s_bkgsub = str(header['BKGSUB'])
+        if 'BKGR_SUB_BY_AUTHOR' in header.keys():
+            s_bkgsub = str(header['BKGR_SUB_BY_AUTHOR'])
 
         return [targ_name,miri_band,miri_channel,asn_file,s_mrsmat,s_outlir,s_bkgsub]
 
@@ -2471,11 +2539,20 @@ class expParsWidget(QWidget):
         layout.addLayout(horizontal_layout)
 
         horizontal_layout = QHBoxLayout(self)
-        horizontal_layout.addWidget(QLabel('Cubename:'))
+        horizontal_layout.addWidget(QLabel('add_cube_postfix_name:'))
         self.cube_filename = QLineEdit()
         self.cube_filename.setText('')
         self.cube_filename.resize(200, 30)
         horizontal_layout.addWidget(self.cube_filename)
+        horizontal_layout.addStretch(1)
+        layout.addLayout(horizontal_layout)
+
+        horizontal_layout = QHBoxLayout(self)
+        horizontal_layout.addWidget(QLabel('new_cube_name:'))
+        self.new_cube_filename = QLineEdit()
+        self.new_cube_filename.setText('')
+        self.new_cube_filename.resize(200, 30)
+        horizontal_layout.addWidget(self.new_cube_filename)
         horizontal_layout.addStretch(1)
         layout.addLayout(horizontal_layout)
 
@@ -2545,12 +2622,18 @@ class expRunWidget(QWidget):
         self.update_cubes_list.resize(200, 60)
         horizontal_layout.addWidget(self.update_cubes_list)
 
-        self.save_local_cube = QPushButton('Save Cube', self, checkable=True)
-        self.save_local_cube.setChecked(False)
+        self.save_local_cube = QPushButton('Save Cube')
+        #self.save_local_cube.setChecked(False)
         self.save_local_cube.clicked[bool].connect(partial(self.SaveLocalCube))
         #self.save_local_cube.setFixedSize(200, 60)
         self.save_local_cube.resize(200, 60)
         horizontal_layout.addWidget(self.save_local_cube)
+        self.save_local_cube_name = QComboBox()
+        self.save_local_cube_name.addItems(['A', 'B'])
+        self.save_local_cube_name.setCurrentIndex(0)
+        self.save_local_cube_name.setFixedSize(90, 30)
+        self.save_local_cube_name.resize(90, 30)
+        horizontal_layout.addWidget(self.save_local_cube_name)
         horizontal_layout.addStretch(1)
         l.addLayout(horizontal_layout)
         layout.addLayout(l)
@@ -2560,14 +2643,14 @@ class expRunWidget(QWidget):
         horizontal_layout = QHBoxLayout(self)
         l.addLayout(horizontal_layout)
         horizontal_layout = QHBoxLayout(self)
-        self.calc_median_flux = QPushButton('CalcMedian', self, checkable=True)
-        self.calc_median_flux.setChecked(False)
+        self.calc_median_flux = QPushButton('CalcMedian')
+        #self.calc_median_flux.setChecked(False)
         self.calc_median_flux.clicked[bool].connect(partial(self.CalcMedCube))
         #self.calc_median_flux.setFixedSize(200, 60)
         self.calc_median_flux.resize(200, 60)
         horizontal_layout.addWidget(self.calc_median_flux)
         self.calc_median_mode = QComboBox()
-        self.calc_median_mode.addItems(['3Dsmothing', '2Dsmothing','Average','Pix2pix'])
+        self.calc_median_mode.addItems(['3Dsmothing', '2Dsmothing','Average','Pix2pix','Circle'])
         self.calc_median_mode.setCurrentIndex(0)
         #self.calc_median_mode.setFixedSize(90, 30)
         self.calc_median_mode.resize(90, 30)
@@ -2576,18 +2659,20 @@ class expRunWidget(QWidget):
         self.mean_kernel_rad = QLineEdit()
         self.mean_kernel_rad.setText(str(5))
         #self.mean_kernel_rad.setFixedSize(60, 30)
-        self.mean_kernel_rad.resize(60, 30)
+        self.mean_kernel_rad.resize(30, 10)
         horizontal_layout.addWidget(self.mean_kernel_rad)
-        self.subtr_median_flux = QPushButton('SubtractMed', self, checkable=True)
-        self.subtr_median_flux.setChecked(False)
+        self.subtr_median_flux = QPushButton('SubtractMed')
+        #self.subtr_median_flux = QPushButton('SubtractMed', self, checkable=True)
+        #self.subtr_median_flux.setChecked(False)
         self.subtr_median_flux.clicked[bool].connect(partial(self.SubtractMedFlux))
         #self.subtr_median_flux.setFixedSize(200, 60)
         self.subtr_median_flux.resize(200, 60)
         horizontal_layout.addWidget(self.subtr_median_flux)
         self.name_cube_subtracted = QComboBox()
-        self.name_cube_subtracted.addItems(['A', 'B'])
+        self.name_cube_subtracted.addItems(['A','B'])
         self.name_cube_subtracted.setCurrentIndex(1)
-        #self.name_cube_subtracted.setFixedSize(90, 30)
+        #self.name_cube_subtracted.setFixedSize(self.name_cube_subtracted.size())
+        self.name_cube_subtracted.setFixedSize(90, 30)
         self.name_cube_subtracted.resize(90, 30)
         horizontal_layout.addWidget(self.name_cube_subtracted)
         horizontal_layout.addStretch(1)
@@ -2637,7 +2722,7 @@ class expRunWidget(QWidget):
         horizontal_layout.addWidget(self.show_disp_roi)
         self.extract_1d_roi = QPushButton('Extract ROI')
         self.extract_1d_roi.clicked[bool].connect(partial(self.extract_Roi))
-        self.extract_1d_roi.setFixedSize(200, 60)
+        self.extract_1d_roi.resize(200, 60)
         horizontal_layout.addWidget(self.extract_1d_roi)
         self.extract_1d_roi_cube = QComboBox()
         self.extract_1d_roi_cube.addItems(['(A)', '(B)'])
@@ -2693,7 +2778,18 @@ class expRunWidget(QWidget):
         #self.level_type.setFixedSize(100, 30)
         self.level_type.resize(100, 30)
         horizontal_layout.addWidget(self.level_type)
+        horizontal_layout.addStretch(1)
+        l.addLayout(horizontal_layout)
 
+        horizontal_layout = QHBoxLayout(self)
+        self.prepare_extraction = QPushButton('TEST', self, checkable=False)
+        # self.set_roi_radius.setChecked(False)
+        self.prepare_extraction.clicked[bool].connect(self.prepare_extraction_test)
+        # self.set_roi_radius.setFixedSize(200, 60)
+        self.prepare_extraction.resize(200, 60)
+        # self.select_roi.clicked[bool].connect(self.ShowROI)
+        # self.select_roi.setFixedSize(200, 60)
+        horizontal_layout.addWidget(self.prepare_extraction)
         horizontal_layout.addStretch(1)
         l.addLayout(horizontal_layout)
 
@@ -2752,22 +2848,35 @@ class expRunWidget(QWidget):
         self.parent.Cubes_A.table.show_gradient_command(add=self.parent.exp_commands.show_gradient.isChecked(),level=1-level,local=local)
 
 
-    def SetRoi_radius(self):
+    def SetRoi_radius(self,roi_type=None,roi_size=None):
         print('')
-        roi_type = self.roi_type.currentText()
+        if roi_type == None:
+            roi_type = self.roi_type.currentText()
+        if roi_size == None:
+            roi_size = int(self.parent.exp_commands.roi_radius.text())
         rois = {}
         if hasattr(self.parent.plot_3dcubeA,'roi_list'):
             rois['green'] = self.parent.plot_3dcubeA.roi_list[0]
             rois['red'] = self.parent.plot_3dcubeA.roi_list[1]
-            cube = self.parent.plot_3dcubeA
+            if roi_type in ['green','red']:
+                cube = self.parent.plot_3dcubeA
         if hasattr(self.parent.plot_3dcubeB,'roi_list'):
             rois['purple'] = self.parent.plot_3dcubeB.roi_list[0]
             rois['yellow'] = self.parent.plot_3dcubeB.roi_list[1]
-            cube = self.parent.plot_3dcubeB
+            if roi_type in ['purple','yellow']:
+                cube = self.parent.plot_3dcubeB
         #rois['blue'] = None
         if roi_type in rois.keys():
             roi = rois[roi_type]
-            cube.updateRoiRadius(roi=roi)
+            cube.updateRoiRadius(roi=roi,roi_size=roi_size)
+
+
+    def prepare_extraction_test(self):
+        self.CalcMedCube()
+        self.SubtractMedFlux()
+        self.SetRoi_radius(roi_type='green',roi_size=2)
+        self.SetRoi_radius(roi_type='red',roi_size=7)
+        self.extract_Roi()
 
 
     def set_DQ_map(self, debug = False):
@@ -2827,38 +2936,46 @@ class expRunWidget(QWidget):
 
     def CalcMedCube(self):
         calc_median_mode = self.calc_median_mode.currentText()
-        self.parent.Cubes_A.table.calc_median_cube(add=self.parent.exp_commands.calc_median_flux.isChecked(),radius=int(self.parent.exp_commands.mean_kernel_rad.text()), method =calc_median_mode)
-
+        self.parent.Cubes_A.table.calc_median_cube(radius=int(self.parent.exp_commands.mean_kernel_rad.text()), method =calc_median_mode)
         filename = './output/detector3/cash/median_cube.fits'
         self.parent.plot_3dcube_median.show()
 
-    def SubtractMedFlux(self, apply=True, first_cube = 'B',debug=True):
+    def SubtractMedFlux(self, first_cube = 'B',debug=True):
         first_cube = self.name_cube_subtracted.currentText()
         median_cube = self.parent.plot_3dcube_median.cube
-        if apply:
-            if first_cube == 'B':
-                tmp = np.array(self.parent.CUBE_B.data.data)
-                if self.parent.CUBE_B.flags['subtract_bkgr'] == False:
-                    self.parent.CUBE_B.flags['subtract_bkgr'] = True
-                    self.parent.CUBE_B.data.data -= median_cube.data.data
-                    if debug:
-                        fig,ax = plt.subplots(1,2)
-                        ax[0].imshow(tmp[10,:,:])
-                        ax[1].imshow(self.parent.CUBE_B.data.data[10,:,:])
-            elif first_cube == 'A':
-                tmp = np.array(self.parent.CUBE_A.data.data)
-                if self.parent.CUBE_A.flags['subtract_bkgr'] == False:
-                    self.parent.CUBE_A.flags['subtract_bkgr'] = True
-
+        if first_cube == 'B':
+            tmp = np.array(self.parent.CUBE_B.data.data)
+            if self.parent.CUBE_B.flags['subtract_bkgr'] == False:
+                self.parent.CUBE_B.flags['subtract_bkgr'] = True
+                self.parent.CUBE_B.data.data -= median_cube.data.data
+                if debug:
+                    fig,ax = plt.subplots(1,2)
+                    ax[0].imshow(tmp[10,:,:])
+                    ax[1].imshow(self.parent.CUBE_B.data.data[10,:,:])
+        elif first_cube == 'A':
+            tmp = np.array(self.parent.CUBE_A.data.data)
+            if self.parent.CUBE_A.flags['subtract_bkgr'] == False:
+                self.parent.CUBE_A.flags['subtract_bkgr'] = True
+                mask_cube_A = ~np.isnan( self.parent.CUBE_A.data.data)
+                if self.parent.CUBE_A.data.data.shape ==  median_cube.data.data.shape:
                     self.parent.CUBE_A.data.data[~np.isnan(self.parent.CUBE_A.data.data)] -= median_cube.data.data[~np.isnan(self.parent.CUBE_A.data.data)]
-                    if debug:
-                        fig, ax = plt.subplots(1, 2)
-                        ax[0].imshow(tmp[10, :, :])
-                        ax[1].imshow(self.parent.CUBE_A.data.data[10, :, :])
+                else:
+                    print('cubeA:', self.parent.CUBE_A.data.data.shape)
+                    print('cubeB=model:',  median_cube.data.data.shape)
+                    for i in range(self.parent.CUBE_A.data.data.shape[1]):
+                        for j in range(self.parent.CUBE_A.data.data.shape[2]):
+                            if all(~np.isnan(self.parent.CUBE_A.data.data[:,i,j])) and (i<median_cube.data.data.shape[1]) and (j<median_cube.data.data.shape[2]):
+                                self.parent.CUBE_A.data.data[:,i,j] -= median_cube.data.data[:,i,j]
+                            else:
+                                self.parent.CUBE_A.data.data[:, i, j] = np.nan
+                if debug:
+                    fig, ax = plt.subplots(1, 2)
+                    ax[0].imshow(tmp[10, :, :])
+                    ax[1].imshow(self.parent.CUBE_A.data.data[10, :, :])
 
     def SaveLocalCube(self):
-        first_cube = self.name_cube_subtracted.currentText()
-        self.parent.Cubes_A.table.save_local_cube_code(cube_name=first_cube)
+        save_local_cube_name = self.save_local_cube_name.currentText()
+        self.parent.Cubes_A.table.save_local_cube_code(cube_name=save_local_cube_name)
 
 
 

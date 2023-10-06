@@ -189,17 +189,17 @@ class plotSpec(pg.PlotWidget):
                 self.zero_level = pg.PlotCurveItem([0, 30], [0, 0], pen=pg.mkPen(color='darkgray', style=Qt.DashLine, width=1))
                 self.vb.addItem(self.zero_level)
                 self.show_template = False
-
-                    #NGC = np.loadtxt('/home/slava/science/codes/python/jwst/input/NGC19.txt',delimiter=',')
+                if 0:
+                    NGC = np.loadtxt('/home/slava/science/codes/python/jwst/input/NGC19.txt',delimiter=',')
                     #NGC = np.loadtxt('/home/slava/science/data/SPITZER/AO0235/cassis_yaaar_spcfw_15121152t.dat')
-                    #x,y = NGC[:,0]/1e4, NGC[:,1]
-                    #mask = (x>wavel[10])*(x<wavel[40])
-                    #self.show_template = False
-                    #if np.sum(mask)>0:
-                    #    self.show_template = True
-                    #    norm = 1/np.mean(y[mask])*np.mean(data[10:40])
-                    #    self.plot_NGC = pg.PlotCurveItem(x,y*norm, pen='lightgreen')
-                    #    self.vb.addItem(self.plot_NGC)
+                    x,y = NGC[:,0]/1e4, NGC[:,1]
+                    mask = (x>wavel[10])*(x<wavel[40])
+                    self.show_template = False
+                    if np.sum(mask)>0:
+                        self.show_template = True
+                        norm = 1/np.mean(y[mask])*np.mean(data[10:40])
+                        self.plot_NGC = pg.PlotCurveItem(x,y*norm, pen='lightgreen')
+                        self.vb.addItem(self.plot_NGC)
                     #self.legend_model.addItem(self.plot_NGC, 'Template')
 
 
@@ -284,43 +284,43 @@ class Viewer(QWidget):
         self.horizontalLayout = QHBoxLayout(self)
         if 1:
             filenamelist = ['None']+self.readfolder(obj_name=self.objname_box.currentText())
-            self.w1 = Slider(0, 10, name='c1:', filenamelist=filenamelist, path=self.spec_folder)
+            self.w1 = Slider(0, 3, name='c1:', filenamelist=filenamelist, path=self.spec_folder)
             self.horizontalLayout.addWidget(self.w1)
 
-            self.w2 = Slider(0, 10,name='c2:',filenamelist=filenamelist,path =  self.spec_folder)
+            self.w2 = Slider(0, 3,name='c2:',filenamelist=filenamelist,path =  self.spec_folder)
             self.horizontalLayout.addWidget(self.w2)
 
-            self.w3 = Slider(0, 10,name='c3:',filenamelist=filenamelist,path =  self.spec_folder)
+            self.w3 = Slider(0, 3,name='c3:',filenamelist=filenamelist,path =  self.spec_folder)
             self.horizontalLayout.addWidget(self.w3)
 
-            self.w4 = Slider(0, 10,name='c4:',filenamelist=filenamelist,path =  self.spec_folder)
+            self.w4 = Slider(0, 3,name='c4:',filenamelist=filenamelist,path =  self.spec_folder)
             self.horizontalLayout.addWidget(self.w4)
 
-            self.w5 = Slider(0, 10, name='c5:',filenamelist=filenamelist,path =  self.spec_folder)
+            self.w5 = Slider(0, 3, name='c5:',filenamelist=filenamelist,path =  self.spec_folder)
             self.horizontalLayout.addWidget(self.w5)
 
-            self.w6 = Slider(0, 10, name='c6:',filenamelist=filenamelist,path =  self.spec_folder)
+            self.w6 = Slider(0, 3, name='c6:',filenamelist=filenamelist,path =  self.spec_folder)
             self.horizontalLayout.addWidget(self.w6)
 
-            self.w7 = Slider(0, 10, name='c7:',filenamelist=filenamelist,path =  self.spec_folder)
+            self.w7 = Slider(0, 3, name='c7:',filenamelist=filenamelist,path =  self.spec_folder)
             self.horizontalLayout.addWidget(self.w7)
 
-            self.w8 = Slider(0, 10, name='c8:',filenamelist=filenamelist,path =  self.spec_folder)
+            self.w8 = Slider(0, 3, name='c8:',filenamelist=filenamelist,path =  self.spec_folder)
             self.horizontalLayout.addWidget(self.w8)
 
-            self.w9 = Slider(0, 10, name='c9:',filenamelist=filenamelist,path =  self.spec_folder)
+            self.w9 = Slider(0, 3, name='c9:',filenamelist=filenamelist,path =  self.spec_folder)
             self.horizontalLayout.addWidget(self.w9)
 
-            self.w10 = Slider(0, 10, name='c10:',filenamelist=filenamelist,path =  self.spec_folder)
+            self.w10 = Slider(0, 3, name='c10:',filenamelist=filenamelist,path =  self.spec_folder)
             self.horizontalLayout.addWidget(self.w10)
 
-            self.w11 = Slider(0, 10, name='c11:',filenamelist=filenamelist,path =  self.spec_folder)
+            self.w11 = Slider(0, 3, name='c11:',filenamelist=filenamelist,path =  self.spec_folder)
             self.horizontalLayout.addWidget(self.w11)
 
-            self.w12 = Slider(0, 10, name='c12:',filenamelist=filenamelist,path =  self.spec_folder)
+            self.w12 = Slider(0, 3, name='c12:',filenamelist=filenamelist,path =  self.spec_folder)
             self.horizontalLayout.addWidget(self.w12)
 
-            self.w13 = Slider(0, 10, name='tmplate:', filenamelist=['cassis_yaaar_spcfw_15121152t-copy-red_norm.dat'], path=self.spec_tmp)
+            self.w13 = Slider(0, 3, name='tmplate:', filenamelist=['cassis_yaaar_spcfw_15121152t-copy-red_norm.dat'], path=self.spec_tmp)
             self.horizontalLayout.addWidget(self.w13)
         self.mainLayout.addLayout(self.horizontalLayout)
         #self.p6 = self.win.addPlot(title="My Plot")
@@ -623,7 +623,7 @@ class Viewer(QWidget):
         lst = []
         for (dirpath, dirname, filenames) in os.walk(path):
             for k, f in enumerate(filenames):
-                if f.endswith('.spec1d') and obj_name in f:
+                if f.endswith('_sci.spec1d') and obj_name in f:
                     lst.append(f)
         return sorted(lst)
 
