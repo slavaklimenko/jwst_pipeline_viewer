@@ -2782,7 +2782,7 @@ class expRunWidget(QWidget):
         l.addLayout(horizontal_layout)
 
         horizontal_layout = QHBoxLayout(self)
-        self.prepare_extraction = QPushButton('TEST', self, checkable=False)
+        self.prepare_extraction = QPushButton('FAST EXTRACTION', self, checkable=False)
         # self.set_roi_radius.setChecked(False)
         self.prepare_extraction.clicked[bool].connect(self.prepare_extraction_test)
         # self.set_roi_radius.setFixedSize(200, 60)
