@@ -561,9 +561,10 @@ class detector2():
         self.calfiles = self.residual_fringe.copy()
         for ii in range(0, len(self.residual_fringe)):
             self.calfiles[ii] = str.replace(self.residual_fringe[ii], 'residual_fringe', 'cal')
-            example_file = fits.open(self.residual_fringe[ii])
-            example_file.writeto(self.calfiles[ii], overwrite=True)
-            example_file.close()
+            os.renames(self.residual_fringe[ii], self.calfiles[ii])
+            #example_file = fits.open(self.residual_fringe[ii])
+            #example_file.writeto(self.calfiles[ii], overwrite=True)
+            #example_file.close()
 
         if debug:
             print('RES FRINGE STEP: Done.')

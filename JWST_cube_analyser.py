@@ -181,6 +181,9 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
                     self.data = self.parent.CUBE_B.data.data
                     self.data_tot = self.parent.CUBE_B.data
                 self.label_filename.setText(filename.split('/')[-1].split('s3d')[0])
+                #cb = self.label_filename
+                #width = cb.minimumSizeHint().width()
+                #cb.setFixedWidth(width)
                 self.label_filename.adjustSize()
                 #self.label_filename.resize(600, 40)
 
@@ -2421,24 +2424,23 @@ class chooseExpWidget(QWidget):
                 data = lst
             if len(data) > 0:
                 self.table.setdata(data)
-
-            for i, d in enumerate(data):
-                wdg = QWidget()
-                l = QVBoxLayout()
-                l.addSpacing(3)
-                button = QPushButton(d[0].split('_uncal')[0], self, checkable=True)
-                #button.setFixedSize(600, 30)
-                button.resize(600, 30)
-                button.setChecked(False)
-                button.clicked[bool].connect(partial(self.click, d[0]))
-                button.setText(d[0].split('_uncal')[0])
-                #button.clicked.connect(partial(self.click, d[0]))
-                self.buttons[d[0]] = button
-                l.addWidget(button)
-                l.addSpacing(3)
-                l.setContentsMargins(0, 0, 0, 0)
-                wdg.setLayout(l)
-                self.table.setCellWidget(i, 0, wdg)
+            if 1:
+                for i, d in enumerate(data):
+                    wdg = QWidget()
+                    l = QVBoxLayout()
+                    l.addSpacing(3)
+                    button = QPushButton(d[0].split('_uncal')[0], self, checkable=True)
+                    button.resize(600, 30)
+                    button.setChecked(False)
+                    button.clicked[bool].connect(partial(self.click, d[0]))
+                    button.setText(d[0].split('_uncal')[0])
+                    #button.clicked.connect(partial(self.click, d[0]))
+                    self.buttons[d[0]] = button
+                    l.addWidget(button)
+                    l.addSpacing(3)
+                    l.setContentsMargins(0, 0, 0, 0)
+                    wdg.setLayout(l)
+                    self.table.setCellWidget(i, 0, wdg)
         #self.table.data = table.data[0]
         #self.__init__(parent=self.parent,cube_choice=self.cube_choice)
 
@@ -2456,6 +2458,7 @@ class chooseExpWidget(QWidget):
             self.parent.Cubes_A.table.flags = flags.fromkeys(flags, False)
             print('added by click', self.parent.Cubes_A.table.flags)
         p = np.where(self.table.data['name'] == name)
+        print(p[0],p[0][0])
         self.table.setCurrentCell(np.where(self.table.data['name'] == name)[0][0], 0)
 
     def ok(self):
