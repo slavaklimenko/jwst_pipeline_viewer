@@ -136,7 +136,7 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
         self.label3 = QLabel("World:", self.ui.graphicsView.viewport())
         self.label3.move(25, 0)
         self.label_filename = QLabel("Filename:", self.ui.graphicsView.viewport())
-        self.label_filename.move(1325, 15)
+        self.label_filename.move(1000, 15)
 
     def add_scale_stick(self):
         if self.cube_name == 'A':
@@ -181,14 +181,14 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
                     self.data = self.parent.CUBE_B.data.data
                     self.data_tot = self.parent.CUBE_B.data
                 self.label_filename.setText(filename.split('/')[-1].split('s3d')[0])
-                self.label_filename.resize(600, 40)
+                self.label_filename.adjustSize()
+                #self.label_filename.resize(600, 40)
 
                 t,x, y = (0,2, 1)
                 self.setImage(self.data, axes={'t': t, 'x': x, 'y': y, 'c': None}, levels=[-100,800]) #autoRange=True,
                 self.vb.hoverEvent = self.imageHoverEvent
                 hist = self.getHistogramWidget()
                 hist.setHistogramRange(mn=-200, mx=1000)
-
                 (self.t, self.time) = self.timeIndex(self.timeLine)
 
 
@@ -748,7 +748,7 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
         text = "pixel: (row=%d, col=%d, l=%d), val: %.2f MJy/sr" % ( col, row,time,val)
         print(text)
 
-        text_world_coord = "world: (ra=%.6f, dec=%.6f, l=%.6f)" % (x_world,y_world,lam_world)
+        text_world_coord = "world: (ra=%.6f, dec=%.6f, l=%.2f)" % (x_world,y_world,lam_world)
         print(text_world_coord)
 
         rah = int(x_world/360*24)
@@ -764,12 +764,14 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
         #print('world->detector', cal_world_to_detector(x_world,y_world, lam_world))
 
         self.label.setText(text)
-        self.label.resize(600, 40)
+        #self.label.resize(600, 40)
+        self.label.adjustSize()
         self.label2.setText(text_world_coord)
-        self.label2.resize(600, 40)
+        self.label2.adjustSize()
+        #self.label2.resize(600, 40)
         self.label3.setText(text_world_coord_asec)
-        self.label3.resize(600, 40)
-
+        #self.label3.resize(600, 40)
+        self.label3.adjustSize()
 
     def mousePressEvent(self, event, pos=None):
         print(pos)
@@ -1479,8 +1481,10 @@ class plotHist(pg.PlotWidget):
             if np.sum(roi_mask) > 0:
                 num_pixels = np.sum(roi_mask)
                 d = data.data[timeind, :, :].copy()
+                print('dr'.d.shape())
                 d = d[roi_mask]
                 derr = data.err[timeind, :, :].copy()
+                print('derr'.derr.shape())
                 derr = derr[roi_mask]
                 d = d[(~np.isnan(d))*(~np.isnan(derr))]
                 derr = derr[(~np.isnan(d))*(~np.isnan(derr))]
@@ -2242,7 +2246,7 @@ class CUBElistTable(pg.TableWidget):
             #name = self.parent.parent.CUBE_B.cubename.split('/')[-1].split('.')[0]
             bkgr_subtr_flag = self.parent.parent.CUBE_B.flags['subtract_bkgr']
 
-        new_cube_filename =  self.parent.parent.exp_pars.new_cube_filename.text()
+        new_cube_filename =  self.parent.parent.exp_commands.new_cube_filename.text()
         bkgr_sub_method = 'False'
         if bkgr_subtr_flag:
             bkgr_sub_method = self.parent.parent.exp_commands.calc_median_mode.currentText()
@@ -2286,7 +2290,10 @@ class chooseExpWidget(QWidget):
         self.associtations_list = {}
 
         if 1:
-            filenames,fileparams,codenames = self.readfolder(self.parent.CUBE_A.output_dir)
+            if self.cube_choice == 'A':
+                filenames,fileparams,codenames = self.readfolder(folder=self.parent.CUBE_A.output_dir,source_name=self.parent.exp_commands.sourse_listA.currentText())
+            elif self.cube_choice == 'B':
+                filenames, fileparams, codenames = self.readfolder(folder=self.parent.CUBE_B.output_dir,source_name=self.parent.exp_commands.sourse_listB.currentText())
             lst = []
             if len(filenames)>0:
                 for s,pars in zip(filenames,fileparams):
@@ -2311,6 +2318,7 @@ class chooseExpWidget(QWidget):
                 button.resize(600, 30)
                 button.setChecked(False)
                 button.clicked[bool].connect(partial(self.click, d[0]))
+                button.setText(d[0].split('_uncal')[0])
                 #button.clicked.connect(partial(self.click, d[0]))
                 self.buttons[d[0]] = button
                 l.addWidget(button)
@@ -2339,7 +2347,7 @@ class chooseExpWidget(QWidget):
         self.setLayout(layout)
 
 
-    def readfolder(self, folder='', verbose=False):
+    def readfolder(self, folder='', verbose=False,source_name=''):
         """
         Read list of models from the folder
         """
@@ -2351,7 +2359,7 @@ class chooseExpWidget(QWidget):
             for (dirpath, dirname, filenames) in os.walk(folder):
                 print(dirpath, dirname, filenames)
                 for k,f in enumerate(filenames):
-                    if f.endswith('_s3d.fits'):
+                    if f.endswith('_s3d.fits') and f.split('_')[0] == source_name:
                         print(k,'from', len(filenames))
                         #lst.append(dirpath.split('/')[-1]+'/'+f)
                         lst.append(dirpath+ f)
@@ -2389,6 +2397,50 @@ class chooseExpWidget(QWidget):
 
         return [targ_name,miri_band,miri_channel,asn_file,s_mrsmat,s_outlir,s_bkgsub]
 
+    def update_list_of_files(self):
+        table = self.table.data.copy()
+        if 1:
+            if 1:
+                if self.cube_choice == 'A':
+                    filenames, fileparams, codenames = self.readfolder(folder=self.parent.CUBE_A.output_dir,
+                                                                       source_name=self.parent.exp_commands.sourse_listA.currentText())
+                elif self.cube_choice == 'B':
+                    filenames, fileparams, codenames = self.readfolder(folder=self.parent.CUBE_B.output_dir,
+                                                                       source_name=self.parent.exp_commands.sourse_listB.currentText())
+                lst = []
+                if len(filenames) > 0:
+                    for s, pars in zip(filenames, fileparams):
+                        d = [s.split('/')[-1]]
+                        for p in pars:
+                            d.append(p)
+                        lst.append(d)
+                        # filenamelst.append(d[0].split('/')[-1])
+                        self.filelist[d[0].split('/')[-1]] = s
+                        self.associtations_list[d[0].split('/')[-1]] = self.parent.CUBE_A.path + '/' + d[4]
+                    lst = np.array([tuple(l) for l in lst], dtype=[('name', 'U400')] + [(p, 'U50') for p in codenames])
+                data = lst
+            if len(data) > 0:
+                self.table.setdata(data)
+
+            for i, d in enumerate(data):
+                wdg = QWidget()
+                l = QVBoxLayout()
+                l.addSpacing(3)
+                button = QPushButton(d[0].split('_uncal')[0], self, checkable=True)
+                #button.setFixedSize(600, 30)
+                button.resize(600, 30)
+                button.setChecked(False)
+                button.clicked[bool].connect(partial(self.click, d[0]))
+                button.setText(d[0].split('_uncal')[0])
+                #button.clicked.connect(partial(self.click, d[0]))
+                self.buttons[d[0]] = button
+                l.addWidget(button)
+                l.addSpacing(3)
+                l.setContentsMargins(0, 0, 0, 0)
+                wdg.setLayout(l)
+                self.table.setCellWidget(i, 0, wdg)
+        #self.table.data = table.data[0]
+        #self.__init__(parent=self.parent,cube_choice=self.cube_choice)
 
 
 
@@ -2430,8 +2482,22 @@ class expParsWidget(QWidget):
         #self.cols, self.x_, self.y_, self.z_, self.lnL_, self.mpars = None, None, None, None, None, None
 
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel('Parameters:'))
+        horizontal_layout = QHBoxLayout(self)
+        horizontal_layout.addWidget(QLabel('Build cube:'))
 
+        self.build_cube = QPushButton('Build cube')
+        self.build_cube.clicked[bool].connect(partial(self.call_build_3dCube))
+        # self.build_cube.setFixedSize(200, 60)
+        self.build_cube.resize(200, 60)
+        horizontal_layout.addWidget(self.build_cube)
+        self.build_cube_12ch = QPushButton('Build 12cubes')
+        self.build_cube_12ch.clicked[bool].connect(partial(self.call_build_cube_12_ch))
+        # self.build_cube_12ch.setFixedSize(200, 60)
+        self.build_cube_12ch.resize(200, 60)
+        horizontal_layout.addWidget(self.build_cube_12ch)
+
+        horizontal_layout.addStretch(1)
+        layout.addLayout(horizontal_layout)
 
         #l = QHBoxLayout(self)
         #l.addWidget(QLabel('Exp1:'))
@@ -2462,8 +2528,13 @@ class expParsWidget(QWidget):
         self.master_bkgr_flag = QComboBox()
         self.master_bkgr_flag.addItems(['No', 'Yes'])
         self.master_bkgr_flag.setCurrentIndex(0)
-        #self.master_bkgr_flag.setFixedSize(90, 30)
-        self.master_bkgr_flag.resize(90, 30)
+        cb  = self.master_bkgr_flag
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
+        #height = cb.minimumSizeHint().height()
+        #cb.view().setMinimumWidth(width)
+        #self.master_bkgr_flag.setFixedSize(10, 50)
+        #self.master_bkgr_flag.resize(90, 30)
         horizontal_layout.addWidget(self.master_bkgr_flag)
 
         horizontal_layout.addWidget(QLabel('ResBkgrMatch:'))
@@ -2471,27 +2542,36 @@ class expParsWidget(QWidget):
         self.master_res_bkgr_flag.addItems(['No', 'Yes'])
         self.master_res_bkgr_flag.setCurrentIndex(1)
         #self.master_res_bkgr_flag.setFixedSize(90, 30)
-        self.master_res_bkgr_flag.resize(90, 30)
+        #self.master_res_bkgr_flag.resize(90, 30)
+        cb = self.master_res_bkgr_flag
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
         horizontal_layout.addWidget(self.master_res_bkgr_flag)
 
         horizontal_layout.addWidget(QLabel('OutlierDet:'))
         self.master_outlier_flag = QComboBox()
         self.master_outlier_flag.addItems(['No', 'Yes'])
         self.master_outlier_flag.setCurrentIndex(1)
+        cb = self.master_outlier_flag
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
         #self.master_outlier_flag.setFixedSize(90, 30)
-        self.master_outlier_flag.resize(90, 30)
+        #self.master_outlier_flag.resize(90, 30)
         horizontal_layout.addWidget(self.master_outlier_flag)
         horizontal_layout.addStretch(1)
         layout.addLayout(horizontal_layout)
 
         horizontal_layout = QHBoxLayout(self)
 
-        horizontal_layout.addWidget(QLabel('ResampleSpec:'))
+        horizontal_layout.addWidget(QLabel('Resample:'))
         self.master_resample_spec_flag = QComboBox()
         self.master_resample_spec_flag.addItems(['No', 'Yes'])
         self.master_resample_spec_flag.setCurrentIndex(1)
         #self.master_resample_spec_flag.setFixedSize(90, 30)
-        self.master_resample_spec_flag.resize(90, 30)
+        #self.master_resample_spec_flag.resize(90, 30)
+        cb = self.master_resample_spec_flag
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
         horizontal_layout.addWidget(self.master_resample_spec_flag)
 
 
@@ -2499,8 +2579,11 @@ class expParsWidget(QWidget):
         self.master_extract1d_flag = QComboBox()
         self.master_extract1d_flag.addItems(['No', 'Yes'])
         self.master_extract1d_flag.setCurrentIndex(1)
+        cb = self.master_extract1d_flag
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
         #self.master_extract1d_flag.setFixedSize(90, 30)
-        self.master_extract1d_flag.resize(90, 30)
+        #self.master_extract1d_flag.resize(90, 30)
         horizontal_layout.addWidget(self.master_extract1d_flag)
 
         horizontal_layout.addStretch(1)
@@ -2514,52 +2597,60 @@ class expParsWidget(QWidget):
             lst = self.readfolder(self.parent.CUBE_A.path)
         self.asn_source.addItems(lst) #['Object', 'Background','Both'])
         self.asn_source.setCurrentIndex(0)
+        cb = self.asn_source
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
         #p = self.asn_source.currentText()
         #print(self.asn_source.itemData[0])
         #self.asn_source.setFixedSize(90, 30)
-        self.asn_source.resize(90, 30)
+        #self.asn_source.resize(90, 30)
         horizontal_layout.addWidget(self.asn_source)
 
         horizontal_layout.addWidget(QLabel('Channel:'))
         self.asn_channel = QComboBox()
         self.asn_channel.addItems(['1', '2','3','4'])
         self.asn_channel.setCurrentIndex(0)
+        cb = self.asn_channel
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
         #self.asn_channel.setFixedSize(90, 30)
-        self.asn_channel.resize(90, 30)
+        #self.asn_channel.resize(90, 30)
         horizontal_layout.addWidget(self.asn_channel)
 
         horizontal_layout.addWidget(QLabel('Band:'))
         self.asn_band = QComboBox()
         self.asn_band.addItems(['SHORT', 'MEDIUM', 'LONG','ABC'])
         self.asn_band.setCurrentIndex(0)
-        self.asn_band.resize(90, 30)
+        cb = self.asn_band
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
+        #self.asn_band.resize(90, 30)
         horizontal_layout.addWidget(self.asn_band)
 
         horizontal_layout.addStretch(1)
         layout.addLayout(horizontal_layout)
 
         horizontal_layout = QHBoxLayout(self)
-        horizontal_layout.addWidget(QLabel('add_cube_postfix_name:'))
+        horizontal_layout.addWidget(QLabel('postfix_name_for_builded_cube:'))
         self.cube_filename = QLineEdit()
         self.cube_filename.setText('')
-        self.cube_filename.resize(200, 30)
+        cb = self.cube_filename
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
+        #self.cube_filename.resize(200, 30)
         horizontal_layout.addWidget(self.cube_filename)
         horizontal_layout.addStretch(1)
         layout.addLayout(horizontal_layout)
 
         horizontal_layout = QHBoxLayout(self)
-        horizontal_layout.addWidget(QLabel('new_cube_name:'))
-        self.new_cube_filename = QLineEdit()
-        self.new_cube_filename.setText('')
-        self.new_cube_filename.resize(200, 30)
-        horizontal_layout.addWidget(self.new_cube_filename)
-        horizontal_layout.addStretch(1)
-        layout.addLayout(horizontal_layout)
+        # self.create_asn = QPushButton('Create AssFile')
+        # self.create_asn.clicked[bool].connect(partial(self.create_ASN_file))
+        # self.create_asn.setFixedSize(200, 60)
+        # horizontal_layout.addWidget(self.create_asn)
 
 
-        horizontal_layout = QHBoxLayout(self)
-        horizontal_layout.addStretch(1)
-        layout.addLayout(horizontal_layout)
+
+
 
 
         layout.addStretch(1)
@@ -2583,6 +2674,20 @@ class expParsWidget(QWidget):
                             lst.append(obj_name)
         return lst
 
+
+    def create_ASN_file(self):
+        self.parent.Cubes_A.table.create_asn_file()
+
+    def call_build_3dCube(self):
+        print('create_asn:')
+        self.parent.Cubes_A.table.create_asn_file()
+        print('build cube:')
+        self.parent.Cubes_A.table.build_3dcube()
+
+    def call_build_cube_12_ch(self):
+        self.parent.Cubes_A.table.build_3dcube_12_channels()
+
+
 class expRunWidget(QWidget):
     """
     Widget for choose fitting parameters during the fit.
@@ -2599,27 +2704,21 @@ class expRunWidget(QWidget):
         layout = QVBoxLayout(self)
 
         l = QVBoxLayout(self)
-        l.addWidget(QLabel('Commands:'))
+
 
         horizontal_layout = QHBoxLayout(self)
+        horizontal_layout.addWidget(QLabel('Cube Analyser:'))
         #self.create_asn = QPushButton('Create AssFile')
         #self.create_asn.clicked[bool].connect(partial(self.create_ASN_file))
         #self.create_asn.setFixedSize(200, 60)
         #horizontal_layout.addWidget(self.create_asn)
-        self.build_cube = QPushButton('Build cube')
-        self.build_cube.clicked[bool].connect(partial(self.call_build_3dCube))
-        #self.build_cube.setFixedSize(200, 60)
-        self.build_cube.resize(200, 60)
-        horizontal_layout.addWidget(self.build_cube)
-        self.build_cube_12ch = QPushButton('Build 12cubes')
-        self.build_cube_12ch.clicked[bool].connect(partial(self.call_build_cube_12_ch))
-        #self.build_cube_12ch.setFixedSize(200, 60)
-        self.build_cube_12ch.resize(200, 60)
-        horizontal_layout.addWidget(self.build_cube_12ch)
         self.update_cubes_list = QPushButton('Update_List')
         self.update_cubes_list.clicked[bool].connect(partial(self.update_CubeList))
         #self.update_cubes_list.setFixedSize(200, 60)
-        self.update_cubes_list.resize(200, 60)
+        #self.update_cubes_list.resize(200, 60)
+        cb = self.update_cubes_list
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
         horizontal_layout.addWidget(self.update_cubes_list)
 
         self.save_local_cube = QPushButton('Save Cube')
@@ -2631,12 +2730,63 @@ class expRunWidget(QWidget):
         self.save_local_cube_name = QComboBox()
         self.save_local_cube_name.addItems(['A', 'B'])
         self.save_local_cube_name.setCurrentIndex(0)
-        self.save_local_cube_name.setFixedSize(90, 30)
-        self.save_local_cube_name.resize(90, 30)
+        #self.save_local_cube_name.setFixedSize(90, 30)
+        #self.save_local_cube_name.resize(90, 30)
+        cb = self.save_local_cube_name
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
         horizontal_layout.addWidget(self.save_local_cube_name)
+
+        horizontal_layout.addWidget(QLabel('Name:'))
+        self.new_cube_filename = QLineEdit()
+        self.new_cube_filename.setText('')
+        cb = self.new_cube_filename
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
+        #self.new_cube_filename.resize(200, 30)
+        horizontal_layout.addWidget(self.new_cube_filename)
+        horizontal_layout.addStretch(1)
+        layout.addLayout(horizontal_layout)
+
+
         horizontal_layout.addStretch(1)
         l.addLayout(horizontal_layout)
         layout.addLayout(l)
+
+        horizontal_layout = QHBoxLayout(self)
+        horizontal_layout.addWidget(QLabel('Source list (A):'))
+        self.sourse_listA = QComboBox()
+        lst = self.parent.exp_pars.readfolder(self.parent.CUBE_A.path)
+        self.sourse_listA.addItems(lst)  # ['Object', 'Background','Both'])
+        self.sourse_listA.setCurrentIndex(0)
+        # p = self.asn_source.currentText()
+        # print(self.asn_source.itemData[0])
+        # self.asn_source.setFixedSize(90, 30)
+        #self.sourse_listA.resize(90, 30)
+        cb = self.sourse_listA
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
+        horizontal_layout.addWidget(self.sourse_listA)
+        horizontal_layout.addStretch(1)
+        layout.addLayout(horizontal_layout)
+
+        horizontal_layout = QHBoxLayout(self)
+        horizontal_layout.addWidget(QLabel('Source list (B):'))
+        self.sourse_listB = QComboBox()
+        lst = self.parent.exp_pars.readfolder(self.parent.CUBE_B.path)
+        self.sourse_listB.addItems(lst)  # ['Object', 'Background','Both'])
+        self.sourse_listB.setCurrentIndex(0)
+        # p = self.asn_source.currentText()
+        # print(self.asn_source.itemData[0])
+        # self.asn_source.setFixedSize(90, 30)
+        #self.sourse_listB.resize(90, 30)
+        cb = self.sourse_listB
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
+        horizontal_layout.addWidget(self.sourse_listB)
+        horizontal_layout.addStretch(1)
+        layout.addLayout(horizontal_layout)
+
 
         l = QVBoxLayout(self)
         l.addWidget(QLabel('Background model:'))
@@ -2653,27 +2803,39 @@ class expRunWidget(QWidget):
         self.calc_median_mode.addItems(['3Dsmothing', '2Dsmothing','Average','Pix2pix','Circle'])
         self.calc_median_mode.setCurrentIndex(0)
         #self.calc_median_mode.setFixedSize(90, 30)
-        self.calc_median_mode.resize(90, 30)
+        #self.calc_median_mode.resize(90, 30)
+        cb = self.calc_median_mode
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
         horizontal_layout.addWidget(self.calc_median_mode)
         horizontal_layout.addWidget(QLabel('Rad:'))
         self.mean_kernel_rad = QLineEdit()
         self.mean_kernel_rad.setText(str(5))
+        cb = self.mean_kernel_rad
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
         #self.mean_kernel_rad.setFixedSize(60, 30)
-        self.mean_kernel_rad.resize(30, 10)
+        #self.mean_kernel_rad.resize(30, 10)
         horizontal_layout.addWidget(self.mean_kernel_rad)
         self.subtr_median_flux = QPushButton('SubtractMed')
         #self.subtr_median_flux = QPushButton('SubtractMed', self, checkable=True)
         #self.subtr_median_flux.setChecked(False)
         self.subtr_median_flux.clicked[bool].connect(partial(self.SubtractMedFlux))
         #self.subtr_median_flux.setFixedSize(200, 60)
-        self.subtr_median_flux.resize(200, 60)
+       # self.subtr_median_flux.resize(200, 60)
+        cb = self.subtr_median_flux
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
         horizontal_layout.addWidget(self.subtr_median_flux)
         self.name_cube_subtracted = QComboBox()
         self.name_cube_subtracted.addItems(['A','B'])
         self.name_cube_subtracted.setCurrentIndex(1)
         #self.name_cube_subtracted.setFixedSize(self.name_cube_subtracted.size())
-        self.name_cube_subtracted.setFixedSize(90, 30)
-        self.name_cube_subtracted.resize(90, 30)
+        #self.name_cube_subtracted.setFixedSize(90, 30)
+        #self.name_cube_subtracted.resize(90, 30)
+        cb = self.name_cube_subtracted
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
         horizontal_layout.addWidget(self.name_cube_subtracted)
         horizontal_layout.addStretch(1)
         l.addLayout(horizontal_layout)
@@ -2695,7 +2857,10 @@ class expRunWidget(QWidget):
         self.roi_type.addItems(['green', 'red', 'purple', 'yellow', 'blue'])
         self.roi_type.setCurrentIndex(0)
         #self.roi_type.setFixedSize(90, 30)
-        self.roi_type.resize(90, 30)
+        #self.roi_type.resize(90, 30)
+        cb = self.roi_type
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
         horizontal_layout.addWidget(self.roi_type)
         self.show_roi = QPushButton('Show Detector', self, checkable=True)
         self.show_roi.setChecked(False)
@@ -2708,7 +2873,10 @@ class expRunWidget(QWidget):
         self.norm_flag_roi.addItems(['no', 'yes'])
         self.norm_flag_roi.setCurrentIndex(0)
         #self.norm_flag_roi.setFixedSize(90, 30)
-        self.norm_flag_roi.resize(90, 30)
+        #self.norm_flag_roi.resize(90, 30)
+        cb = self.norm_flag_roi
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
         horizontal_layout.addWidget(self.norm_flag_roi)
         horizontal_layout.addStretch(1)
         l.addLayout(horizontal_layout)
@@ -2720,6 +2888,29 @@ class expRunWidget(QWidget):
         #self.show_disp_roi.setFixedSize(200, 60)
         self.show_disp_roi.resize(200, 60)
         horizontal_layout.addWidget(self.show_disp_roi)
+
+        self.show_roi_1_minus_2 = QPushButton('Show A1/A2', self, checkable=True)
+        self.show_roi_1_minus_2.setChecked(False)
+        self.show_roi_1_minus_2.clicked[bool]
+        #self.show_roi_1_minus_2.setFixedSize(200, 60)
+        #self.show_roi_1_minus_2.resize(200, 60)
+        cb = self.show_roi_1_minus_2
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
+        horizontal_layout.addWidget(self.show_roi_1_minus_2)
+
+        self.show_roi_slit = QPushButton('Show Slit', self, checkable=True)
+        self.show_roi_slit.setChecked(False)
+        self.show_roi_slit.clicked[bool].connect(partial(self.ShowSlit))
+        # self.show_roi_slit.setFixedSize(200, 60)
+        self.show_roi_slit.resize(200, 60)
+        horizontal_layout.addWidget(self.show_roi_slit)
+
+
+        horizontal_layout.addStretch(1)
+        l.addLayout(horizontal_layout)
+
+        horizontal_layout = QHBoxLayout(self)
         self.extract_1d_roi = QPushButton('Extract ROI')
         self.extract_1d_roi.clicked[bool].connect(partial(self.extract_Roi))
         self.extract_1d_roi.resize(200, 60)
@@ -2728,19 +2919,13 @@ class expRunWidget(QWidget):
         self.extract_1d_roi_cube.addItems(['(A)', '(B)'])
         self.extract_1d_roi_cube.setCurrentIndex(0)
         #self.extract_1d_roi_cube.setFixedSize(100, 30)
-        self.extract_1d_roi_cube.resize(100, 30)
+        #self.extract_1d_roi_cube.resize(100, 30)
+        cb = self.extract_1d_roi_cube
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
         horizontal_layout.addWidget(self.extract_1d_roi_cube)
 
-        self.show_roi_1_minus_2 = QPushButton('Show A1/A2', self, checkable=True)
-        self.show_roi_1_minus_2.setChecked(False)
-        self.show_roi_1_minus_2.clicked[bool]
-        #self.show_roi_1_minus_2.setFixedSize(200, 60)
-        self.show_roi_1_minus_2.resize(200, 60)
-        horizontal_layout.addWidget(self.show_roi_1_minus_2)
-        horizontal_layout.addStretch(1)
-        l.addLayout(horizontal_layout)
 
-        horizontal_layout = QHBoxLayout(self)
         self.set_roi_radius = QPushButton('SetRoi_R') #, self, checkable=False)
         #self.set_roi_radius.setChecked(False)
         self.set_roi_radius.clicked[bool].connect(self.SetRoi_radius)
@@ -2752,15 +2937,13 @@ class expRunWidget(QWidget):
         self.roi_radius = QLineEdit()
         self.roi_radius.setText(str(10))
         #self.roi_radius.setFixedSize(60, 30)
-        self.roi_radius.resize(60, 30)
+        #self.roi_radius.resize(60, 30)
+        cb = self.roi_radius
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
         horizontal_layout.addWidget(self.roi_radius)
 
-        self.show_roi_slit = QPushButton('Show Slit', self, checkable=True)
-        self.show_roi_slit.setChecked(False)
-        self.show_roi_slit.clicked[bool].connect(partial(self.ShowSlit))
-        #self.show_roi_slit.setFixedSize(200, 60)
-        self.show_roi_slit.resize(200, 60)
-        horizontal_layout.addWidget(self.show_roi_slit)
+
 
         self.show_gradient = QPushButton('Contours', self, checkable=True)
         self.show_gradient.setChecked(False)
@@ -2770,13 +2953,19 @@ class expRunWidget(QWidget):
         horizontal_layout.addWidget(self.show_gradient)
         self.level_value = QLineEdit()
         self.level_value.setText(str(0.68))
-        self.level_value.resize(60, 30)
+        #self.level_value.resize(60, 30)
+        cb = self.level_value
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
         horizontal_layout.addWidget(self.level_value)
         self.level_type = QComboBox()
         self.level_type.addItems(['LOC', 'TOT'])
-        self.level_type.setCurrentIndex(0)
+        self.level_type.setCurrentIndex(1)
         #self.level_type.setFixedSize(100, 30)
-        self.level_type.resize(100, 30)
+        #self.level_type.resize(100, 30)
+        cb = self.level_type
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
         horizontal_layout.addWidget(self.level_type)
         horizontal_layout.addStretch(1)
         l.addLayout(horizontal_layout)
@@ -2786,7 +2975,10 @@ class expRunWidget(QWidget):
         # self.set_roi_radius.setChecked(False)
         self.prepare_extraction.clicked[bool].connect(self.prepare_extraction_test)
         # self.set_roi_radius.setFixedSize(200, 60)
-        self.prepare_extraction.resize(200, 60)
+        #self.prepare_extraction.resize(200, 60)
+        cb = self.prepare_extraction
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
         # self.select_roi.clicked[bool].connect(self.ShowROI)
         # self.select_roi.setFixedSize(200, 60)
         horizontal_layout.addWidget(self.prepare_extraction)
@@ -2804,21 +2996,11 @@ class expRunWidget(QWidget):
         self.setStyleSheet(open('styles.ini').read())
 
 
-    def create_ASN_file(self):
-        self.parent.Cubes_A.table.create_asn_file()
-
-    def call_build_3dCube(self):
-        print('create_asn:')
-        self.parent.Cubes_A.table.create_asn_file()
-        print('build cube:')
-        self.parent.Cubes_A.table.build_3dcube()
-
-    def call_build_cube_12_ch(self):
-        self.parent.Cubes_A.table.build_3dcube_12_channels()
 
     def update_CubeList(self):
         print('update list:')
-        self.parent.Cubes_A.table.update_cube_list()
+        self.parent.Cubes_A.update_list_of_files()
+        self.parent.Cubes_B.update_list_of_files()
 
     def extract_Roi(self,mode=None):
         print('extract Roi:')
@@ -3026,10 +3208,11 @@ class JWST_spec_viewer(QMainWindow):
                 self.plot_slit = plotSlit(self)
 
             self.plot_spectrum = plotSpec(self)
-            self.Cubes_A = chooseExpWidget(self, closebutton=False,cube_choice='A')
-            self.Cubes_B = chooseExpWidget(self, closebutton=False,cube_choice='B')
             self.exp_pars = expParsWidget(self)
             self.exp_commands = expRunWidget(self)
+            self.Cubes_A = chooseExpWidget(self, closebutton=False,cube_choice='A')
+            self.Cubes_B = chooseExpWidget(self, closebutton=False,cube_choice='B')
+
             # self.plot.setFrameShape(QFrame.StyledPanel)
 
             self.splitter = QSplitter(Qt.Vertical)
