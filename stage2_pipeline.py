@@ -212,7 +212,7 @@ class detector2():
         map2mapfilename['Straylight'] = '*straylightstep.fits'
         map2mapfilename['Fringe'] = '*fringestep.fits'
         map2mapfilename['FluxCalib'] = '*photomstep.fits'
-        map2mapfilename['ResFringe'] = '*residual_fringe.fits'
+        map2mapfilename['ResFringe'] = '*cal.fits'
 
         sstring = self.output_dir + map2mapfilename[step_name]
         filenames = sorted(glob.glob(sstring))

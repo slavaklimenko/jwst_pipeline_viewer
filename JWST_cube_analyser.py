@@ -163,7 +163,7 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
         self.selected_pixels_cr_multi = []
 
 
-    def add(self, name, add,mode=None,show_associated_galaxies =True):
+    def add(self, name, add,mode=None,show_associated_galaxies =False):
         if add:
             if mode == None:
                 print('add cube name:',name)
@@ -174,13 +174,16 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
                     self.parent.CUBE_A.init_cube()
                     self.data = self.parent.CUBE_A.data.data
                     self.data_tot = self.parent.CUBE_A.data
+                    self.label_filename.setText(filename.split('/')[-1].split('s3d')[0])
+                    self.label_filename.setText('BACKGROUND-A')
                 elif self.cube_name == 'B':
                     filename = self.parent.Cubes_B.filelist[name]
                     self.parent.CUBE_B.add_cube(cubename=filename)
                     self.parent.CUBE_B.init_cube()
                     self.data = self.parent.CUBE_B.data.data
                     self.data_tot = self.parent.CUBE_B.data
-                self.label_filename.setText(filename.split('/')[-1].split('s3d')[0])
+                    self.label_filename.setText(filename.split('/')[-1].split('s3d')[0])
+                    self.label_filename.setText('BACKGROUND-B')
                 #cb = self.label_filename
                 #width = cb.minimumSizeHint().width()
                 #cb.setFixedWidth(width)
@@ -315,15 +318,15 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
                                 if self.cube_name == 'A':
                                     self.parent.plot_spectrum.plot_specA1(data=roi_selected_flux,err=roi_selected_flux_err, add=False,show_err_bar=True)
                                     self.parent.plot_spectrum.plot_specA1(data=roi_selected_flux,err=roi_selected_flux_err,  pen='gray',normalize=normalize,label='CubeA - green',show_err_bar=True,smoothing=False)
-                                    self.parent.plot_spectrum.plot_specAmax(data=roi_mean_w_flux, add=False)
-                                    self.parent.plot_spectrum.plot_specAmax(data=roi_max_flux,  err=roi_max_flux_err, normalize=normalize,label='CubeA:maxF-pixel')
+                                    #self.parent.plot_spectrum.plot_specAmax(data=roi_mean_w_flux, add=False)
+                                    #self.parent.plot_spectrum.plot_specAmax(data=roi_max_flux,  err=roi_max_flux_err, normalize=normalize,label='CubeA:maxF-pixel')
                                     self.parent.plot_hist1.plot_hist(data=self.data_tot, roi_mask=roi.roi_mask, timeind=self.time, add=False)
                                     self.parent.plot_hist1.plot_hist(data=self.data_tot, roi_mask=roi.roi_mask, timeind=self.time,pen=roi.pen)
                                 if self.cube_name == 'B':
                                     self.parent.plot_spectrum.plot_specB1(data=roi_selected_flux,err=roi_selected_flux_err, add=False,show_err_bar=True)
                                     self.parent.plot_spectrum.plot_specB1(data=roi_selected_flux, err=roi_selected_flux_err,pen=roi.pen,normalize=normalize,show_err_bar=True,smoothing=False)
-                                    self.parent.plot_spectrum.plot_specB_median(add=False)
-                                    self.parent.plot_spectrum.plot_specB_median(pen=pg.mkPen('cyan', width=1.5),normalize=normalize,npixels = np.sum(roi.roi_mask),smoothing=False)
+                                    #self.parent.plot_spectrum.plot_specB_median(add=False)
+                                    #self.parent.plot_spectrum.plot_specB_median(pen=pg.mkPen('cyan', width=1.5),normalize=normalize,npixels = np.sum(roi.roi_mask),smoothing=False)
                                     self.parent.plot_hist3.plot_hist(data=self.data_tot, roi_mask=roi.roi_mask,
                                                                      timeind=self.time, add=False)
                                     self.parent.plot_hist3.plot_hist(data=self.data_tot, roi_mask=roi.roi_mask,
@@ -766,15 +769,13 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
         #cal_world_to_detector = wcs.get_transform('world', 'detector')
         #print('world->detector', cal_world_to_detector(x_world,y_world, lam_world))
 
-        self.label.setText(text)
-        #self.label.resize(600, 40)
-        self.label.adjustSize()
-        self.label2.setText(text_world_coord)
-        self.label2.adjustSize()
-        #self.label2.resize(600, 40)
-        self.label3.setText(text_world_coord_asec)
-        #self.label3.resize(600, 40)
-        self.label3.adjustSize()
+        if 0:
+            self.label.setText(text)
+            self.label.adjustSize()
+            self.label2.setText(text_world_coord)
+            self.label2.adjustSize()
+            self.label3.setText(text_world_coord_asec)
+            self.label3.adjustSize()
 
     def mousePressEvent(self, event, pos=None):
         print(pos)
@@ -1159,7 +1160,7 @@ class plotImage(pg.ImageView): #(pg.PlotWidget):
 class plotSpec(pg.PlotWidget):
     def __init__(self, parent):
         self.parent = parent
-        pg.PlotWidget.__init__(self, background=(29, 29, 29), labels={'left': 'SB (MJy/sr)', 'bottom': 'Wavelength [micron]'})
+        pg.PlotWidget.__init__(self, background=(29, 29, 29), labels={'left': 'Flux (MJy)', 'bottom': 'Wavelength [micron]'})
         #self.initstatus()
         self.vb = self.getViewBox()
         self.image = None
@@ -1207,11 +1208,11 @@ class plotSpec(pg.PlotWidget):
                 #NGC = np.loadtxt('/media/slava/14999070-ec17-4bcc-993d-c556030e9642/home/slava/science/data/SPITZER/AO0235/cassis_yaaar_spcfw_15121152t-copy-red_norm.dat')
                 NGC = np.loadtxt('./data/reference_spectrum.dat')
                 x,y = NGC[:,0], NGC[:,1]
-                mask = (x>wavel[10])*(x<wavel[40])
+                mask = (x>wavel[350])*(x<wavel[450])
                 self.show_template = False
-                if np.sum(mask)>0:
+                if np.sum(mask)>0 and 0:
                     self.show_template = True
-                    norm = 1/np.mean(y[mask])*np.mean(data[10:40])
+                    norm = 1/np.mean(y[mask])*np.mean(data[350:450])
                     self.plot_NGC = pg.PlotCurveItem(x,y*norm, pen='pink')
                     self.vb.addItem(self.plot_NGC)
                     self.legend_model.addItem(self.plot_NGC, 'Template')
@@ -1484,13 +1485,12 @@ class plotHist(pg.PlotWidget):
             if np.sum(roi_mask) > 0:
                 num_pixels = np.sum(roi_mask)
                 d = data.data[timeind, :, :].copy()
-                print('dr'.d.shape())
                 d = d[roi_mask]
                 derr = data.err[timeind, :, :].copy()
-                print('derr'.derr.shape())
                 derr = derr[roi_mask]
-                d = d[(~np.isnan(d))*(~np.isnan(derr))]
-                derr = derr[(~np.isnan(d))*(~np.isnan(derr))]
+                mask = (~np.isnan(d))*(~np.isnan(derr))
+                d = d[mask]
+                derr = derr[mask]
 
                 y, x = np.histogram(d[~np.isnan(d)])
                 self.plot_hist_roi = pg.PlotCurveItem(x, y, stepMode=True, fillLevel=0, pen=pen)

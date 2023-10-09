@@ -323,6 +323,9 @@ class plotImage(pg.ImageView): #(pg.PlotWidget):
                     self.parent.plot_pixel_diffs.plot_pixel_diffs(row=row, col=col)
                 elif self.parent.Exposures.table.current_pipeline_stage == 'stage2':
                     self.parent.plot_pixel_diffs.plot_pixel_diffs(row=row, col=col, add=False)
+                    self.parent.plot_pixel_diffs.plot_pixel_diffs(row=row, col=col)
+                elif self.parent.Exposures.table.current_pipeline_stage == 'stage2' and 0:
+                    self.parent.plot_pixel_diffs.plot_pixel_diffs(row=row, col=col, add=False)
                     self.parent.plot_pixel_diffs.plot_verical_stripe(row=row, col=col, add=False)
                     self.parent.plot_pixel_diffs.plot_verical_stripe(row=row, col=col)
 
@@ -674,8 +677,11 @@ class plotPixDiffs(pg.PlotWidget):
                     mask_diff = np.where(np.bitwise_and(pixeldq, dnu_flag)+np.bitwise_and(pixeldq, sat_flag))
                     median_diff = diffs.copy()
                     median_diff[mask_diff] = np.nan
-                    median_diff[np.nanargmax(np.abs(median_diff), axis=0)] = np.nan
-                    median_diffs = np.nanmedian(median_diff, axis=0)
+                    if np.sum(~np.isnan(median_diff))>0:
+                        median_diff[np.nanargmax(np.abs(median_diff), axis=0)] = np.nan
+                        median_diffs = np.nanmedian(median_diff, axis=0)
+                    else:
+                        median_diffs = 0
 
                 read_noise = self.parent.EXP.readnoisearray[row,col]
                 error+=np.sqrt(np.abs(median_diffs) + read_noise**2)
@@ -1011,6 +1017,7 @@ class EXPlistTable(pg.TableWidget):
             debug = False #self.parent.parent.exp_pars.debug.isChecked()
             save_res_flag = int(self.parent.parent.exp_pars.save_tmp_res.currentIndex())
             print('Run CR step: add_neighbors=', flag, ' show_debug = ', debug)
+            save_res_flag = True
             self.parent.parent.EXP.jump_corr_step(debug=debug, limit=CRlimit, flag_4_neighbors=flag,RecalcMedian=RecalcMedian,save_results=bool(save_res_flag))
             self.flags['CR_step'] = True
             print('CR STEP: DONE')
@@ -1020,6 +1027,7 @@ class EXPlistTable(pg.TableWidget):
             debug = False #self.parent.parent.exp_pars.debug.isChecked()
             save_res_flag = int(self.parent.parent.exp_pars.save_tmp_res.currentIndex())
             print('Run second CR step: add_neighbors=', flag, ' show_debug = ', debug)
+            save_res_flag = True
             self.parent.parent.EXP.reset_dq(flagname='JUMP_DET')
             self.parent.parent.EXP.jump_corr_step(debug=debug, limit=CRlimit, flag_4_neighbors=flag,save_results=bool(save_res_flag))
             self.flags['CR_step'] = True
@@ -1122,12 +1130,13 @@ class EXPlistTable(pg.TableWidget):
                 input_file = self.parent.parent.EXP.input_file
             input_file_base = os.path.basename(input_file).replace('uncal.fits', '')
             output_dir = './output/results/' #self.parent.parent.EXP.output_dir
+            output_dir_local = './output/detector1/'  # self.parent.parent.EXP.output_dir
             #output_dir = self.parent.parent.EXP.output_dir
 
             files = os.listdir(output_dir)
             if np.sum(input_file_base in f for f in files):
                 # Generate the name of the optional output file
-                optional_file = os.path.join(output_dir, '{}fitopt.fits'.format(input_file_base))
+                optional_file = os.path.join(output_dir_local, '{}fitopt.fits'.format(input_file_base))
                 hdulist = fits.open(optional_file)
                 intercepts = hdulist['YINT'].data[0, :, :, :]
                 intercepts_err = hdulist['SIGYINT'].data[0, :, :, :]
@@ -1155,8 +1164,11 @@ class EXPlistTable(pg.TableWidget):
                 # group_times = np.arange(num_groups) * group_time
 
                 fit_jump_det_file = os.path.join(output_dir, '{}jumpstep.fits'.format(input_file_base))
-                hdulist = fits.open(fit_jump_det_file)
-                group_dq = hdulist['GROUPDQ'].data[:, :,:,:]
+                lst = glob.glob(output_dir+'*jumpstep.fits')
+                if '{}jumpstep.fits'.format(input_file_base) in lst:
+                    hdulist = fits.open(fit_jump_det_file)
+                    group_dq = hdulist['GROUPDQ'].data[:, :,:,:]
+                    self.parent.parent.EXP.data.groupdq = group_dq
 
 
                 self.parent.parent.EXP.itercepts = intercepts
@@ -1166,7 +1178,6 @@ class EXPlistTable(pg.TableWidget):
                 self.parent.parent.EXP.local_slopes = local_slopes * group_time  # in DN/groups
                 self.parent.parent.EXP.local_slopes_err = local_sig_slopes * group_time  # in DN/groups
                 self.parent.parent.EXP.data.pixeldq = dq
-                self.parent.parent.EXP.data.groupdq = group_dq
                 self.parent.parent.EXP.ramp_fit = ramp_fit_0,ramp_fit_1
                 #self.parent.parent.EXP.ramp_fit[0].data = slopes
                 #self.flags['read_fit_slopes'] = True
@@ -1229,6 +1240,24 @@ class EXPlistTable(pg.TableWidget):
                     miri1.save_model(ints_model, 'rateints')
                 if input is not None:
                     miri1.save_model(input, 'rate')
+            if 1:
+                s = self.parent.parent.EXP.data.meta.cal_step
+                lst = []
+                for l in [s.linearity, s.rscd, s.dark_sub, s.refpix]:
+                    if l != None:
+                        lst.append(l)
+                    else:
+                        lst.append(2)
+                print(lst)
+                origin = self.parent.parent.EXP.output_dir
+                target = miri1.output_dir
+                # Fetching the list of all the files
+                files = os.listdir(origin)
+                # Fetching all the files to directory
+                exp_name = self.parent.parent.EXP.name.split('_uncal')[0]
+                with open(target + exp_name + '_cal_steps.csw', 'w') as f:
+                    csv_writer = csv.writer(f, delimiter=',')
+                    csv_writer.writerows([lst])
             if output_dir == 'final' and copy_add_data==True:
                 # Providing the folder path
                 origin = self.parent.parent.EXP.output_dir
@@ -1242,20 +1271,6 @@ class EXPlistTable(pg.TableWidget):
                 for file_name in files:
                     if exp_name in file_name:
                         shutil.copy(origin + file_name, target + file_name)
-
-                s = self.parent.parent.EXP.data.meta.cal_step
-                lst = []
-                for l in [s.linearity,s.rscd,s.dark_sub,s.refpix]:
-                    if l != None:
-                        lst.append(l)
-                    else:
-                        lst.append(2)
-                print(lst)
-                with open(target + exp_name+'_cal_steps.csw', 'w') as f:
-                    csv_writer = csv.writer(f, delimiter=',')
-                    csv_writer.writerows([lst])
-
-
                 print("Fit slopes are saved to", target+exp_name)
 
 
@@ -1470,16 +1485,22 @@ class expParsWidget(QWidget):
 
 
         l = QHBoxLayout(self)
-        l.addWidget(QLabel('Intergration:'))
+        l.addWidget(QLabel('Integration:'))
         self.nINT = QLineEdit()
         self.nINT.setText(str(0))
-        self.nINT.resize(90, 30)
+        cb = self.nINT
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
+        #self.nINT.resize(90, 30)
         l.addWidget(self.nINT)
 
         l.addWidget(QLabel('Group:'))
         self.nGROUP = QLineEdit()
         self.nGROUP.setText(str(1))
-        self.nGROUP.resize(90, 30)
+        cb = self.nGROUP
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
+        #self.nGROUP.resize(90, 30)
         l.addWidget(self.nGROUP)
         l.addStretch(1)
         layout.addLayout(l)
@@ -1509,7 +1530,10 @@ class expParsWidget(QWidget):
         horizontal_layout.addWidget(QLabel('CR limit:'))
         self.CRlimit = QLineEdit()
         self.CRlimit.setText(str(5.0))
-        self.CRlimit.resize(90, 30)
+        cb = self.CRlimit
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
+        #self.CRlimit.resize(90, 30)
         horizontal_layout.addWidget(self.CRlimit)
         self.addCRneighbors = QCheckBox('4NeighPix')
         self.addCRneighbors.setChecked(True)
@@ -1518,13 +1542,19 @@ class expParsWidget(QWidget):
         self.CR_recalc_flag = QComboBox()
         self.CR_recalc_flag.addItems(['No','Yes'])
         self.CR_recalc_flag.setCurrentIndex(1)
-        self.CR_recalc_flag.resize(90, 30)
+        cb = self.CR_recalc_flag
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
+        #self.CR_recalc_flag.resize(90, 30)
         horizontal_layout.addWidget(self.CR_recalc_flag)
         horizontal_layout.addWidget(QLabel('SaveRes:'))
         self.save_tmp_res = QComboBox()
         self.save_tmp_res.addItems(['No','Yes'])
         self.save_tmp_res.setCurrentIndex(0)
-        self.save_tmp_res.resize(90, 30)
+        cb = self.save_tmp_res
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
+        #self.save_tmp_res.resize(90, 30)
         horizontal_layout.addWidget(self.save_tmp_res)
 
         horizontal_layout.addStretch(1)
@@ -1558,11 +1588,17 @@ class expRunWidget(QWidget):
         horizontal_layout = QHBoxLayout(self)
         self.show_image = QPushButton('Show Image')
         self.show_image.clicked[bool].connect(partial(self.show_Image,'image'))
-        self.show_image.resize(200, 60)
+        cb = self.show_image
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
+        #self.show_image.resize(200, 60)
         horizontal_layout.addWidget(self.show_image)
         self.show_slope = QPushButton('Show Slope')
         self.show_slope.clicked[bool].connect(partial(self.show_Image,'slope'))
-        self.show_slope.resize(200, 60)
+        cb = self.show_slope
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
+        #self.show_slope.resize(200, 60)
         horizontal_layout.addWidget(self.show_slope)
         horizontal_layout.addStretch(1)
         l.addLayout(horizontal_layout)
@@ -1580,7 +1616,10 @@ class expRunWidget(QWidget):
         flags = [*dqflags.pixel]
         self.dq_categories.addItems(['all']+flags)
         self.dq_categories.setCurrentIndex(2)
-        self.dq_categories.resize(90, 30)
+        cb = self.dq_categories
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
+        #self.dq_categories.resize(90, 30)
         horizontal_layout.addWidget(self.dq_categories)
         horizontal_layout.addWidget(QLabel('Show:'))
         self.show_linear_step = QPushButton('DNU')
@@ -1744,7 +1783,7 @@ class expRunWidget(QWidget):
         self.parent.Exposures.table.read_slopes()
         self.parent.Exposures.table.save_slope_fit(output_dir='local')
 
-    def RunAllStage1(self):
+    def RunAllStage1(self,save_fit=True):
         print('Run all stage 1:')
         print('Init_Stage2:')
         self.parent.Exposures.table.set_dq()
@@ -1769,9 +1808,10 @@ class expRunWidget(QWidget):
         print('Slope Fit')
         self.parent.Exposures.table.slope_fit()
         self.parent.Exposures.table.read_slopes()
-        print('Save Fit')
-        #self.parent.Exposures.table.save_slope_fit(output_dir='final', copy_add_data=False)
-        #print('Run all: done.')
+        if save_fit:
+            print('Save Fit')
+            self.parent.Exposures.table.save_slope_fit(output_dir='final', copy_add_data=False)
+            print('Run all: done.')
 
     def run_stage1_table(self):
         table = self.parent.Exposures.table
@@ -1780,7 +1820,7 @@ class expRunWidget(QWidget):
             name = obj['name']
             self.parent.plot_image.add(name, add=True)
             self.parent.Exposures.current_name = name
-            self.RunAllStage1()
+            self.RunAllStage1(save_fit=False)
             print('Save Fit')
             # set copy_add_data to False to do not copy tmp data,
             self.parent.Exposures.table.save_slope_fit(output_dir='final', copy_add_data=False)
@@ -1838,13 +1878,19 @@ class expPipeline2Widget(QWidget):
         flags = ['Initial','BkgrSub','Flatfield','Straylight','Fringe','Photom','ResFringe']
         self.compare_init_map_choice.addItems(flags)
         self.compare_init_map_choice.setCurrentIndex(0)
-        self.compare_init_map_choice.resize(150, 30)
+        cb = self.compare_init_map_choice
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
+        #self.compare_init_map_choice.resize(150, 30)
         horizontal_layout.addWidget(self.compare_init_map_choice)
         self.compare_sec_map_choice = QComboBox()
         flags = ['Initial', 'BkgrSub', 'Flatfield', 'Straylight', 'Fringe','Photom','ResFringe']
         self.compare_sec_map_choice.addItems(flags)
         self.compare_sec_map_choice.setCurrentIndex(0)
-        self.compare_sec_map_choice.resize(140, 30)
+        cb = self.compare_sec_map_choice
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
+        #self.compare_sec_map_choice.resize(140, 30)
         horizontal_layout.addWidget(self.compare_sec_map_choice)
 
         horizontal_layout.addStretch(1)
@@ -1928,8 +1974,11 @@ class expPipeline2Widget(QWidget):
         self.read_step_choice = QComboBox()
         flags = ['Initial', 'BkgrSub', 'Flatfield', 'Straylight', 'Fringe','FluxCalib','ResFringe']
         self.read_step_choice.addItems(flags)
-        self.read_step_choice.setCurrentIndex(5)
-        self.read_step_choice.resize(140, 30)
+        self.read_step_choice.setCurrentIndex(6)
+        cb = self.read_step_choice
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
+        #self.read_step_choice.resize(140, 30)
         horizontal_layout.addWidget(self.read_step_choice)
 
         horizontal_layout.addStretch(1)
