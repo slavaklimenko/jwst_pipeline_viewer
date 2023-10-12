@@ -447,8 +447,8 @@ class plotPixProfile(pg.PlotWidget):
 
     def plot_profile(self, row=None, col=None, add=True,show_fit=False,sat_limit = 55000,debug=False):
         if add:
-            if row <= self.parent.EXP.data.data.shape[2] and row>=0 and col <= self.parent.EXP.data.data.shape[3] and col>=0:
-                nint = int(self.parent.exp_pars.nINT.text())
+            nint = int(self.parent.exp_pars.nINT.text())
+            if row <= self.parent.EXP.data.data.shape[2] and row>=0 and col <= self.parent.EXP.data.data.shape[3] and col>=0 and nint <= self.parent.EXP.data.data.shape[0]:
                 # number of group in integration
                 data = self.parent.EXP.data.data[nint, :,row,col]
                 error = np.array(self.parent.EXP.data.err[nint, :, row,col])
@@ -485,11 +485,11 @@ class plotPixProfile(pg.PlotWidget):
                 self.plot_scatters_CRs = pg.ScatterPlotItem(x[mask_CR], data[mask_CR], symbol='o', size=20, brush='b')
                 # add fit
                 if show_fit:
-                    YINT = self.parent.EXP.itercepts[:,row,col]
-                    SIGYINT = self.parent.EXP.itercepts_err[:,row,col]
+                    YINT = self.parent.EXP.itercepts[nint,:,row,col]
+                    SIGYINT = self.parent.EXP.itercepts_err[nint,:,row,col]
                     YSLP = self.parent.EXP.slopes[row,col]
                     SIGYSLP = self.parent.EXP.slopes_err[row, col]
-                    YSLPLOCAL = self.parent.EXP.local_slopes[:, row, col]
+                    YSLPLOCAL = self.parent.EXP.local_slopes[nint,:, row, col]
                     FIT,FIT_LOCAL = [],[]
                     print(row,col, 'YSLP',YSLP,'YINT',YINT)
                     pen = pg.mkPen(color='r', style=Qt.DashLine, width=3)
@@ -556,7 +556,7 @@ class plotPixProfile(pg.PlotWidget):
                     text += ' {0:.0f} {1:.0f}'.format(col,row)
                 self.legend_model.addItem(self.temp_model, text)
             else:
-                print('coords are out of limits of data')
+                print('coords are out of limits of data', nint,row,col)
         else:
             try:
                 self.legend_model.removeItem(self.temp_model)
@@ -1017,7 +1017,6 @@ class EXPlistTable(pg.TableWidget):
             debug = False #self.parent.parent.exp_pars.debug.isChecked()
             save_res_flag = int(self.parent.parent.exp_pars.save_tmp_res.currentIndex())
             print('Run CR step: add_neighbors=', flag, ' show_debug = ', debug)
-            save_res_flag = True
             self.parent.parent.EXP.jump_corr_step(debug=debug, limit=CRlimit, flag_4_neighbors=flag,RecalcMedian=RecalcMedian,save_results=bool(save_res_flag))
             self.flags['CR_step'] = True
             print('CR STEP: DONE')
@@ -1027,7 +1026,6 @@ class EXPlistTable(pg.TableWidget):
             debug = False #self.parent.parent.exp_pars.debug.isChecked()
             save_res_flag = int(self.parent.parent.exp_pars.save_tmp_res.currentIndex())
             print('Run second CR step: add_neighbors=', flag, ' show_debug = ', debug)
-            save_res_flag = True
             self.parent.parent.EXP.reset_dq(flagname='JUMP_DET')
             self.parent.parent.EXP.jump_corr_step(debug=debug, limit=CRlimit, flag_4_neighbors=flag,save_results=bool(save_res_flag))
             self.flags['CR_step'] = True
@@ -1100,10 +1098,10 @@ class EXPlistTable(pg.TableWidget):
             optional_file = os.path.join(output_dir, '{}fitopt.fits'.format(input_file_base))
             print('optional_file',optional_file)
             hdulist = fits.open(optional_file)
-            intercepts = hdulist['YINT'].data[0, :, :, :]
-            intercepts_err = hdulist['SIGYINT'].data[0, :, :, :]
-            local_slopes = hdulist['SLOPE'].data[0, :, :, :]
-            local_sig_slopes = hdulist['SIGSLOPE'].data[0, :, :, :]
+            intercepts = hdulist['YINT'].data[:, :, :, :]
+            intercepts_err = hdulist['SIGYINT'].data[:, :, :, :]
+            local_slopes = hdulist['SLOPE'].data[:, :, :, :]
+            local_sig_slopes = hdulist['SIGSLOPE'].data[:, :, :, :]
             hdulist.close()
             sci_file = os.path.join('./output/results/', '{}rate.fits'.format(input_file_base))
             print('sci_file',sci_file)
@@ -1138,10 +1136,10 @@ class EXPlistTable(pg.TableWidget):
                 # Generate the name of the optional output file
                 optional_file = os.path.join(output_dir_local, '{}fitopt.fits'.format(input_file_base))
                 hdulist = fits.open(optional_file)
-                intercepts = hdulist['YINT'].data[0, :, :, :]
-                intercepts_err = hdulist['SIGYINT'].data[0, :, :, :]
-                local_slopes = hdulist['SLOPE'].data[0, :, :, :]
-                local_sig_slopes = hdulist['SIGSLOPE'].data[0, :, :, :]
+                intercepts = hdulist['YINT'].data[:, :, :, :]
+                intercepts_err = hdulist['SIGYINT'].data[:, :, :, :]
+                local_slopes = hdulist['SLOPE'].data[:, :, :, :]
+                local_sig_slopes = hdulist['SIGSLOPE'].data[:, :, :, :]
                 hdulist.close()
                 sci_file = os.path.join('./output/results/', '{}rate.fits'.format(input_file_base))
                 print(sci_file)
@@ -1163,12 +1161,21 @@ class EXPlistTable(pg.TableWidget):
                 hdulist.close()
                 # group_times = np.arange(num_groups) * group_time
 
-                fit_jump_det_file = os.path.join(output_dir, '{}jumpstep.fits'.format(input_file_base))
-                lst = glob.glob(output_dir+'*jumpstep.fits')
-                if '{}jumpstep.fits'.format(input_file_base) in lst:
-                    hdulist = fits.open(fit_jump_det_file)
-                    group_dq = hdulist['GROUPDQ'].data[:, :,:,:]
-                    self.parent.parent.EXP.data.groupdq = group_dq
+                if 0:
+                    fit_jump_det_file = os.path.join(output_dir, '{}jumpstep.fits'.format(input_file_base))
+                    lst = glob.glob(output_dir+'*jumpstep.fits')
+                    if '{}jumpstep.fits'.format(input_file_base) in lst:
+                        hdulist = fits.open(fit_jump_det_file)
+                        group_dq = hdulist['GROUPDQ'].data[:, :,:,:]
+                        self.parent.parent.EXP.data.groupdq = group_dq
+                else:
+                    fit_jump_det_file = os.path.join(output_dir, '{}groupdq.fits'.format(input_file_base))
+                    lst = glob.glob(output_dir + '*groupdq.fits')
+                    if '{}groupdq.fits'.format(input_file_base) in lst:
+                        hdulist = fits.open(fit_jump_det_file)
+                        group_dq = hdulist['GROUPDQ'].data[:, :, :, :]
+                        self.parent.parent.EXP.data.groupdq = group_dq
+
 
 
                 self.parent.parent.EXP.itercepts = intercepts
@@ -1493,6 +1500,17 @@ class expParsWidget(QWidget):
         cb.setFixedWidth(width)
         #self.nINT.resize(90, 30)
         l.addWidget(self.nINT)
+        nintmax = 'XX'
+        if 1:
+            name = self.parent.Exposures.filelist.keys()
+            for key in name:
+                name=key
+                break
+            fname = self.parent.Exposures.filelist[name]
+            hdu = fits.open(self.parent.EXP.path+'/'+fname)
+            nintmax =hdu['SCI'].data.shape[0]
+            hdu.close()
+        l.addWidget(QLabel(' of '+str(nintmax)))
 
         l.addWidget(QLabel('Group:'))
         self.nGROUP = QLineEdit()
@@ -1820,11 +1838,19 @@ class expRunWidget(QWidget):
             name = obj['name']
             self.parent.plot_image.add(name, add=True)
             self.parent.Exposures.current_name = name
-            self.RunAllStage1(save_fit=False)
-            print('Save Fit')
-            # set copy_add_data to False to do not copy tmp data,
-            self.parent.Exposures.table.save_slope_fit(output_dir='final', copy_add_data=False)
-            self.parent.plot_image.add(name, add=False)
+            if 0:
+                runcode = True
+                lst = glob.glob('./output/results/'+'*_rate.fits')
+                if './output/results/'+name.split('_uncal')[0]+'_rate.fits' in lst:
+                    runcode=False
+            else:
+                runcode = True
+            if runcode:
+                self.RunAllStage1(save_fit=False)
+                print('Save Fit')
+                # set copy_add_data to False to do not copy tmp data,
+                self.parent.Exposures.table.save_slope_fit(output_dir='final', copy_add_data=False)
+                self.parent.plot_image.add(name, add=False)
 
     def ShowSlopeFit(self, debug=False):
         self.parent.Exposures.table.show_slope_image()
@@ -2090,6 +2116,7 @@ class JWSTviewer(QMainWindow):
     def __init__(self):
         super().__init__()
         self.read_settings()
+        print('I use the JWST pipeline of VERSION:  ', jwst.__version__)
 
         self.EXP = detector1(input_file='jw02155001001_04102_00001_mirifulong_uncal.fits', path=self.init_settings['input1_dir'], output_dir=self.init_settings['output1_dir'])
         self.stage2 = detector2(miri_uncal_file='jw02155001001_04102_00001_mirifulong_uncal.fits', path=self.init_settings['input2_dir'], output_dir=self.init_settings['output2_dir'],

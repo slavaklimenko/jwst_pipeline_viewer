@@ -421,6 +421,7 @@ class detector1():
         if input_file == None:
             input_file = self.input_file
 
+        print(' JWST VERSION:  ', jwst.__version__)
 
         dq_init_step = DQInitStep()
         dq_init_step.output_dir = output_dir
@@ -675,6 +676,24 @@ class detector1():
                 mask = np.where(np.bitwise_and(slice,dqflags.pixel['JUMP_DET']))
                 pdq[mask] = np.bitwise_or(pdq[mask],dqflags.pixel['JUMP_DET'])
         self.data.pixeldq = pdq
+        if 1:
+            hdr = fits.Header()
+            hdr['TELESCOP'] = 'JWST'
+            hdr['INSTRUME'] = 'MIRI'
+            hdr['AUTHOR'] = 'V.KLIMENKO'
+            hdr['COMMENT'] = "This file contains groupdq data"
+            empty_primary = fits.PrimaryHDU(header=hdr)
+            #col1 = fits.Column(name='GROUPDQ', format='D', array=gdq)
+            #col2 = fits.Column(name='PIXELDQ', format='D', array=pdq)
+            #cols = fits.ColDefs([col1])
+            #hdu1 = fits.BinTableHDU(data=gdq)
+            #hdul = fits.HDUList([empty_primary, hdu1])
+            hdul = fits.HDUList()
+            hdul.append(empty_primary)
+            #hdul.append(fits.PrimaryHDU())
+            for img in gdq:
+                hdul.append(fits.ImageHDU(data=img,name='GROUPDQ'))
+            hdul.writeto(output_dir+self.name.split('uncal.fits')[0] + 'groupdq.fits', overwrite=True)
 
 
     def slope_fitting_step(self, input_file=None, debug=True, output_dir=None,save_results=False):
@@ -699,6 +718,7 @@ class detector1():
         ramp_fit_step.output_dir = output_dir
         ramp_fit_step.save_results = save_results
         ramp_fit_step.debug = debug
+        ramp_fit_step.maximum_cores = 'all'
 
         # Let's save the optional outputs, in order
         # to help with visualization later

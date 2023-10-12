@@ -175,7 +175,7 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
                     self.data = self.parent.CUBE_A.data.data
                     self.data_tot = self.parent.CUBE_A.data
                     self.label_filename.setText(filename.split('/')[-1].split('s3d')[0])
-                    self.label_filename.setText('BACKGROUND-A')
+                    #self.label_filename.setText('BACKGROUND-A')
                 elif self.cube_name == 'B':
                     filename = self.parent.Cubes_B.filelist[name]
                     self.parent.CUBE_B.add_cube(cubename=filename)
@@ -183,7 +183,7 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
                     self.data = self.parent.CUBE_B.data.data
                     self.data_tot = self.parent.CUBE_B.data
                     self.label_filename.setText(filename.split('/')[-1].split('s3d')[0])
-                    self.label_filename.setText('BACKGROUND-B')
+                    #self.label_filename.setText('BACKGROUND-B')
                 #cb = self.label_filename
                 #width = cb.minimumSizeHint().width()
                 #cb.setFixedWidth(width)
@@ -769,7 +769,7 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
         #cal_world_to_detector = wcs.get_transform('world', 'detector')
         #print('world->detector', cal_world_to_detector(x_world,y_world, lam_world))
 
-        if 0:
+        if 1:
             self.label.setText(text)
             self.label.adjustSize()
             self.label2.setText(text_world_coord)
@@ -2804,7 +2804,7 @@ class expRunWidget(QWidget):
         horizontal_layout.addWidget(self.calc_median_flux)
         self.calc_median_mode = QComboBox()
         self.calc_median_mode.addItems(['3Dsmothing', '2Dsmothing','Average','Pix2pix','Circle'])
-        self.calc_median_mode.setCurrentIndex(0)
+        self.calc_median_mode.setCurrentIndex(1)
         #self.calc_median_mode.setFixedSize(90, 30)
         #self.calc_median_mode.resize(90, 30)
         cb = self.calc_median_mode
@@ -2813,7 +2813,7 @@ class expRunWidget(QWidget):
         horizontal_layout.addWidget(self.calc_median_mode)
         horizontal_layout.addWidget(QLabel('Rad:'))
         self.mean_kernel_rad = QLineEdit()
-        self.mean_kernel_rad.setText(str(5))
+        self.mean_kernel_rad.setText(str(2))
         cb = self.mean_kernel_rad
         width = cb.minimumSizeHint().width()
         cb.setFixedWidth(width)
@@ -2985,6 +2985,18 @@ class expRunWidget(QWidget):
         # self.select_roi.clicked[bool].connect(self.ShowROI)
         # self.select_roi.setFixedSize(200, 60)
         horizontal_layout.addWidget(self.prepare_extraction)
+
+        self.background_extraction = QPushButton('BKGR EXTR', self, checkable=False)
+        # self.set_roi_radius.setChecked(False)
+        self.background_extraction.clicked[bool].connect(self.extract_mean_background)
+        # self.set_roi_radius.setFixedSize(200, 60)
+        # self.prepare_extraction.resize(200, 60)
+        cb = self.background_extraction
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
+        # self.select_roi.clicked[bool].connect(self.ShowROI)
+        # self.select_roi.setFixedSize(200, 60)
+        horizontal_layout.addWidget(self.background_extraction)
         horizontal_layout.addStretch(1)
         l.addLayout(horizontal_layout)
 
@@ -3038,8 +3050,22 @@ class expRunWidget(QWidget):
         if roi_type == None:
             roi_type = self.roi_type.currentText()
         if roi_size == None:
-            roi_size = int(self.parent.exp_commands.roi_radius.text())
+            roi_size = float(self.parent.exp_commands.roi_radius.text())
         rois = {}
+        if 1:
+            (timeind, time) = self.parent.plot_3dcubeA.timeIndex(self.parent.plot_3dcubeA.timeLine)
+            lambda_local = self.parent.CUBE_A.data.wavelength[timeind]
+
+            def miri_psf_pix(lam):
+                # interpolation of miri psf https://jwst-docs.stsci.edu/jwst-mid-in
+                f = np.loadtxt('./data/miri_psf_pix.dat')
+
+                print(f[:, 0])
+                f1d = interp1d(f[:, 0], f[:, 1], fill_value='extrapolate')
+                print('miri psf =', f1d(lam))
+                return f1d(lam)
+
+            miri_psf_fwhm = miri_psf_pix(lambda_local)
         if hasattr(self.parent.plot_3dcubeA,'roi_list'):
             rois['green'] = self.parent.plot_3dcubeA.roi_list[0]
             rois['red'] = self.parent.plot_3dcubeA.roi_list[1]
@@ -3053,16 +3079,28 @@ class expRunWidget(QWidget):
         #rois['blue'] = None
         if roi_type in rois.keys():
             roi = rois[roi_type]
-            cube.updateRoiRadius(roi=roi,roi_size=roi_size)
+            cube.updateRoiRadius(roi=roi,roi_size=roi_size*miri_psf_fwhm)
 
 
     def prepare_extraction_test(self):
         self.CalcMedCube()
         self.SubtractMedFlux()
-        self.SetRoi_radius(roi_type='green',roi_size=2)
-        self.SetRoi_radius(roi_type='red',roi_size=7)
+        self.SetRoi_radius(roi_type='green',roi_size=1.1)
+        self.SetRoi_radius(roi_type='red',roi_size=5)
         self.extract_Roi()
 
+    def extract_mean_background(self):
+        cube_choice = self.name_cube_subtracted.currentText()
+        if 1:
+            data = np.array(self.parent.CUBE_B.data.data)
+            wavel = self.parent.CUBE_B.data.wavelength
+            name = (self.parent.CUBE_B.cubename.split('/')[-1]).split('.fits')[0]
+            spec = np.nanmean(np.nanmean(data,axis=1),axis=1)
+            spec1d = np.zeros((spec.shape[0],3))
+            spec1d[:,0] = wavel
+            spec1d[:, 1] = spec
+            spec1d[:,2] = spec/50
+            np.savetxt('./output/detector3/background/'+name+'.dat',spec1d)
 
     def set_DQ_map(self, debug = False):
         print('set_DQ_map, debug:', debug)
@@ -3128,6 +3166,7 @@ class expRunWidget(QWidget):
     def SubtractMedFlux(self, first_cube = 'B',debug=True):
         first_cube = self.name_cube_subtracted.currentText()
         median_cube = self.parent.plot_3dcube_median.cube
+        calc_median_mode = self.calc_median_mode.currentText()
         if first_cube == 'B':
             tmp = np.array(self.parent.CUBE_B.data.data)
             if self.parent.CUBE_B.flags['subtract_bkgr'] == False:
@@ -3149,10 +3188,17 @@ class expRunWidget(QWidget):
                     print('cubeB=model:',  median_cube.data.data.shape)
                     for i in range(self.parent.CUBE_A.data.data.shape[1]):
                         for j in range(self.parent.CUBE_A.data.data.shape[2]):
-                            if all(~np.isnan(self.parent.CUBE_A.data.data[:,i,j])) and (i<median_cube.data.data.shape[1]) and (j<median_cube.data.data.shape[2]):
-                                self.parent.CUBE_A.data.data[:,i,j] -= median_cube.data.data[:,i,j]
+                            if calc_median_mode == 'Average':
+                                self.parent.CUBE_A.data.data[:, i, j] -= median_cube.data.data[:, 10, 10]
                             else:
-                                self.parent.CUBE_A.data.data[:, i, j] = np.nan
+                                if all(~np.isnan(self.parent.CUBE_A.data.data[:,i,j])):
+                                    if (i < median_cube.data.data.shape[1]) and (j < median_cube.data.data.shape[2]):
+                                        self.parent.CUBE_A.data.data[:,i,j] -= median_cube.data.data[:,i,j]
+                                    else:
+                                        mean_spec = np.nanmean(np.nanmean(median_cube.data.data,axis=1),axis=1)
+                                        self.parent.CUBE_A.data.data[:, i, j] -= mean_spec
+                                else:
+                                    self.parent.CUBE_A.data.data[:, i, j] = np.nan
                 if debug:
                     fig, ax = plt.subplots(1, 2)
                     ax[0].imshow(tmp[10, :, :])
@@ -3194,6 +3240,7 @@ class JWST_spec_viewer(QMainWindow):
     def initUI(self):
         #dbg = pg.dbg()
         # self.specview sets the type of plot representation
+        print('I use the JWST pipeline of VERSION:  ', jwst.__version__)
 
         if 1:# >>> create panel for plotting spectra
             self.plot_3dcubeA = plotCube(self,cube_name='A')

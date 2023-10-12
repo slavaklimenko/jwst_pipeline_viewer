@@ -73,7 +73,7 @@ class spectrum():
 
 
 class Slider(QWidget):
-    def __init__(self, minimum, maximum, parent=None,name='c1:',filenamelist=['file'],path =''):
+    def __init__(self, minimum, maximum, parent=None,name='c1:',filenamelist=['file'],path ='',val=None):
         super(Slider, self).__init__(parent=parent)
         self.name = name
         self.spec_files_path = path
@@ -121,7 +121,7 @@ class Slider(QWidget):
         self.minimum = minimum
         self.maximum = maximum
         self.slider.valueChanged.connect(self.setLabelValue)
-        self.x = None
+        self.x = val
         self.setLabelValue(self.slider.value())
 
 
@@ -284,43 +284,43 @@ class Viewer(QWidget):
         self.horizontalLayout = QHBoxLayout(self)
         if 1:
             filenamelist = ['None']+self.readfolder(obj_name=self.objname_box.currentText())
-            self.w1 = Slider(0, 3, name='c1:', filenamelist=filenamelist, path=self.spec_folder)
+            self.w1 = Slider(0, 3, name='c1:', filenamelist=filenamelist, path=self.spec_folder,val=1)
             self.horizontalLayout.addWidget(self.w1)
 
-            self.w2 = Slider(0, 3,name='c2:',filenamelist=filenamelist,path =  self.spec_folder)
+            self.w2 = Slider(0, 3,name='c2:',filenamelist=filenamelist,path =  self.spec_folder,val=1)
             self.horizontalLayout.addWidget(self.w2)
 
-            self.w3 = Slider(0, 3,name='c3:',filenamelist=filenamelist,path =  self.spec_folder)
+            self.w3 = Slider(0, 3,name='c3:',filenamelist=filenamelist,path =  self.spec_folder,val=1)
             self.horizontalLayout.addWidget(self.w3)
 
-            self.w4 = Slider(0, 3,name='c4:',filenamelist=filenamelist,path =  self.spec_folder)
+            self.w4 = Slider(0, 3,name='c4:',filenamelist=filenamelist,path =  self.spec_folder,val=1)
             self.horizontalLayout.addWidget(self.w4)
 
-            self.w5 = Slider(0, 3, name='c5:',filenamelist=filenamelist,path =  self.spec_folder)
+            self.w5 = Slider(0, 3, name='c5:',filenamelist=filenamelist,path =  self.spec_folder,val=1)
             self.horizontalLayout.addWidget(self.w5)
 
-            self.w6 = Slider(0, 3, name='c6:',filenamelist=filenamelist,path =  self.spec_folder)
+            self.w6 = Slider(0, 3, name='c6:',filenamelist=filenamelist,path =  self.spec_folder,val=1)
             self.horizontalLayout.addWidget(self.w6)
 
-            self.w7 = Slider(0, 3, name='c7:',filenamelist=filenamelist,path =  self.spec_folder)
+            self.w7 = Slider(0, 3, name='c7:',filenamelist=filenamelist,path =  self.spec_folder,val=1)
             self.horizontalLayout.addWidget(self.w7)
 
-            self.w8 = Slider(0, 3, name='c8:',filenamelist=filenamelist,path =  self.spec_folder)
+            self.w8 = Slider(0, 3, name='c8:',filenamelist=filenamelist,path =  self.spec_folder,val=1)
             self.horizontalLayout.addWidget(self.w8)
 
-            self.w9 = Slider(0, 3, name='c9:',filenamelist=filenamelist,path =  self.spec_folder)
+            self.w9 = Slider(0, 3, name='c9:',filenamelist=filenamelist,path =  self.spec_folder,val=1)
             self.horizontalLayout.addWidget(self.w9)
 
-            self.w10 = Slider(0, 3, name='c10:',filenamelist=filenamelist,path =  self.spec_folder)
+            self.w10 = Slider(0, 3, name='c10:',filenamelist=filenamelist,path =  self.spec_folder,val=1)
             self.horizontalLayout.addWidget(self.w10)
 
-            self.w11 = Slider(0, 3, name='c11:',filenamelist=filenamelist,path =  self.spec_folder)
+            self.w11 = Slider(0, 3, name='c11:',filenamelist=filenamelist,path =  self.spec_folder,val=1)
             self.horizontalLayout.addWidget(self.w11)
 
-            self.w12 = Slider(0, 3, name='c12:',filenamelist=filenamelist,path =  self.spec_folder)
+            self.w12 = Slider(0, 3, name='c12:',filenamelist=filenamelist,path =  self.spec_folder,val=1)
             self.horizontalLayout.addWidget(self.w12)
 
-            self.w13 = Slider(0, 3, name='tmplate:', filenamelist=['cassis_yaaar_spcfw_15121152t-copy-red_norm.dat'], path=self.spec_tmp)
+            self.w13 = Slider(0, 3, name='tmplate:', filenamelist=['cassis_yaaar_spcfw_15121152t-copy-red_norm.dat'], path=self.spec_tmp,val=1)
             self.horizontalLayout.addWidget(self.w13)
         self.mainLayout.addLayout(self.horizontalLayout)
         #self.p6 = self.win.addPlot(title="My Plot")
@@ -467,6 +467,32 @@ class Viewer(QWidget):
         self.w11.filename_box.addItems(filenamelist)
         self.w12.filename_box.clear()
         self.w12.filename_box.addItems(filenamelist)
+
+        for f in filenamelist:
+            if '1A' in f:
+                self.w1.filename_box.setCurrentText(f)
+            if '1B' in f:
+                self.w2.filename_box.setCurrentText(f)
+            if '1C' in f:
+                self.w3.filename_box.setCurrentText(f)
+            if '2A' in f:
+                self.w4.filename_box.setCurrentText(f)
+            if '2B' in f:
+                self.w5.filename_box.setCurrentText(f)
+            if '2C' in f:
+                self.w6.filename_box.setCurrentText(f)
+            if '3A' in f:
+                self.w7.filename_box.setCurrentText(f)
+            if '3B' in f:
+                self.w8.filename_box.setCurrentText(f)
+            if '3C' in f:
+                self.w9.filename_box.setCurrentText(f)
+            if '4A' in f:
+                self.w10.filename_box.setCurrentText(f)
+            if '4B' in f:
+                self.w11.filename_box.setCurrentText(f)
+            if '4C' in f:
+                self.w12.filename_box.setCurrentText(f)
 
     def saveObj(self):
         s = spectrum(x=self.w1.data.x,y=self.w1.data.y*self.w1.x,err=self.w1.data.err*self.w1.x)
@@ -624,6 +650,7 @@ class Viewer(QWidget):
         for (dirpath, dirname, filenames) in os.walk(path):
             for k, f in enumerate(filenames):
                 if f.endswith('_sci.spec1d') and obj_name in f:
+                #if f.endswith('_s3d.dat') and obj_name in f:
                     lst.append(f)
         return sorted(lst)
 
@@ -635,6 +662,7 @@ class Viewer(QWidget):
         for (dirpath, dirname, filenames) in os.walk(path):
             for k, f in enumerate(filenames):
                 if f.endswith('.spec1d'):
+                #if f.endswith('_s3d.dat'):
                     objname = f.split('_')[0]
                     if objname not in lst:
                         lst.append(objname)
