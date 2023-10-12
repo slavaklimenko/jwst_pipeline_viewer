@@ -237,28 +237,38 @@ class detector2():
         ratefile = datamodels.open(filename)
         hdulist = fits.open(filename)
         rate_header = hdulist[0].header
+        rate_name=rate_header['TARGPROP']+rate_header['CHANNEL']+rate_header['DETECTOR']+rate_header['TARGNAME']+str(rate_header['PATT_NUM'])
+        print(rate_header['TARGPROP']+rate_header['CHANNEL']+rate_header['BAND'])
+
 
         filename = output_dir + ref_file  # self.rate_file
         reffile = datamodels.open(filename)
         hdulist = fits.open(filename)
         ref_header = hdulist[0].header
+        ref_name = ref_header['TARGPROP'] + ref_header['CHANNEL'] + ref_header['DETECTOR'] + ref_header['TARGNAME'] + \
+                    str(ref_header['PATT_NUM'])
+        print(ref_header['TARGPROP'] + ref_header['CHANNEL'] + ref_header['BAND'])
 
         filename = output_dir + dither_file  # self.rate_file
         dithfile = datamodels.open(filename)
         hdulist = fits.open(filename)
         dith_header = hdulist[0].header
+        dith_name = dith_header['TARGPROP'] + dith_header['CHANNEL'] + dith_header['DETECTOR'] + dith_header['TARGNAME'] + \
+                   str(dith_header['PATT_NUM'])
+        print(dith_header['TARGPROP'] + dith_header['CHANNEL'] + dith_header['BAND'])
 
         data = ratefile.data
+        print(data.shape)
         dq = ratefile.dq
         data_ref = reffile.data
         dq_ref = reffile.dq
         data_dith = dithfile.data
         dq_dith = dithfile.dq
-        fig,ax = plt.subplots(1,4,sharex=True, sharey=True)
+        fig,ax = plt.subplots(2,4,sharex=True, sharey=True)
         fig2, ax2 = plt.subplots()
         p = data.flatten()
         p_ref = data_ref.flatten()
-        threshold_pix_val = 2
+        threshold_pix_val = 1
         plt.subplots()
         plt.hist(data.flatten(),log=True, bins=np.linspace(-10, 100, 101),alpha=0.2)
         plt.hist(data_dith.flatten(),log=True, bins=np.linspace(-10, 100, 101),alpha=0.2)
@@ -268,25 +278,37 @@ class detector2():
             arg = np.argwhere(data>limit)
             for i in range(arg.shape[0]):
                 x,y = arg[i,0],arg[i,1]
-                if x<data.shape[0]-1 and y < data.shape[1]-1 and x>1 and y>1:
+                if x<data.shape[0]-4 and y < data.shape[1]-4 and x>4 and y>4:
                     #print(x,y)
                     f = data[x,y]
                     flux_mean,npix = 0,0
-                    for j,k in zip([x,x,x-1,x+1],[y-1,y+1,y,y]):
+                    for j,k in zip([x-2,x-3,x-4,x+4,x+3,x+2],[y,y,y,y,y,y]):
                         if dq[j,k]==0:
                             flux_mean += data[j,k]
                             npix +=1
                     if npix>0:
                         flux_mean/=npix
-                    #elif npix == 0:
-                    #    mask[x, y] = False
-                    #else:
-                    #    print(x, y)
-                    if data[x,y]<3*flux_mean:
+
+
+                    flux_mean2,npix = 0,0
+                    for j, k in zip([x-2,x-3,x-4,x+4,x+3,x+2],[y,y,y,y,y,y,]):
+                        if dq[j, k] == 0 and data[j, k]<2*flux_mean:
+                            flux_mean2 += data[j, k]
+                            npix += 1
+                    if npix > 0:
+                        flux_mean2 /= npix
+
+                    flux_mean=flux_mean2
+
+                    if data[x,y]<5*flux_mean:
                         mask[x,y] = False
-                    if np.bitwise_and(dq[x,y],0) and np.bitwise_and(dq[x,y],4):
+                    if np.bitwise_and(dq[x,y],1) and 0:
                         d = dq[x,y]
                         mask[x, y] = False
+                    elif np.bitwise_and(dq[x,y],4) and 0:
+                        d = dq[x,y]
+                        mask[x, y] = False
+
 
             return mask
 
@@ -327,24 +349,34 @@ class detector2():
         ar = np.zeros_like(data)
         vmin,vmax = 0,threshold_pix_val
         ar[hot_pixels_list] = data[hot_pixels_list]
-        ax[0].imshow(ar, vmin=vmin, vmax=vmax)
+        ax[0,0].imshow(ar, vmin=vmin, vmax=vmax)
+        ax[0,0].set_title(rate_name)
+        ax[1, 0].imshow(ratefile.data, vmin=-3, vmax=3)
+        print('N of hot_pixels_list', np.sum(hot_pixels_list))
         #ax2.hist(ar[ar>threshold_pix_val].flatten(),bins=np.linspace(0,20,21),alpha=0.3)
         ar = np.zeros_like(data)
-        ar[hot_pixels_dith_list] = data_ref[hot_pixels_dith_list]
-        ax[1].imshow(ar, vmin=vmin, vmax=vmax)
+        ar[hot_pixels_ref_list] = data_ref[hot_pixels_ref_list]
+        ax[0,1].imshow(ar, vmin=vmin, vmax=vmax)
+        ax[0,1].set_title(ref_name)
+        ax[1, 1].imshow(reffile.data, vmin=-3, vmax=3)
+        print('N of hot_pixels_ref_list', np.sum(hot_pixels_ref_list))
         #ax2.hist(ar[ar>threshold_pix_val].flatten(),bins=np.linspace(0,20,21),alpha=0.3)
 
         ar = np.zeros_like(data)
-        ar[hot_pixels_ref_list] = data_ref[hot_pixels_ref_list]
-        ax[2].imshow(ar, vmin=vmin, vmax=vmax)
+        ar[hot_pixels_dith_list] = data_ref[hot_pixels_dith_list]
+        ax[0,2].imshow(ar, vmin=vmin, vmax=vmax)
+        ax[0,2].set_title(dith_name)
+        print('N of hot_pixels_ref_list', np.sum(hot_pixels_dith_list))
 
         ar = np.zeros_like(data)
         ar[hot_pixels_ref_list*hot_pixels_list*hot_pixels_dith_list] = data_dith[hot_pixels_ref_list*hot_pixels_list*hot_pixels_dith_list]
-        ax[3].imshow(ar, vmin=vmin, vmax=vmax)
+        ax[0,3].imshow(ar, vmin=vmin, vmax=vmax)
+        ax[0,3].set_title('Mix')
+        ax[1,3].imshow(dithfile.data, vmin=-3, vmax=3)
         print('N of hot pix', np.sum(hot_pixels_ref_list*hot_pixels_list*hot_pixels_dith_list), ' of ',np.sum(hot_pixels_ref_list))
         ax2.hist(ar[ar>threshold_pix_val].flatten(),bins=np.linspace(0,20,101),alpha=0.3)
         ax2.hist(data_dith.flatten(), bins=np.linspace(-10, 20, 101), alpha=0.3)
-
+        plt.show()
         #plt.hist(p[~np.isnan(p)],log=True,bins=np.linspace(-1,100,200))
         if 1:
             CHAN,BAND =rate_header['CHANNEL'],rate_header['BAND']
@@ -681,7 +713,7 @@ if __name__ == '__main__':
     exp1 = detector2(miri_uncal_file=miri_uncal_file, path = input_dir, output_dir=output_dir,spec2_cachedir=spec2_cachedir)
     #input_file =  'jw02155001001_04102_00001_mirifulong_rate.fits' #N of hot pix 983  of  1051
     input_file = 'jw02155001001_04102_00004_mirifulong_rate.fits'  # N of hot pix 983  of  1051
-    exp1.fix_hot_pix_step(input_file='jw02155001001_04106_00002_mirifushort_rate.fits',ref_file = "jw02155009001_02105_00004_mirifushort_rate.fits", dither_file='jw02155001001_04106_00003_mirifushort_rate.fits')
+    exp1.fix_hot_pix_step(input_file='jw02155004001_03106_00001_mirifushort_rate.fits',ref_file = "jw02155004001_03106_00004_mirifushort_rate.fits", dither_file='jw02155001001_04102_00003_mirifushort_rate.fits')
     exp1.show_hot_pix_maps()
     exp1.compare_maps()
     plt.show()
