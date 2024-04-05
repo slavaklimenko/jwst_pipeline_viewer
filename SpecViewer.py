@@ -27,7 +27,7 @@ class spectrum():
         if name is not None:
             self.name = name
 
-    def append(self,s,mode = 'mean weighted',debug=False):
+    def append(self,s,mode = 'mean disp',debug=False):
         if not hasattr(self, 'x'):
             if hasattr(s,'x'):
                 self.x = s.x.copy()
@@ -62,6 +62,12 @@ class spectrum():
                     elif mode == 'mean':
                         self.y[mask_selfx_intersection] = np.nanmean(comb)
                         self.err[mask_selfx_intersection] = np.power(np.nansum(np.power(e_comb, -2), axis=0), -0.5)
+                    elif mode == 'mean disp':
+                        self.y[mask_selfx_intersection] = np.nansum(comb,axis=0)/2
+                        f = comb-self.y[mask_selfx_intersection]
+                        f1 = np.power(f,2)
+                        self.err[mask_selfx_intersection] = np.power(np.nansum(f1,axis=0)/2, 0.5)
+
                 self.x = np.append(self.x,s.x[mask_extension])
                 self.y = np.append(self.y,s.y[mask_extension])
                 self.err = np.append(self.err,s.err[mask_extension])
@@ -253,6 +259,10 @@ class Viewer(QWidget):
         self.obj_name_win.clicked[bool].connect(self.setObjName)
         self.obj_name_win.setFixedSize(200, 60)
         self.horizontalLayout.addWidget(self.obj_name_win)
+        self.comb_dithers_win = QPushButton('CombineDithers')
+        self.comb_dithers_win.clicked[bool].connect(self.comb_dithers)
+        self.comb_dithers_win.setFixedSize(200, 60)
+        self.horizontalLayout.addWidget(self.comb_dithers_win)
         self.save_data_win = QPushButton('SaveSpec')
         #self.build_cube.clicked[bool].connect(partial(self.call_build_3dCube))
         self.save_data_win.clicked[bool].connect(partial(self.saveObj))
@@ -494,6 +504,51 @@ class Viewer(QWidget):
             if '4C' in f:
                 self.w12.filename_box.setCurrentText(f)
 
+    def comb_dithers(self):
+        filenamelist = self.readfolder(obj_name=self.objname_box.currentText(),dith=True)
+
+        for ch in ['ch1','ch2','ch3','ch4']:
+            for band in ['short','medium','long']:
+                exp_list_names = []
+                for f in filenamelist:
+                    if 'dith' in f and ch in f and band in f:
+                        exp_list_names.append(f)
+                print(exp_list_names)
+                exp_list = []
+                for f in exp_list_names:
+                    d = np.loadtxt(fname=self.spec_folder + f)
+                    exp_list.append(spectrum(x=d[:, 0], y=d[:, 1], err=d[:, 2], name=f))
+                import matplotlib.pyplot as plt
+
+                comb = exp_list[0].copy()
+                f = np.array([s.y for s in exp_list])
+                comb.y = np.nanmedian(f,axis=0)
+
+                mask_exp = np.zeros((len(exp_list),comb.x.shape[0]))
+                for i,s in enumerate(exp_list):
+                    mask = np.abs(s.y-comb.y)/s.err<5
+                    mask_exp[i,:] = mask.copy()
+
+                f = np.array([s.y for s in exp_list])
+                err = np.array([s.err for s in exp_list])
+                inv = np.power(err,-2)
+                comb.y = np.nansum(f*inv*mask_exp,axis=0)/np.nansum(inv*mask_exp,axis=0)
+                comb.err = np.power(np.nansum(inv*mask_exp,axis=0),-0.5)
+
+                fig,ax = plt.subplots()
+                for s in exp_list:
+                    ax.errorbar(s.x,s.y,yerr=s.err)
+                ax.errorbar(comb.x,comb.y,yerr=comb.err,color='black',lw=2)
+                ax.set_title(ch+band)
+                plt.show()
+
+                filename = self.spec_folder + self.objname_box.currentText()+'_combined_'+ch+band+'_sci.spec1d'
+                with open(filename, 'w') as fout:
+                    # for x,y,e in zip(wavel,roi_mean_w_flux,roi_mean_w_f_error):
+                    for x, y, e in zip(comb.x, comb.y, comb.err):
+                        fout.write('%.4e %.4e %.4e \n' % (x, y, e))
+                fout.close()
+
     def saveObj(self):
         s = spectrum(x=self.w1.data.x,y=self.w1.data.y*self.w1.x,err=self.w1.data.err*self.w1.x)
         label='CH1'
@@ -625,8 +680,8 @@ class Viewer(QWidget):
 
         self.combined_spec = s.copy()
         self.combined_spec.name = 'Combined'
-        self.win.plot_spec(fname='Combined', add=False, show_err_bar=False)
-        self.win.plot_spec(fname='Combined', fcolor='green', data=self.combined_spec, coef=1, show_err_bar=False)
+        self.win.plot_spec(fname='Combined', add=False, show_err_bar=True)
+        self.win.plot_spec(fname='Combined', fcolor='green', data=self.combined_spec, coef=1, show_err_bar=True)
 
     def RebinIt(self):
         self.spec_factor = int(self.rebin_n_pix.text())
@@ -642,16 +697,20 @@ class Viewer(QWidget):
         #self.win.plot_spec(fname='Combined', add=False, show_err_bar=False)
         #self.win.plot_spec(fname='Combined', fcolor='green', data=self.combined_spec, coef=1, show_err_bar=False)
 
-    def readfolder(self,path=None,obj_name=''):
+    def readfolder(self,path=None,obj_name='',dith=True):
         if path==None:
            path = self.spec_folder
 
         lst = []
         for (dirpath, dirname, filenames) in os.walk(path):
             for k, f in enumerate(filenames):
-                if f.endswith('_sci.spec1d') and obj_name in f:
+                if dith == False:
+                    if f.endswith('_sci.spec1d') and obj_name in f and 'dith' not in f:
                 #if f.endswith('_s3d.dat') and obj_name in f:
-                    lst.append(f)
+                        lst.append(f)
+                elif dith == True:
+                    if f.endswith('_sci.spec1d') and obj_name in f:
+                        lst.append(f)
         return sorted(lst)
 
     def readobjnameinfolder(self,path=None):

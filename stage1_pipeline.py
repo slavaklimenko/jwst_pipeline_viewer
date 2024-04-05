@@ -1,5 +1,34 @@
 #Modify the path to a directory on your machine
 import os
+def read_settings(init_file='init.dat'):
+    init_settings = {}
+    with open(init_file) as f:
+        for k, line in enumerate(f):
+            values = [s for s in line.split()]
+            if line[0] != '#':
+                if values[0] == 'input1_dir:':
+                    input_dir = values[1]
+                    init_settings['input1_dir'] = values[1]
+                if values[0] == 'input2_dir:':
+                    init_settings['input2_dir'] = values[1]
+                if values[0] == 'spec2_cachedir:':
+                    init_settings['spec2_cachedir'] = values[1]
+                if values[0] == 'output1_dir:':
+                    init_settings['output1_dir'] = values[1]
+                if values[0] == 'output2_dir:':
+                    init_settings['output2_dir'] = values[1]
+                if values[0] == 'CRDS_PATH:':
+                    init_settings['CRDS_PATH'] = values[1]
+                if values[0] == 'CRDS_SERVER_URL:':
+                    init_settings['CRDS_SERVER_URL'] = values[1]
+                if values[0] == 'CRDS_CONTEXT:':
+                    init_settings['CRDS_CONTEXT'] = values[1]
+    return init_settings
+settings =  read_settings()
+os.environ["CRDS_PATH"] = settings['CRDS_PATH']
+os.environ["CRDS_SERVER_URL"] = settings['CRDS_SERVER_URL']
+if 'CRDS_CONTEXT' in  settings.keys():
+    os.environ["CRDS_CONTEXT"] = settings['CRDS_CONTEXT']
 #os.environ["CRDS_PATH"] = "/home/slava/science/codes/python/jwst/data"
 #os.environ["CRDS_SERVER_URL"] = "https://jwst-crds.stsci.edu"
 
@@ -48,35 +77,16 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 from stdatamodels.jwst.datamodels import dqflags
 from jwst.assign_wcs import AssignWcsStep
+from jwst.superbias import SuperBiasStep
+
+from exotic_miri.reference import SetCustomGain, SetCustomLinearity, GetWavelengthMap
+from exotic_miri.stage_1 import DropGroupsStep
+from exotic_miri.stage_2 import CleanOutliersStep, BackgroundSubtractStep, Extract1DBoxStep, AlignSpectraStep
 
 import jwst
 print(jwst.__version__)
 
-def read_settings(init_file='init.dat'):
-    init_settings = {}
-    with open(init_file) as f:
-        for k, line in enumerate(f):
-            values = [s for s in line.split()]
-            if line[0] != '#':
-                if values[0] == 'input1_dir:':
-                    input_dir = values[1]
-                    init_settings['input1_dir'] = values[1]
-                if values[0] == 'input2_dir:':
-                    init_settings['input2_dir'] = values[1]
-                if values[0] == 'spec2_cachedir:':
-                    init_settings['spec2_cachedir'] = values[1]
-                if values[0] == 'output1_dir:':
-                    init_settings['output1_dir'] = values[1]
-                if values[0] == 'output2_dir:':
-                    init_settings['output2_dir'] = values[1]
-                if values[0] == 'CRDS_PATH:':
-                    init_settings['CRDS_PATH'] = values[1]
-                if values[0] == 'CRDS_SERVER_URL:':
-                    init_settings['CRDS_SERVER_URL'] = values[1]
-    return init_settings
-settings =  read_settings()
-os.environ["CRDS_PATH"] = settings['CRDS_PATH']
-os.environ["CRDS_SERVER_URL"] = settings['CRDS_SERVER_URL']
+
 output_dir = settings['output1_dir'] #')./output/detector1/'
 input_dir = settings['input1_dir'] #./input/detector1/'
 #miri_uncal_file= 'jw02155001001_04102_00001_mirifulong_uncal.fits'
@@ -136,179 +146,6 @@ def download_files(files, output_directory, force=False):
                 continue
     return filenames
 
-def plot_jump(signal, jump_group, xpixel=None, ypixel=None, slope=None):
-    """Function to plot the signal up the ramp for a
-    pixel and show the location of flagged jumps.
-
-    Parameters
-    ----------
-    signal : numpy.ndarray
-        1D array of signal values
-
-    jump_group : list
-        List of boolean values whether a jump is present or
-        not in each group
-
-    slope : numpy.ndarray
-        1D array of signal values constructed from the slope
-    """
-    groups = np.arange(len(signal))
-    fig = plt.figure(figsize=(6, 6))
-    ax = plt.subplot()
-
-    plt.plot(groups, signal, marker='o', color='black')
-    plt.plot(groups[jump_group], signal[jump_group], marker='o', color='red',
-             label='Flagged Jump')
-
-    if slope is not None:
-        plt.plot(groups, slope, marker='o', color='blue', label='Data from slope')
-
-    plt.legend(loc=2)
-
-    plt.xlabel('Groups')
-    plt.ylabel('Signal (DN)')
-    fig.tight_layout()
-    plt.subplots_adjust(top=0.95)
-
-    if xpixel and ypixel:
-        plt.title('Pixel (' + str(xpixel) + ',' + str(ypixel) + ')')
-
-def plot_jumps(signals, jump_groups, pixel_loc, slopes=None):
-    """Function to plot the ramp and show the jump location
-    for several pixels. For simplicity, let's force the input
-    number of pixels to be a square.
-
-    Parameters
-    ----------
-    signals : numpy.ndarray
-        2D array (groups x pix) of signal values
-
-    jump_groups : numpy.ndarray
-        2D array containing boolean entries for each group of
-        each pixel, describing where the jumps were found
-
-    pixel_loc : list
-        List of 2-tuples containing the (x, y)
-        location of the pixels with the jumps
-
-    slopes : numpy.ndarray
-        2D array (groups x pix) of linear signal values
-        If not None, these will be overplotted onto the
-        plots of signals
-    """
-    num_group, num_pix = signals.shape
-    root = np.sqrt(num_pix)
-    if int(root + 0.5) ** 2 != num_pix:
-        raise ValueError('Number of pixels input should be a square.')
-
-    root = int(root)
-    groups = np.arange(num_group)
-    fig, axs = plt.subplots(root, root, figsize=(10, 10))
-
-    for index in range(len(pixel_loc)):
-        i = int(index % root)
-        j = int(index / root)
-        axs[i, j].plot(groups, signals[:, index], marker='o', color='black')
-        j_grp = jump_groups[:, index]
-        axs[i, j].plot(groups[j_grp], signals[j_grp, index],
-                       marker='o', color='red')
-
-        if slopes is not None:
-            axs[i, j].plot(groups, slopes[:, index], marker='o', color='blue')
-
-        axs[i, j].set_title('Pixel ({}, {})'.format(pixel_loc[index][1], pixel_loc[index][0]))
-
-    plt.xlabel('Groups')
-    plt.ylabel('Signal (DN)')
-    fig.tight_layout()
-
-def plot_ramp(groups, signal, xpixel=None, ypixel=None, title=None, ax=None):
-    """Function to plot the up the ramp signal for a pixel.
-
-    Parameters
-    ----------
-    groups : numpy.ndarray
-        1D array of group numbers. X-axis values.
-
-    signal : numpy.ndarray
-        1D array of pixel signal values.
-
-    xpixel : int
-        X-coordinate of the pixel being plotted. Used for legend only.
-
-    ypixel : int
-        Y-coordinate of the pixel being plotted. Used for legend only.
-
-    title : str
-        String to use for the plot title
-    """
-    if ax==None:
-        fig = plt.figure(figsize=(8, 8))
-        ax = plt.subplot()
-    if xpixel and ypixel:
-        ax.plot(groups, signal, marker='o',
-                 label='Pixel (' + str(xpixel) + ',' + str(ypixel) + ')')
-        ax.legend(loc=2)
-
-    else:
-        ax.plot(groups, signal, marker='o')
-
-    ax.set_xlabel('Groups')
-    ax.set_ylabel('Signal (DN)')
-    #fig.tight_layout()
-    #plt.subplots_adjust(left=0.15)
-
-    if title:
-        ax.set_title(title)
-
-def plot_ramps(groups, signal1, signal2, label1=None, label2=None, title=None,ax=None):
-    """Function to plot the up the ramp signal for two pixels
-    on a single plot.
-
-    Parameters
-    ----------
-    groups : numpy.ndarray
-        1D array of group numbers. X-axis values.
-
-    signal1 : numpy.ndarray
-        1D array of signal values for first pixel
-
-    signal2 : numpy.ndarray
-        1D array of signal values for second pixel
-
-    label1 : str
-        Label to place in the legend for pixel1
-
-    label2 : str
-        Label to place in the legend for pixel2
-
-    title : str
-        String to place in the title of the plot
-    """
-    if ax == None:
-        fig = plt.figure(figsize=(6, 6))
-        ax = plt.subplot()
-    if label1:
-        ax.plot(groups, signal1, marker='o', color='black', label=label1)
-    else:
-        ax.plot(groups, signal1, marker='o', color='black')
-    if label2:
-        ax.plot(groups, signal2, marker='o', color='red', label=label2)
-    else:
-        ax.plot(groups, signal2, marker='o', color='red')
-    if label1 or label2:
-        ax.legend(loc=2)
-
-    ax.set_xlabel('Groups')
-    ax.set_ylabel('Signal (DN)')
-    #fig.tight_layout()
-    #plt.subplots_adjust(left=0.15)
-    #plt.subplots_adjust(top=0.95)
-
-    if title:
-        ax.set_title(title)
-    return ax
-
 def show_image(data_2d, vmin, vmax, xpixel=None, ypixel=None, title=None):
     """Function to generate a 2D, log-scaled image of the data,
     with an option to highlight a specific pixel (with a red dot).
@@ -348,56 +185,6 @@ def show_image(data_2d, vmin, vmax, xpixel=None, ypixel=None, title=None):
     if title:
         plt.title(title)
 
-def side_by_side(data1, data2, vmin, vmax, title1=None, title2=None, title=None):
-    """Show two images side by side for easy comparison. Optionally highlight
-    a given pixel with a red dot.
-
-    Parameters
-    ----------
-    data1 : numpy.ndarray
-        First image to be displayed
-
-    data2 : numpy.ndarray
-        Second image to be displayed
-
-    vmin : float
-        Minimum signal value to use for scaling
-
-    vmax : float
-        Maximum signal value to use for scaling
-
-    title1 : str
-        Title to use for first (left) plot
-
-    title2 : str
-        Title to use for the second (right) plot
-
-    title : str
-        String to use for the plot title
-    """
-    norm = ImageNormalize(data1, interval=ManualInterval(vmin=vmin, vmax=vmax),
-                          stretch=LogStretch())
-
-    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(11, 8))
-    im = axes[0].imshow(data1, origin='lower', norm=norm)
-    im = axes[1].imshow(data2, origin='lower', norm=norm)
-
-    axes[0].set_xlabel('Pixel column')
-    axes[0].set_ylabel('Pixel row')
-    axes[1].set_xlabel('Pixel column')
-
-    if title1:
-        axes[0].set_title(title1)
-    if title2:
-        axes[1].set_title(title2)
-
-    fig.subplots_adjust(right=0.8)
-    cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.7])
-    fig.colorbar(im, cax=cbar_ax, label='DN')
-
-    if title:
-        fig.suptitle(title)
-
 class detector1():
     def __init__(self,input_file=None,path=None, output_dir=None):
         self.input_file = input_file
@@ -429,6 +216,12 @@ class detector1():
 
         # Call the run() method on the uncal file
         self.data = dq_init_step.run(self.path + '/'+ input_file)
+        shape = self.data.data.shape
+        self.nint = shape[0]
+        self.ngroup = shape[1]
+        self.nrows = shape[2]
+        self.ncols = shape[3]
+
         if debug:
             # Print some basic information on the number of flagged pixels
             idx_pixelDQ = np.where(self.data.pixeldq.flatten() == 0.)[0]
@@ -509,6 +302,33 @@ class detector1():
                     full_ramp = saturation.data[0, :, y, x]
                     plot_ramp(groups, full_ramp, title='Normal pixel', xpixel=x, ypixel=y, ax=ax[1, axi])
 
+    def roeba_step(self,input_file=None, debug=True, output_dir=None,save_results=False):
+        from tshirt.tests import test_phot_algorithms
+        import numpy as np
+        from tshirt.pipeline.instrument_specific import rowamp_sub
+
+        if output_dir == None:
+            output_dir = self.output_dir
+        if input_file == None:
+            input_file = self.data
+        superbias_step = SuperBiasStep()
+        # superbias_step.output_dir = output_dir
+        # superbias_step.save_results = True
+
+        # Call using the the output from the previously-run saturation step
+        superbias = superbias_step.run(input_file)
+
+        mod_refpix = deepcopy(superbias)
+
+        ngroups = superbias.meta.exposure.ngroups
+        nints = superbias.data.shape[0]  ## could be split into ints per segment
+
+        for oneInt in tqdm.tqdm(np.arange(nints)):
+            for oneGroup in np.arange(ngroups):
+                rowSub, modelImg = rowamp_sub.do_backsub(superbias.data[oneInt, oneGroup, :, :],
+                                                         backgMask=simDict['bkgmask'], amplifiers=1)
+                mod_refpix.data[oneInt, oneGroup, :, :] = rowSub
+
     def reset_step(self, input_file=None, debug=True, output_dir=None,save_results=False):
         if output_dir == None:
             output_dir = self.output_dir
@@ -561,7 +381,68 @@ class detector1():
         if debug:
             print('LAST step: Done.')
 
-    def linear_step(self, input_file=None, debug=True, output_dir=None,save_results=False):
+    def exotic_drop_groups(self,input_file=None, mode = 'small_n_gr', output_dir=None,save_results=False):
+        if output_dir == None:
+            output_dir = self.output_dir
+        if input_file == None:
+            input_file = self.data
+
+        custom_drop_groups = DropGroupsStep()
+        if mode == 'small_n_gr':
+            custom_drop_groups.drop_groups=[6]
+        elif mode == 'large_n_gr':
+            custom_drop_groups.drop_groups=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 99]
+        self.data = custom_drop_groups.run(input_file)
+
+    def drop_first_steps(self,input_file=None, mode = 0, output_dir=None,):
+        if output_dir == None:
+            output_dir = self.output_dir
+        if input_file == None:
+            input_file = self.data
+
+        def do_correction(input_model, N_drop = 0):
+            """
+            Short Summary
+            -------------
+            The sole correction is to reset to DO_NOT_USE the GROUP data quality flags
+            for the first 6 (or 12) groups, if the number of groups is higher than 12.
+
+            Parameters
+            ----------
+            input_model: data model object
+                science data to be corrected
+
+            Returns
+            -------
+            output: data model object
+                lastframe-corrected science data
+
+            """
+
+            # Save some data params for easy use later
+            sci_ngroups = input_model.data.shape[1]
+
+            # Create output as a copy of the input science data model
+            output = input_model.copy()
+
+            # Update the step status, and if ngroups > 2, set all of the GROUPDQ in
+            # the first N group to 'DO_NOT_USE'
+            if sci_ngroups > 12:
+                for i in range(N_drop):
+                    output.groupdq[:, i, :, :] = \
+                        np.bitwise_or(output.groupdq[:, i, :, :], dqflags.group['DO_NOT_USE'])
+                print("LastFrame Sub: resetting GROUPDQ in last frame to DO_NOT_USE")
+                output.meta.cal_step.drop_groups = 'COMPLETE'
+            else:  # too few groups
+                print("Too few groups to apply correction")
+                print("Step will be skipped")
+                output.meta.cal_step.drop_groups = 'SKIPPED'
+
+            return output
+
+        self.data = do_correction(input_file, N_drop=mode)
+
+    def linear_step(self, input_file=None, debug=True, output_dir=None,save_results=False, override_linearity=False):
         '''
         Correction of science data values for detector non-linearity.
         The correction is represented by an nth-order polynomial for each pixel in the detector (not selected as "NO_LIN_CORRECTION" or "SATURATED"),
@@ -577,8 +458,10 @@ class detector1():
         linear_step.output_dir = output_dir
         linear_step.save_results = save_results
         linear_step.debug = debug
+        if override_linearity:
+            linear_step.override_linearity=self.linearity_model
 
-        # Call using the the output from the previously-run dq_init step
+        # Call using the output from the previously-run dq_init step
         self.data = linear_step.run(input_file)
         if debug:
             print('LINEAR step: Done.')
@@ -645,7 +528,8 @@ class detector1():
             print('REF PIX correction: Done.')
             plt.show()
 
-    def jump_corr_step(self, input_file=None, debug=False, output_dir=None,limit=5,flag_4_neighbors=True,RecalcMedian=True,save_results=False):
+    def jump_corr_step(self, input_file=None, debug=False, output_dir=None,limit=5,flag_4_neighbors=True,RecalcMedian=True,
+                       save_results=False, override_gain= False,find_showers=False):
         if output_dir == None:
             output_dir = self.output_dir
         if input_file == None:
@@ -659,9 +543,19 @@ class detector1():
         jump_step.output_dir = output_dir
         jump_step.save_results = save_results
         jump_step.rejection_threshold = limit
+        jump_step.three_group_rejection_threshold = limit
+        jump_step.four_group_rejection_threshold = limit
+        jump_step.min_jump_to_flag_neighbors = 15.
         jump_step.debug=debug
         jump_step.flag_4_neighbors = flag_4_neighbors
+        jump_step.expand_large_events = False
+        jump_step.skip = False
         jump_step.recalculate_median = RecalcMedian
+        jump_step.maximum_cores = 'all'
+        jump_step.find_showers = find_showers
+        if override_gain:
+            jump_step.override_gain = self.gain_model
+        print('jump_step.find_showers',jump_step.find_showers)
 
         # Call using the dark instance from the previously-run
         # dark current subtraction step
@@ -696,7 +590,7 @@ class detector1():
             hdul.writeto(output_dir+self.name.split('uncal.fits')[0] + 'groupdq.fits', overwrite=True)
 
 
-    def slope_fitting_step(self, input_file=None, debug=True, output_dir=None,save_results=False):
+    def slope_fitting_step(self, input_file=None, debug=True, output_dir=None,save_results=False,override_gain=False,algorithm='CHI2'):
         '''
 
         :param input_file:
@@ -718,7 +612,10 @@ class detector1():
         ramp_fit_step.output_dir = output_dir
         ramp_fit_step.save_results = save_results
         ramp_fit_step.debug = debug
-        ramp_fit_step.maximum_cores = 'all'
+        ramp_fit_step.algorithm = algorithm
+        #ramp_fit_step.maximum_cores = 'all'
+        if override_gain:
+            ramp_fit_step.override_gain = self.gain_model
 
         # Let's save the optional outputs, in order
         # to help with visualization later
@@ -726,7 +623,96 @@ class detector1():
 
         # Call using the dark instance from the previously-run
         # jump step
-        self.ramp_fit = ramp_fit_step.run(input_file)
+        self.ramp_fit,self.ramp_fit_info = ramp_fit_step.run(input_file)
+
+        #with open('tmp.pkl', 'rb') as f:
+        #    self.ramp_fit = pickle.load(f)
+        #with open('tmp1.pkl', 'rb') as f:
+        #    self.ramp_fit_info = pickle.load(f)
+        #print('')
+
+    def chiq_ramp_fit(self, input_file=None, debug=True, output_dir=None,save_results=False):
+        if output_dir == None:
+            output_dir = self.output_dir
+        if input_file == None:
+            input_file = self.data
+        if debug:
+            print('Slope chi1q fit')
+        import fitramp
+        import time
+        niters = self.data.data.shape[0]
+        ngroups = self.data.data.shape[1]
+        nrows,ncols = self.data.data.shape[2],self.data.data.shape[3]
+        readtimes = np.arange(1, ngroups+2)
+        C = fitramp.Covar(readtimes)
+        data = self.data.data.copy()
+        err =  self.data.err.copy()
+        pixdq = self.data.pixeldq
+        groupdq = self.data.groupdq
+
+        if 1:
+            # Get the gain and readnoise reference files
+            input_model= datamodels.RampModel(input_file)
+
+            gain_filename = self.get_reference_file(input_model, 'gain')
+            self.log.info('Using GAIN reference file: %s', gain_filename)
+            gain_model = datamodels.GainModel(gain_filename)
+            gain_2d = gain_model.data
+
+            readnoise_filename = self.get_reference_file(input_model,'readnoise')
+            self.log.info('Using READNOISE reference file: %s', readnoise_filename)
+            readnoise_model = datamodels.ReadnoiseModel(readnoise_filename)
+            readnoise_2d = readnoise_model.data
+
+            data *= gain_2d
+            err *= gain_2d
+            readnoise_2d *= gain_2d
+            rate = np.zeros([niters,data.shape[2],data.shape[3]])
+            err_rate = np.zeros_like(rate)
+
+        #t0 = time.time()
+
+        for it in niters:
+            im = data[it].copy()
+            d = (im[1:] - im[:-1]) / C.delta_t[:, np.newaxis, np.newaxis]
+            sig = readnoise_2d
+            fit = np.zeros((d.shape[1], d.shape[2]))
+            err_fit = np.zeros((d.shape[1], d.shape[2]))
+            ped = np.zeros((d.shape[1], d.shape[2]))
+            alljumps = np.zeros(d.shape)
+            alljumpsigs = np.zeros(d.shape)
+
+            for i in range(nrows):
+                diffs2use, countrates = fitramp.mask_jumps(d[:, i], C, sig[i], threshold_oneomit=20.25, threshold_twoomit=23.8)
+                ct = countrates * (countrates > 0)
+                result = fitramp.fit_ramps(d[:, i], C, sig[i], diffs2use=diffs2use, detect_jumps=True, countrateguess=ct)
+
+                alljumps[:, i] = result.jumpval_oneomit
+                alljumpsigs[:, i] = result.jumpsig_oneomit
+                fit[i, :] = result.countrate
+                err_fit[i, :] = result.uncert
+
+                ped[i, :] = (im[0,i,:]+im[1,i,:])/2
+                for j in range(len(d)):
+                    indx = diffs2use[j] == 0  # only need to redo these differences
+                    if np.sum(indx) == 0:
+                        continue
+                    # each time we'll make sure that this difference isn't masked
+                    mask = diffs2use[:, indx] * 1
+                    mask[j] = 1
+                    result = fitramp.fit_ramps(d[:, i, indx], C, sig[i, indx], diffs2use=mask,
+                                               detect_jumps=True, countrateguess=ct[indx])
+                    # Overwrite the jump value if it was previously masked.
+                    alljumps[j, i, indx] = result.jumpval_oneomit[j]
+                    alljumpsigs[j, i, indx] = result.jumpsig_oneomit[j]
+                    pixdq[it,i,indx] = 4
+                    groupdq[it,j,i,indx] = 4
+            rate[it] = fit.copy()
+            err_rate[it] = err_fit.copy()
+        return rate,err_rate, alljumps, pixdq,groupdq
+
+
+        #self.ramp_fit = ramp_fit_step.run(input_file)
 
 
     def plot_image(self,ngroup = 1,vmin = 3000,vmax=5000):
@@ -842,9 +828,36 @@ class detector1():
             self.readnoisearray = readnoise_2d
             return self.readnoisearray
 
+
+    def calc_gain_model(self):
+        '''
+        make mddel for gain corection from https://exotic-miri.readthedocs.io/en
+        :return: gain_model
+        '''
+        custom_set_gain = SetCustomGain()
+        # Make custom gain datamodel (using the final segment).
+        uncal_last = datamodels.RampModel(os.path.join(self.path, self.input_file))
+        gain_model = custom_set_gain.call(uncal_last, gain_value=3.1)
+        self.gain_model = gain_model
+        del uncal_last
+
+    def calc_linearity_model(self):
+        '''
+        make mddel for gain corection from https://exotic-miri.readthedocs.io/en
+        :return: gain_model
+        '''
+        custom_set_linearity = SetCustomLinearity()
+        # Make custom gain datamodel (using the final segment).
+        uncal_last = datamodels.RampModel(os.path.join(self.path, self.input_file))
+        linearity_model = custom_set_linearity.call(uncal_last, group_idx_start_fit=10, group_idx_end_fit=28,
+            group_idx_start_derive=10, group_idx_end_derive=28, row_idx_start_used=300, row_idx_end_used=380)
+        del uncal_last
+        self.linearity_model = linearity_model
+
+
 if __name__ == '__main__':
     print('Hi PyCharm')
-    miri_uncal_file = 'jw02155001001_04102_00001_mirifulong_uncal.fits'
+    miri_uncal_file = 'jw02155004001_03102_00004_mirifushort/jw02155004001_03102_00004_mirifushort_uncal.fits'
 
     exp1 =  detector1(input_file=miri_uncal_file, path = input_dir, output_dir=output_dir)
     exp1.dq_init_step()

@@ -3,6 +3,37 @@ import glob
 import sys
 #Modify the path to a directory on your machine
 import os
+def read_settings(init_file='init.dat'):
+    init_settings = {}
+    with open(init_file) as f:
+        for k, line in enumerate(f):
+            values = [s for s in line.split()]
+            if line[0] != '#':
+                if values[0] == 'input1_dir:':
+                    input_dir = values[1]
+                    init_settings['input1_dir'] = values[1]
+                if values[0] == 'input2_dir:':
+                    init_settings['input2_dir'] = values[1]
+                if values[0] == 'input3_dir:':
+                    init_settings['input3_dir'] = values[1]
+                if values[0] == 'spec2_cachedir:':
+                    init_settings['spec2_cachedir'] = values[1]
+                if values[0] == 'output1_dir:':
+                    init_settings['output1_dir'] = values[1]
+                if values[0] == 'output2_dir:':
+                    init_settings['output2_dir'] = values[1]
+                if values[0] == 'output3_dir:':
+                    init_settings['output3_dir'] = values[1]
+                if values[0] == 'CRDS_PATH:':
+                    init_settings['CRDS_PATH'] = values[1]
+                if values[0] == 'CRDS_SERVER_URL:':
+                    init_settings['CRDS_SERVER_URL'] = values[1]
+    return init_settings
+settings =  read_settings()
+os.environ["CRDS_PATH"] = settings['CRDS_PATH']
+os.environ["CRDS_SERVER_URL"] = settings['CRDS_SERVER_URL']
+if 'CRDS_CONTEXT' in  settings.keys():
+    os.environ["CRDS_CONTEXT"] = settings['CRDS_CONTEXT']
 #os.environ["CRDS_PATH"] = "/home/slava/science/codes/python/jwst/data"
 #os.environ["CRDS_SERVER_URL"] = "https://jwst-crds.stsci.edu"
 import time
@@ -60,35 +91,7 @@ from stdatamodels.jwst import datamodels
 #input_dir = './output/detector2/'
 #miri_uncal_file= 'jw02155001001_04102_00001_mirifulong_uncal.fits'
 #input_file_base = os.path.basename(miri_uncal_file).replace('uncal.fits', '')
-def read_settings(init_file='init.dat'):
-    init_settings = {}
-    with open(init_file) as f:
-        for k, line in enumerate(f):
-            values = [s for s in line.split()]
-            if line[0] != '#':
-                if values[0] == 'input1_dir:':
-                    input_dir = values[1]
-                    init_settings['input1_dir'] = values[1]
-                if values[0] == 'input2_dir:':
-                    init_settings['input2_dir'] = values[1]
-                if values[0] == 'input3_dir:':
-                    init_settings['input3_dir'] = values[1]
-                if values[0] == 'spec2_cachedir:':
-                    init_settings['spec2_cachedir'] = values[1]
-                if values[0] == 'output1_dir:':
-                    init_settings['output1_dir'] = values[1]
-                if values[0] == 'output2_dir:':
-                    init_settings['output2_dir'] = values[1]
-                if values[0] == 'output3_dir:':
-                    init_settings['output3_dir'] = values[1]
-                if values[0] == 'CRDS_PATH:':
-                    init_settings['CRDS_PATH'] = values[1]
-                if values[0] == 'CRDS_SERVER_URL:':
-                    init_settings['CRDS_SERVER_URL'] = values[1]
-    return init_settings
-settings =  read_settings()
-os.environ["CRDS_PATH"] = settings['CRDS_PATH']
-os.environ["CRDS_SERVER_URL"] = settings['CRDS_SERVER_URL']
+
 output_dir = settings['output3_dir'] #')./output/detector1/'
 input_dir = settings['input3_dir'] #./input/detector1/'
 
@@ -101,6 +104,7 @@ class IFScube():
         self.wmap = None
         self.hdtap = None
         self.asdf= None
+        self.meta = None
 
 class detector3():
     def __init__(self,cubename= None, path = None, obj_key_name = 'jw02155001001_04',bkgr_key_name = 'jw02155009001_02',output_dir=None,spec3_cachedir=None):
@@ -123,6 +127,10 @@ class detector3():
 
     def init_cube(self, read_spectum=True):
         self.data = IFScube()
+        if 1:
+            data = datamodels.open(self.cubename)
+            self.meta = data.meta
+            del(data)
         hdu1 = fits.open(self.cubename)
         if isinstance(hdu1['WMAP'].data,(np.ndarray, np.generic)):
             self.data.data = hdu1['SCI'].data
@@ -162,7 +170,7 @@ class detector3():
             hdu2.close()
         else:
             self.data.wavelength = np.arange(self.data.data.shape[0])
-    def conv_world_coord(self,t,x,y,mode='normal'):
+    def conv_world_coord(self,t,x,y,mode='pipeline'):
         wcs1 = self.data.wcs
         if mode == 'cubevis':
             x_world = wcs1['CRVAL1'] - (x - wcs1['CRPIX1']+1) * wcs1['CDELT1']*1.043
@@ -172,6 +180,12 @@ class detector3():
             x_world = wcs1['CRVAL1'] - (x - wcs1['CRPIX1'] +1) * wcs1['CDELT1']
             y_world = wcs1['CRVAL2'] + (y - wcs1['CRPIX2'] +1) * wcs1['CDELT2']
             lam_world = wcs1['CRVAL3'] + (t - wcs1['CRPIX3'] + 1)* wcs1['CDELT3']
+        elif  mode == 'pipeline':
+            wcs = self.meta.wcs
+            sky = wcs.pixel_to_world(x, y, t)
+            x_world = sky[0].ra.deg
+            y_world = sky[0].dec.deg
+            lam_world = wcs1['CRVAL3'] + (t - wcs1['CRPIX3'] + 1) * wcs1['CDELT3']
 
         print('world coord:', x_world, y_world, lam_world)
         #print(self.data.wcs((t,x,y)))
@@ -365,7 +379,7 @@ class detector3():
         spec3('od.json')
         # Otherwise, just copy cached outputs into our output directory structure
 
-    def create_association(self, input_dir=None,source = 'Object',channel = '1', band ='SHORT',subfilename = ''):
+    def create_association(self, input_dir=None,source = 'Object',channel = '1', band ='SHORT',subfilename = '',dither=None):
         if band != 'ABC':
             exp_list = []
             bandname = {}
@@ -383,12 +397,15 @@ class detector3():
                 f_channel = header['CHANNEL']
                 f_dit_pos = header['PATT_NUM']
                 hdulist.close()
-                if f_targ_name == source and channel in f_channel and f_band in band:
+                if dither == None:
+                    f_dit_pos = None
+                if f_targ_name == source and channel in f_channel and f_band in band and f_dit_pos == dither:
                     exp_list.append(f.split('/')[-1])
             if subfilename == '':
                 asn_name = input_dir + '/'+ source + '_'+channel + bandname[band] + '.json'
             else:
                 asn_name = input_dir + '/' + source + subfilename + '.json'
+            #exp_list = [exp_list[0],exp_list[1]]
             print('ASN_FILE',asn_name, [el for el in exp_list])
             self.writel3asn(exp_list, asn_name, source + '_'+channel + bandname[band])
             self.local_asn_file = asn_name
@@ -433,7 +450,7 @@ class detector3():
         spec3.master_background.skip = 1 - master_bkgr_flag
         spec3.outlier_detection.skip = 1 - master_outlier_flag
         spec3.mrs_imatch.skip = 1 - master_res_bkgr_flag
-        spec3.resample_spec.skip = 1-master_resample_spec_flag
+        spec3.resample_spec.skip = 1 #-master_resample_spec_flag
         spec3.cube_build.channel = channel
         spec3.cube_build.output_file = (input_file.split('/')[-1]).split('.')[0]
         spec3.extract_1d.skip = 1 - master_extract1d_flag
@@ -506,8 +523,14 @@ if __name__ == '__main__':
     print('Hi PyCharm')
     miri_uncal_file = 'jw02155001001_04102_00001_mirifulong_uncal.fits'
     input_dir = './output/detector2'
+    output_dir  = './output/detector3/'
     spec3_cachedir = './temp/spec3/'
-    exposure = detector3(cubename='./output/detector3/sci_1SHORT(A)_ch1-short_s3d.fits')
+    exposure = detector3(obj_key_name = 'jw02155001001_04102',bkgr_key_name = 'jw02155009001_02101', path = input_dir, output_dir=output_dir) #cubename='./output/detector3/sci_1SHORT(A)_ch1-short_s3d.fits')
+    exposure.create_association(input_dir=input_dir, source='BACKGROUND-AO0235+164', channel='3', band='SHORT',
+                                subfilename='_TEST_4EXP')
+    exposure.build_cube(input_file=exposure.local_asn_file, channel='3', master_bkgr_flag=False,
+               master_res_bkgr_flag=True, master_outlier_flag=True,
+               master_resample_spec_flag=True, master_extract1d_flag=True)
     #exposure.init_cube()
     #exposure.load3asn(asnfile='sci_1short.json')
     #exposure.residual_background_matching()
@@ -515,7 +538,7 @@ if __name__ == '__main__':
     #[sci, bkg] = exposure.create_association(input_dir=exposure.path, channel = '1', band ='short')
     #exposure.cube_creation(channel='1')
     #exposure.spec_extraction()
-    exposure.plot_cube(cube_filename='./output/detector3/sci_1SHORT(A)_ch1-short_s3d.fits')
+    #exposure.plot_cube(cube_filename='./output/detector3/sci_1SHORT(A)_ch1-short_s3d.fits')
     #exposure.plot_spec()
 
     plt.show()

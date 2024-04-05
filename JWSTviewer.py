@@ -13,9 +13,6 @@ import numpy as np
 import pickle
 from PyQt5.QtCore import (Qt, )
 from PyQt5.QtGui import (QFont, )
-from PyQt5.QtWidgets import (QApplication, QMessageBox, QMainWindow, QSplitter, QWidget, QLabel,
-                             QVBoxLayout, QHBoxLayout, QPushButton, QHeaderView, QCheckBox,
-                             QRadioButton, QButtonGroup, QComboBox, QTableView, QLineEdit)
 import pyqtgraph as pg
 from scipy.interpolate import interp1d, interp2d, RectBivariateSpline, Rbf
 from scipy.interpolate import RBFInterpolator
@@ -27,6 +24,8 @@ from stage1_pipeline import detector1
 from stage2_pipeline import *
 from stage2_pipeline import detector2
 from scipy import signal
+import scipy
+
 
 #from spectro.stats import distr2d,distr1d
 #from spectro.a_unc import a
@@ -35,79 +34,79 @@ import copy
 from stdatamodels.jwst.datamodels import dqflags
 from PyQt5.QtWidgets import (QApplication, QMessageBox, QMainWindow, QWidget,
                              QFileDialog, QTextEdit, QVBoxLayout,
-                             QSplitter, QFrame, QLineEdit, QLabel, QPushButton, QCheckBox,
+                             QSplitter, QFrame, QLineEdit, QLabel, QPushButton, QCheckBox,QHeaderView,
                              QGridLayout, QTabWidget, QFormLayout, QHBoxLayout, QRadioButton,
                              QTreeWidget, QComboBox, QTreeWidgetItem, QAbstractItemView,
                              QStatusBar, QMenu, QButtonGroup, QMessageBox, QToolButton, QColorDialog)
-from pyqtgraph.Qt import QtCore, QtGui
+#from pyqtgraph.Qt import QtCore, QtGui
 from stdatamodels.jwst import datamodels
 import csv
-
+'''
 #output_dir = './output/detector1/'
 #output2_dir = './output/detector2/'
 #input_dir = './input/detector1/'
 #miri_uncal_file= 'jw02155001001_04102_00001_mirifulong_uncal.fits'
 #input_file_base = os.path.basename(miri_uncal_file).replace('uncal.fits', '')
 
-class image():
-    """
-    class for working with images (2d spectra) inside Spectrum plotting
-    """
-    def __init__(self, x=None, y=None, z=None, err=None, mask=None):
-        if any([v is not None for v in [x, y, z, err, mask]]):
-            self.set_data(x=x, y=y, z=z, err=err, mask=mask)
-        else:
-            self.z = None
+#class image():
+#    """
+#    class for working with images (2d spectra) inside Spectrum plotting
+#    """
+#    def __init__(self, x=None, y=None, z=None, err=None, mask=None):
+#        if any([v is not None for v in [x, y, z, err, mask]]):
+#            self.set_data(x=x, y=y, z=z, err=err, mask=mask)
+#        else:
+#            self.z = None
 
-    def set_data(self, x=None, y=None, z=None, err=None, mask=None):
-        for attr, val in zip(['z', 'err', 'mask'], [z, err, mask]):
-            if val is not None:
-                setattr(self, attr, np.asarray(val))
-            else:
-                setattr(self, attr, val)
-        if x is not None:
-            self.x = np.asarray(x)
-        else:
-            self.x = np.arange(z.shape[0])
-        if y is not None:
-            self.y = np.asarray(y)
-        else:
-            self.y = np.arange(z.shape[1])
+ #   def set_data(self, x=None, y=None, z=None, err=None, mask=None):
+ #       for attr, val in zip(['z', 'err', 'mask'], [z, err, mask]):
+ #           if val is not None:
+ ##               setattr(self, attr, np.asarray(val))
+  #          else:
+  #              setattr(self, attr, val)
+  #      if x is not None:
+  #          self.x = np.asarray(x)
+  #      else:
+  #          self.x = np.arange(z.shape[0])
+  #      if y is not None:
+  #          self.y = np.asarray(y)
+  #      else:
+  #          self.y = np.arange(z.shape[1])
 
-        self.pos = [self.x[0] - (self.x[1] - self.x[0]) / 2, self.y[0] - (self.y[1] - self.y[0]) / 2]
-        self.scale = [(self.x[-1] - self.x[0]) / (self.x.shape[0]-1), (self.y[-1] - self.y[0]) / (self.y.shape[0]-1)]
-        for attr in ['z', 'err']:
-            self.getQuantile(attr=attr)
-            self.setLevels(attr=attr)
+  #      self.pos = [self.x[0] - (self.x[1] - self.x[0]) / 2, self.y[0] - (self.y[1] - self.y[0]) / 2]
+  ##      self.scale = [(self.x[-1] - self.x[0]) / (self.x.shape[0]-1), (self.y[-1] - self.y[0]) / (self.y.shape[0]-1)]
+   #     for attr in ['z', 'err']:
+  #          self.getQuantile(attr=attr)
+  #          self.setLevels(attr=attr)#
 
 
-    def getQuantile(self, quantile=0.997, attr='z'):
-        if getattr(self, attr) is not None:
-            x = np.sort(getattr(self, attr).flatten())
-            x = x[~np.isnan(x)]
-            setattr(self, attr+'_quantile', [x[int(len(x)*(1-quantile)/2)], x[int(len(x)*(1+quantile)/2)]])
-        else:
-            setattr(self, attr + '_quantile', [0, 1])
-
-    def setLevels(self, bottom=None, top=None, attr='z'):
-        quantile = getattr(self, attr+'_quantile')
-        if bottom is None:
-            bottom = quantile[0]
-        if top is None:
-            top = quantile[1]
-        top, bottom = np.max([top, bottom]), np.min([top, bottom])
-        if top - bottom < (quantile[1] - quantile[0]) / 100:
-            top += ((quantile[1] - quantile[0]) / 100 - (top - bottom)) /2
-            bottom -= ((quantile[1] - quantile[0]) / 100 - (top - bottom)) / 2
-        setattr(self, attr+'_levels', [bottom, top])
-
-    def find_nearest(self, x, y, attr='z'):
-        z = getattr(self, attr)
-        if len(z.shape) == 2:
-            return z[np.min([z.shape[0]-1, (np.abs(self.y - y)).argmin()]), np.min([z.shape[1]-1, (np.abs(self.x - x)).argmin()])]
-        else:
-            return None
-
+ #   def getQuantile(self, quantile=0.997, attr='z'):
+ #       if getattr(self, attr) is not None:
+ #           x = np.sort(getattr(self, attr).flatten())
+ #           x = x[~np.isnan(x)]
+ #           setattr(self, attr+'_quantile', [x[int(len(x)*(1-quantile)/2)], x[int(len(x)*(1+quantile)/2)]])
+ #       else:
+ #           setattr(self, attr + '_quantile', [0, 1])
+#
+ #   def setLevels(self, bottom=None, top=None, attr='z'):
+ #       quantile = getattr(self, attr+'_quantile')
+ #       if bottom is None:
+ #           bottom = quantile[0]
+  #      if top is None:
+ #           top = quantile[1]
+  #      top, bottom = np.max([top, bottom]), np.min([top, bottom])
+  #      if top - bottom < (quantile[1] - quantile[0]) / 100:
+ #           top += ((quantile[1] - quantile[0]) / 100 - (top - bottom)) /2
+ #           bottom -= ((quantile[1] - quantile[0]) / 100 - (top - bottom)) / 2
+ #       setattr(self, attr+'_levels', [bottom, top])
+#
+ #   def find_nearest(self, x, y, attr='z'):
+#        z = getattr(self, attr)
+#        if len(z.shape) == 2:
+#            return z[np.min([z.shape[0]-1, (np.abs(self.y - y)).argmin()]), np.min([z.shape[1]-1, (np.abs(self.x - x)).argmin()])]
+#        else:
+#            return None
+'''
 
 
 class plotImage(pg.ImageView): #(pg.PlotWidget):
@@ -182,6 +181,7 @@ class plotImage(pg.ImageView): #(pg.PlotWidget):
                 else:
                     data = self.parent.EXP.data.data[nint][ngroup]
                     self.data = data
+                    self.err = self.parent.EXP.data.err[nint][ngroup]
                     #self.view[name] = pg.ImageView()
                     #self.view[name].setImage(img=data)
                     x, y = (1, 0)
@@ -200,25 +200,32 @@ class plotImage(pg.ImageView): #(pg.PlotWidget):
                 if nint > nintmax - 1:
                     print('Set correct Integration number, <=', nintmax - 1)
                     data = self.parent.EXP.data.data[nintmax - 1][ngrmax - 1]
+                    err =self.parent.EXP.data.err[nintmax - 1][ngrmax - 1]
                     self.setImage(data * 0, autoRange=True, levels=[2000, 6000])
                 elif ngroup > ngrmax - 1:
                     print('Set correct Group number, <=', ngrmax - 1)
                     data = self.parent.EXP.data.data[nintmax - 1][ngrmax - 1]
+                    err = self.parent.EXP.data.err[nintmax - 1][ngrmax - 1]
                     self.setImage(data * 0, autoRange=True, levels=[2000, 6000])
                 else:
                     data = self.parent.EXP.data.data[nint][ngroup]
+                    err = self.parent.EXP.data.err[nint][ngroup]
                 x, y = (1, 0)
                 zmin, zmax = np.nanquantile(data.flatten(), 0.01), np.nanquantile(data.flatten(), 0.99)
                 #self.setImage(data, autoRange=True, levels=[2000, 6000], axes={'t': None, 'x': x, 'y': y, 'c': None})
                 self.data = data
+                self.err = err
                 self.setImage(data, autoRange=True, levels=[zmin, zmax], axes={'t': None, 'x': x, 'y': y, 'c': None})
                 self.vb.hoverEvent = self.imageHoverEvent
             elif mode == 'slope':
+                nint = int(self.parent.exp_pars.nINT.text())
                 if self.parent.Exposures.table.flags['read_fit_slopes']:
-                    data = self.parent.EXP.ramp_fit[0].data
+                    #data = self.parent.EXP.ramp_fit[0].data
+                    data = self.parent.EXP.int_slopes[nint,0,:,:]
                     zmin, zmax = np.nanquantile(data.flatten(), 0.01), np.nanquantile(data.flatten(), 0.99)
                     x, y = (1, 0)
                     self.data = data
+                    self.err = self.parent.EXP.int_sigslopes[nint,0,:,:]
                     self.setImage(data, autoRange=True, levels=[zmin, zmax],
                                   axes={'t': None, 'x': x, 'y': y, 'c': None})
                     self.vb.hoverEvent = self.imageHoverEvent
@@ -229,6 +236,25 @@ class plotImage(pg.ImageView): #(pg.PlotWidget):
                     self.setImage(data, autoRange=True, levels=[-1, 5],
                                   axes={'t': None, 'x': x, 'y': y, 'c': None})
                     self.vb.hoverEvent = self.imageHoverEvent
+            elif mode == 'rate':
+                if self.parent.Exposures.table.flags['read_fit_slopes']:
+                    data = self.parent.EXP.mean_slope
+                    zmin, zmax = np.nanquantile(data.flatten(), 0.01), np.nanquantile(data.flatten(), 0.99)
+                    x, y = (1, 0)
+                    self.data = data
+                    self.err = self.parent.EXP.mean_slope_sig
+
+                    self.setImage(data, autoRange=True, levels=[zmin, zmax],
+                                  axes={'t': None, 'x': x, 'y': y, 'c': None})
+                    self.vb.hoverEvent = self.imageHoverEvent
+                else:
+                    print('There is no SLOPE ARRAY')
+                    data = (self.parent.EXP.data.data[0][0]).copy() * 0
+                    x, y = (1, 0)
+                    self.setImage(data, autoRange=True, levels=[-1, 5],
+                                  axes={'t': None, 'x': x, 'y': y, 'c': None})
+                    self.vb.hoverEvent = self.imageHoverEvent
+
             elif mode == 'stage2':
                 if self.parent.Exposures.table.current_pipeline_stage == 'stage2':
                     print('Show image of'+self.parent.stage2.name)
@@ -236,6 +262,7 @@ class plotImage(pg.ImageView): #(pg.PlotWidget):
                     zmin,zmax = np.nanquantile(data.flatten(),0.01),np.nanquantile(data.flatten(),0.99)
                     x, y = (1, 0)
                     self.data = data
+                    self.err = self.parent.stage2.data.err
                     self.setImage(data, autoRange=True, #levels=[-1, 5],
                                   axes={'t': None, 'x': x, 'y': y, 'c': None}, levels=[zmin,zmax])
                     self.vb.hoverEvent = self.imageHoverEvent
@@ -282,10 +309,11 @@ class plotImage(pg.ImageView): #(pg.PlotWidget):
         text = "pixel: (%d, %d), val: None" % (col, row)
         if row < self.data.shape[0] and row >=0 and col <self.data.shape[1] and col > 0:
             val = self.data[row,col]
-            text = "pixel: (%d, %d), val: %.2f" % (col,row, val)
+            err = self.err[row,col]
+            text = "pixel: (%d, %d), val: %.2f,%.2f" % (col,row, val,err)
         #print('coord', text, val)
         self.label.setText(text)
-        self.label.resize(400, 40)
+        self.label.resize(500, 40)
         if self.parent.Exposures.table.current_pipeline_stage == 'stage2' and 0:
             wcs = self.parent.stage2.data.meta.wcs
             print(wcs.available_frames)
@@ -485,51 +513,75 @@ class plotPixProfile(pg.PlotWidget):
                 self.plot_scatters_CRs = pg.ScatterPlotItem(x[mask_CR], data[mask_CR], symbol='o', size=20, brush='b')
                 # add fit
                 if show_fit:
-                    YINT = self.parent.EXP.itercepts[nint,:,row,col]
-                    SIGYINT = self.parent.EXP.itercepts_err[nint,:,row,col]
-                    YSLP = self.parent.EXP.slopes[row,col]
-                    SIGYSLP = self.parent.EXP.slopes_err[row, col]
-                    YSLPLOCAL = self.parent.EXP.local_slopes[nint,:, row, col]
-                    FIT,FIT_LOCAL = [],[]
-                    print(row,col, 'YSLP',YSLP,'YINT',YINT)
-                    pen = pg.mkPen(color='r', style=Qt.DashLine, width=3)
-                    if debug:
-                        print('YSLP,SIGYSLP:', YSLP, SIGYSLP)
-                        print('maskCR',mask_CR)
-                        print('maskCR cumsum', np.cumsum(mask_CR))
-                    self.slope_model,self.slope_range,self.local_slope_model = [],[],[]
-                    kk = -1
-                    for k in range(YINT.shape[0]):
-                        mask_k = (np.cumsum(mask_CR)== k)*(dq_map == 0)
-                        part_fit_size = np.sum(mask_k)
+                    algorithm = self.parent.exp_pars.FitAlgorithm_mode.currentText()
+                    if algorithm == 'OLS':
+                        YINT = self.parent.EXP.itercepts[nint,:,row,col]
+                        SIGYINT = self.parent.EXP.itercepts_err[nint,:,row,col]
+                        YSLP = self.parent.EXP.slopes[row,col]
+                        SIGYSLP = self.parent.EXP.slopes_err[row, col]
+                        YSLPLOCAL = self.parent.EXP.local_slopes[nint,:, row, col]
+                        FIT,FIT_LOCAL = [],[]
+                        print(row,col, 'YSLP',YSLP,'YINT',YINT)
+                        pen = pg.mkPen(color='r', style=Qt.DashLine, width=3)
                         if debug:
-                            print(k, 'mask_k ', mask_k)
-                        if part_fit_size > 1:
-                            kk+=1
+                            print('YSLP,SIGYSLP:', YSLP, SIGYSLP)
+                            print('maskCR',mask_CR)
+                            print('maskCR cumsum', np.cumsum(mask_CR))
+                        self.slope_model,self.slope_range,self.local_slope_model = [],[],[]
+                        kk = -1
+                        for k in range(YINT.shape[0]):
+                            mask_k = (np.cumsum(mask_CR)== k)*(dq_map == 0)
+                            part_fit_size = np.sum(mask_k)
                             if debug:
-                                print('YINT,SIGYINT:', YINT[kk], SIGYINT[kk])
-                            x_0 = 0
-                            FIT.append(YINT[kk] + YSLP * (x[mask_k]-x_0))
-                            FIT_LOCAL.append(YINT[kk] + YSLPLOCAL[kk] * (x[mask_k]-x_0))
-                            self.slope_model.append(pg.PlotCurveItem(x[mask_k], (FIT[kk]), pen=pen))
-                            self.local_slope_model.append(pg.PlotCurveItem(x[mask_k], (FIT_LOCAL[kk]), pen=pg.mkPen(color='b', style=Qt.DashLine, width=3)))
-                            if 1:
-                                nn = 50
-                                y_tmp = np.zeros((nn,part_fit_size))
-                                for i in range(nn):
-                                    yint_i  = YINT[kk] + (-1+2*np.random.uniform())*SIGYINT[kk]
-                                    slp_i = YSLP + (-1+2*np.random.uniform())*SIGYSLP
-                                    y_tmp[i,:] = yint_i + slp_i*(x[mask_k] - x_0)
-                                if 0:
-                                    plt.subplot()
+                                print(k, 'mask_k ', mask_k)
+                            if part_fit_size > 1:
+                                kk+=1
+                                if debug:
+                                    print('YINT,SIGYINT:', YINT[kk], SIGYINT[kk])
+                                x_0 = 0
+                                FIT.append(YINT[kk] + YSLP * (x[mask_k]-x_0))
+                                FIT_LOCAL.append(YINT[kk] + YSLPLOCAL[kk] * (x[mask_k]-x_0))
+                                #self.slope_model.append(pg.PlotCurveItem(x[mask_k], (FIT[kk]), pen=pen))
+                                self.slope_model.append(pg.PlotCurveItem(x, YINT+YSLP*x, pen=pen))
+                                self.local_slope_model.append(pg.PlotCurveItem(x[mask_k], (FIT_LOCAL[kk]), pen=pg.mkPen(color='b', style=Qt.DashLine, width=3)))
+                                if 1:
+                                    nn = 50
+                                    y_tmp = np.zeros((nn,part_fit_size))
                                     for i in range(nn):
-                                        plt.plot(x,y_tmp[i,:])
-                                    plt.show()
-                            curve1 = pg.PlotCurveItem(x[mask_k], [np.min(y_tmp[:,i]) for i in range(part_fit_size)], pen=pen)
-                            curve2 = pg.PlotCurveItem(x[mask_k], [np.max(y_tmp[:,i]) for i in range(part_fit_size)], pen=pen)
-                            self.slope_range.append(pg.FillBetweenItem(curve1, curve2,brush=(250,0,50,50)))
+                                        yint_i  = YINT[kk] + (-1+2*np.random.uniform())*SIGYINT[kk]
+                                        slp_i = YSLP + (-1+2*np.random.uniform())*SIGYSLP
+                                        y_tmp[i,:] = yint_i + slp_i*(x[mask_k] - x_0)
+                                    if 0:
+                                        plt.subplot()
+                                        for i in range(nn):
+                                            plt.plot(x,y_tmp[i,:])
+                                        plt.show()
+                                curve1 = pg.PlotCurveItem(x[mask_k], [np.min(y_tmp[:,i]) for i in range(part_fit_size)], pen=pen)
+                                curve2 = pg.PlotCurveItem(x[mask_k], [np.max(y_tmp[:,i]) for i in range(part_fit_size)], pen=pen)
+                                self.slope_range.append(pg.FillBetweenItem(curve1, curve2,brush=(250,0,50,50)))
+                    elif algorithm == 'CHI2':
+                        if 0 in dq_map:
+                            i_gr = np.where(dq_map == 0)[0][0]
+                            YINT = self.parent.EXP.data.data[nint,i_gr,row,col]
+                            if 0: #average over integrationa
+                                YSLP = self.parent.EXP.slopes[row,col]
+                            else:
+                                YSLP = self.parent.EXP.int_slopes[nint,0,row,col]
+                                YSLPERR = self.parent.EXP.int_sigslopes[nint,0,row,col]
+                            print(row,col, 'YSLP',YSLP,'pm',YSLPERR, ' YINT',YINT)
 
+                            YJUMP = self.parent.EXP.int_jumps[nint,:,row,col]
+                            print('YJUMP',YJUMP)
+                            y_fit = YINT + YSLP * (x-i_gr)
+                            p = 0
+                            for ii,s in enumerate(mask_CR):
+                                if s:
+                                    y_fit[ii:] += YJUMP[p]
+                                    p+=1
 
+                            pen = pg.mkPen(color='r', style=Qt.DashLine, width=3)
+                            self.slope_model,self.slope_range= [],[]
+                            self.slope_model.append(pg.PlotCurveItem(x, y_fit, pen=pen))
 
 
 
@@ -539,10 +591,14 @@ class plotPixProfile(pg.PlotWidget):
                 self.vb.addItem(self.plot_scatters_CRs)
                 self.vb.setLimits(xMin=-2,xMax=x[-1]+2)
                 if show_fit:
-                    for m,r,l in zip(self.slope_model,self.slope_range,self.local_slope_model):
-                        self.vb.addItem(m)
-                        self.vb.addItem(r)
-                        self.vb.addItem(l)
+                    if algorithm == 'OLS':
+                        for m,r,l in zip(self.slope_model,self.slope_range,self.local_slope_model):
+                            self.vb.addItem(m)
+                            self.vb.addItem(r)
+                            self.vb.addItem(l)
+                    else:
+                        if 0 in dq_map:
+                            self.vb.addItem(self.slope_model[0])
 
                 if np.sum(data>sat_limit):
                     self.parent.show_sat_limit=True
@@ -559,15 +615,20 @@ class plotPixProfile(pg.PlotWidget):
                 print('coords are out of limits of data', nint,row,col)
         else:
             try:
+                algorithm = self.parent.exp_pars.FitAlgorithm_mode.currentText()
                 self.legend_model.removeItem(self.temp_model)
                 self.vb.removeItem(self.temp_model)
                 self.vb.removeItem(self.good_groups)
                 self.vb.removeItem(self.plot_scatters)
                 self.vb.removeItem(self.plot_scatters_CRs)
-                for m, r,l in zip(self.slope_model, self.slope_range,self.local_slope_model):
-                    self.vb.removeItem(m)
-                    self.vb.removeItem(r)
-                    self.vb.removeItem(l)
+                if show_fit:
+                    if algorithm == 'OLS':
+                        for m, r,l in zip(self.slope_model, self.slope_range,self.local_slope_model):
+                            self.vb.removeItem(m)
+                            self.vb.removeItem(r)
+                            self.vb.removeItem(l)
+                    if algorithm == 'CHI2':
+                        self.vb.removeItem(self.slope_model[0])
                 if self.parent.show_sat_limit:
                     self.vb.removeItem(self.satur_limit)
                     self.parent.show_sat_limit = False
@@ -646,7 +707,7 @@ class plotPixDiffs(pg.PlotWidget):
         self.vb = self.getViewBox()
         self.image = None
         self.text = None
-        self.grid = image()
+        #self.grid = image()
         cdict = cm.get_cmap('viridis')
         cmap = np.array(cdict.colors)
         cmap[-1] = [1, 0.4, 0]
@@ -886,15 +947,29 @@ class EXPlistTable(pg.TableWidget):
             print('show slope, name', self.parent.parent.current_name)
             #self.parent.parent.plot_image.add(name=self.parent.parent.current_name, add=False)
             self.parent.parent.plot_image.add(name=self.parent.parent.current_name, add=True,mode='slope')
+        if mode == 'rate':
+            print('show rate, name', self.parent.parent.current_name)
+            # self.parent.parent.plot_image.add(name=self.parent.parent.current_name, add=False)
+            self.parent.parent.plot_image.add(name=self.parent.parent.current_name, add=True, mode='rate')
+
         if mode == 'stage2':
             print('show rate (stage2), name', self.parent.parent.current_name)
             # self.parent.parent.plot_image.add(name=self.parent.parent.current_name, add=False)
             self.parent.parent.plot_image.add(name=self.parent.parent.current_name, add=True, mode='stage2')
 
+
+    def calc_ExoTiC_models(self):
+        print('calc gain model')
+        self.parent.parent.EXP.calc_gain_model()
+        #print('calc linearity model')
+        #self.parent.parent.EXP.calc_linearity_model()
+
     def set_dq(self):
         print('set data quality map')
         save_res_flag = int(self.parent.parent.exp_pars.save_tmp_res.currentIndex())
         self.parent.parent.EXP.dq_init_step(save_results=bool(save_res_flag))
+        print('calc gain model (Bell 2023). Set gain = 3.1 instead of 5.5 el/Dn')
+        self.parent.parent.EXP.calc_gain_model()
         #self.parent.parent.EXP.dq_init_step()
 
     def show_dq(self):
@@ -907,7 +982,7 @@ class EXPlistTable(pg.TableWidget):
     def check_saturation(self):
         if self.flags['saturation_step'] == False:
             flag = self.parent.parent.exp_pars.addneighbors.isChecked()
-            debug = self.parent.parent.exp_pars.debug.isChecked()
+            debug = bool(self.parent.parent.exp_pars.debug.currentIndex())
             save_res_flag = int(self.parent.parent.exp_pars.save_tmp_res.currentIndex())
             print('Run Saturation step: add_neighbors=',flag, ' show_debug = ',debug)
             self.parent.parent.EXP.saturation_step(n_pix_grow_sat=flag,debug=debug,save_results=bool(save_res_flag))
@@ -915,7 +990,7 @@ class EXPlistTable(pg.TableWidget):
             print('SATURATION STEP: DONE')
         else:
             flag = self.parent.parent.exp_pars.addneighbors.isChecked()
-            debug = self.parent.parent.exp_pars.debug.isChecked()
+            debug = bool(self.parent.parent.exp_pars.debug.currentIndex())
             save_res_flag = int(self.parent.parent.exp_pars.save_tmp_res.currentIndex())
             print('Run second saturation step: add_neighbors=', flag, ' show_debug = ', debug)
             self.parent.parent.EXP.reset_dq(flagname='SATURATED')
@@ -924,6 +999,11 @@ class EXPlistTable(pg.TableWidget):
             print('SATURATION STEP: DONE')
         if debug:
             plt.show()
+
+
+   # def roeba_specific_module(self):
+
+
 
     def show_saturation(self):
         if self.flags['saturation_step'] == True:
@@ -949,19 +1029,28 @@ class EXPlistTable(pg.TableWidget):
                 self.flags['show_dnu'] = False
                 self.parent.parent.plot_image.selectPixels(add=False, type='dnu')
 
+
     def first_group(self):
-        debug = self.parent.parent.exp_pars.debug.isChecked()
+        debug = bool(self.parent.parent.exp_pars.debug.currentIndex())
         save_res_flag = int(self.parent.parent.exp_pars.save_tmp_res.currentIndex())
+        #save_res_flag = False
         self.parent.parent.EXP.first_step(debug=debug,save_results=bool(save_res_flag))
         print('FIRST STEP: DONE')
     def last_group(self):
-        debug = self.parent.parent.exp_pars.debug.isChecked()
+        debug = bool(self.parent.parent.exp_pars.debug.currentIndex())
         save_res_flag = int(self.parent.parent.exp_pars.save_tmp_res.currentIndex())
+        #save_res_flag = False
         self.parent.parent.EXP.last_step(debug=debug,save_results=bool(save_res_flag))
         print('LAST STEP: DONE')
 
+    def exotic_drop_groups(self):
+        mode = int(self.parent.parent.exp_pars.n_group_dropped.text())
+        #self.parent.parent.EXP.exotic_drop_groups(mode = 'small_n_gr')
+        self.parent.parent.EXP.drop_first_steps(mode = mode)
+        print('DROP GROUPS STEP by ExoTiC pipeline')
+
     def reset_correction(self):
-        debug = self.parent.parent.exp_pars.debug.isChecked()
+        debug = bool(self.parent.parent.exp_pars.debug.currentIndex())
         save_res_flag = int(self.parent.parent.exp_pars.save_tmp_res.currentIndex())
         self.parent.parent.EXP.reset_step(debug=debug,save_results=bool(save_res_flag))
         print('RESET STEP: DONE')
@@ -971,15 +1060,19 @@ class EXPlistTable(pg.TableWidget):
             print('Linearity correction was applied already')
         else:
             save_res_flag = int(self.parent.parent.exp_pars.save_tmp_res.currentIndex())
-            debug = self.parent.parent.exp_pars.debug.isChecked()
-            self.parent.parent.EXP.linear_step(debug=debug,save_results=bool(save_res_flag))
-            print('LINEAR STEP: DONE')
+            debug = bool(self.parent.parent.exp_pars.debug.currentIndex())
+            override_linearity_model = False #bool(int(self.parent.parent.exp_pars.ExoTiC_mode.currentIndex()))
+            self.parent.parent.EXP.linear_step(debug=debug,save_results=bool(save_res_flag), override_linearity=override_linearity_model)
+            if override_linearity_model:
+                print('LINEAR STEP by ExoTiC pipeline: DONE')
+            else:
+                print('STANDARD LINEAR STEP: DONE')
+
 
     def show_linear_correction(self):
         if self.parent.parent.EXP.data.meta.cal_step.linearity == 'COMPLETE':
             print('Linear correction was completed already')
         else:
-            debug = self.parent.parent.exp_pars.debug.isChecked()
             print('show_linear_correction: not ready')
 
     def rscd_correction(self):
@@ -987,7 +1080,7 @@ class EXPlistTable(pg.TableWidget):
             print('RSCD correction was applied already')
         else:
             save_res_flag = int(self.parent.parent.exp_pars.save_tmp_res.currentIndex())
-            debug = self.parent.parent.exp_pars.debug.isChecked()
+            debug = bool(self.parent.parent.exp_pars.debug.currentIndex())
             self.parent.parent.EXP.rscd_step(debug=debug,save_results=bool(save_res_flag))
             print('RSCD STEP: DONE')
 
@@ -996,7 +1089,7 @@ class EXPlistTable(pg.TableWidget):
             print('Dark subtraction was applied already')
         else:
             save_res_flag = int(self.parent.parent.exp_pars.save_tmp_res.currentIndex())
-            debug = self.parent.parent.exp_pars.debug.isChecked()
+            debug = bool(self.parent.parent.exp_pars.debug.currentIndex())
             self.parent.parent.EXP.dark_step(debug=debug,save_results=bool(save_res_flag))
             print('DARK STEP: DONE')
 
@@ -1005,29 +1098,36 @@ class EXPlistTable(pg.TableWidget):
             print('RefPix correction was applied already')
         else:
             save_res_flag = int(self.parent.parent.exp_pars.save_tmp_res.currentIndex())
-            debug = self.parent.parent.exp_pars.debug.isChecked()
+            debug = bool(self.parent.parent.exp_pars.debug.currentIndex())
             self.parent.parent.EXP.refpix_corr_step(debug=debug,save_results=bool(save_res_flag))
             print('REF PIX STEP: DONE')
 
     def jump_detection(self):
+
         if self.flags['CR_step'] == False:
             CRlimit = float(self.parent.parent.exp_pars.CRlimit.text())
             RecalcMedian = int(self.parent.parent.exp_pars.CR_recalc_flag.currentIndex())
-            flag = self.parent.parent.exp_pars.addCRneighbors.isChecked()
+            flag_4neighbors = bool(self.parent.parent.exp_pars.addCRneighbors.currentIndex())
+            find_showers = bool(self.parent.parent.exp_pars.find_CRshowers.currentIndex())
             debug = False #self.parent.parent.exp_pars.debug.isChecked()
             save_res_flag = int(self.parent.parent.exp_pars.save_tmp_res.currentIndex())
-            print('Run CR step: add_neighbors=', flag, ' show_debug = ', debug)
-            self.parent.parent.EXP.jump_corr_step(debug=debug, limit=CRlimit, flag_4_neighbors=flag,RecalcMedian=RecalcMedian,save_results=bool(save_res_flag))
+            override_gain = bool(int(self.parent.parent.exp_pars.ExoTiC_mode.currentIndex()))
+            print('Run CR step: add_neighbors=', flag_4neighbors, ' show_debug = ', debug)
+            self.parent.parent.EXP.jump_corr_step(debug=debug, limit=CRlimit, flag_4_neighbors=flag_4neighbors,RecalcMedian=RecalcMedian,
+                                                  save_results=bool(save_res_flag), override_gain=override_gain,find_showers=find_showers)
             self.flags['CR_step'] = True
             print('CR STEP: DONE')
         else:
             CRlimit = float(self.parent.parent.exp_pars.CRlimit.text())
-            flag = self.parent.parent.exp_pars.addCRneighbors.isChecked()
+            flag_4neighbors = bool(self.parent.parent.exp_pars.addCRneighbors.currentIndex())
+            find_showers = bool(self.parent.parent.exp_pars.find_CRshowers.currentIndex())
             debug = False #self.parent.parent.exp_pars.debug.isChecked()
             save_res_flag = int(self.parent.parent.exp_pars.save_tmp_res.currentIndex())
-            print('Run second CR step: add_neighbors=', flag, ' show_debug = ', debug)
+            override_gain = bool(int(self.parent.parent.exp_pars.ExoTiC_mode.currentIndex()))
+            print('Run second CR step: add_neighbors=', flag_4neighbors, ' show_debug = ', debug)
             self.parent.parent.EXP.reset_dq(flagname='JUMP_DET')
-            self.parent.parent.EXP.jump_corr_step(debug=debug, limit=CRlimit, flag_4_neighbors=flag,save_results=bool(save_res_flag))
+            self.parent.parent.EXP.jump_corr_step(debug=debug, limit=CRlimit, flag_4_neighbors=flag_4neighbors,save_results=bool(save_res_flag),
+                                                  override_gain=override_gain,find_showers=find_showers)
             self.flags['CR_step'] = True
             print('CR STEP: DONE')
         if debug:
@@ -1042,7 +1142,21 @@ class EXPlistTable(pg.TableWidget):
         if self.flags['CR_step'] == True:
             if self.flags['show_CR'] == False:
                 self.flags['show_CR'] = True
-                mask = np.where(np.bitwise_and(self.parent.parent.EXP.data.pixeldq, dqflags.pixel['JUMP_DET']))
+                if 1:
+                    nint = int(self.parent.parent.exp_pars.nINT.text())
+                    if hasattr(self.parent.parent.EXP,'int_pixeldq'):
+                        pdq =self.parent.parent.EXP.int_pixeldq[nint]
+                    elif self.parent.parent.Exposures.table.current_pipeline_stage == 'stage2':
+                        pdq =self.parent.parent.stage2.data.dq
+                    else:
+                        pdq = self.parent.parent.EXP.data.pixeldq
+                    mask = np.where(np.bitwise_and(pdq, dqflags.pixel['JUMP_DET']))
+                else:
+                    nint = int(self.parent.parent.exp_pars.nINT.text())
+                    mask = np.zeros((self.parent.parent.EXP.nrows,self.parent.parent.EXP.ncols)).astype(int)
+                    for i_gr in range(self.parent.parent.EXP.ngroup):
+                        mask = np.bitwise_or(self.parent.parent.EXP.data.groupdq[nint,i_gr],mask)
+                    mask = np.where(np.bitwise_and(mask, dqflags.pixel['JUMP_DET']))
                 #for i, j in zip(mask[0], mask[1]):
                 #    self.parent.parent.plot_image.selectPixels(add=self.flags['show_CR'], x=j, y=i)
                 self.parent.parent.plot_image.selectPixels(add=self.flags['show_CR'], x=mask[1], y=mask[0],color='g',type='cr')
@@ -1055,7 +1169,14 @@ class EXPlistTable(pg.TableWidget):
         if self.flags['CR_step'] == True:
             if self.flags['show_multi_CR'] == False:
                 self.flags['show_multi_CR'] = True
-                mask = np.where(np.bitwise_and(self.parent.parent.EXP.data.pixeldq, dqflags.pixel['JUMP_DET']))
+                nint = int(self.parent.parent.exp_pars.nINT.text())
+                if hasattr(self.parent.parent.EXP, 'int_pixeldq'):
+                    pdq = self.parent.parent.EXP.int_pixeldq[nint]
+                elif self.parent.parent.Exposures.table.current_pipeline_stage == 'stage2':
+                    pdq = self.parent.parent.stage2.data.dq
+                else:
+                    pdq = self.parent.parent.EXP.data.pixeldq
+                mask = np.where(np.bitwise_and(pdq, dqflags.pixel['JUMP_DET']))
                 x,y = [],[]
                 for i in range(mask[0].shape[0]):
                     mask_tmp = np.bitwise_and(self.parent.parent.EXP.data.groupdq[0,:,mask[0][i],mask[1][i]], dqflags.pixel['JUMP_DET'])
@@ -1071,21 +1192,100 @@ class EXPlistTable(pg.TableWidget):
                 self.flags['show_multi_CR'] = False
                 self.parent.parent.plot_image.selectPixels(add=False,type='cr_multi')
 
-    def slope_fit(self,denug=False):
-
+    def slope_fit(self,debug=False,algorithm='CHI2'):
+        algorithm = self.parent.parent.exp_pars.FitAlgorithm_mode.currentText()
         #CRlimit = float(self.parent.parent.exp_pars.CRlimit.text())
         #flag = self.parent.parent.exp_pars.addCRneighbors.isChecked()
-        debug = self.parent.parent.exp_pars.debug.isChecked()
-        save_res_flag = True #int(self.parent.parent.exp_pars.save_tmp_res.currentIndex())
+        debug = bool(self.parent.parent.exp_pars.debug.currentIndex())
+        save_res_flag = int(self.parent.parent.exp_pars.save_tmp_res.currentIndex())
+        override_gain = bool(int(self.parent.parent.exp_pars.ExoTiC_mode.currentIndex()))
         print('Run Slope Fit step: show_debug = ', debug, 'save result =  ', bool(save_res_flag))
-        self.parent.parent.EXP.slope_fitting_step(debug=debug,save_results=bool(save_res_flag))
+        if algorithm == 'CHI2':
+            save_res_flag = True
+        self.parent.parent.EXP.slope_fitting_step(debug=debug,save_results=bool(save_res_flag),override_gain=override_gain,algorithm=algorithm)
         self.flags['slope_fit_step'] = True
+        if algorithm == 'CHI2':
+            self.parent.parent.EXP.data.pixeldq = self.parent.parent.EXP.ramp_fit[0].dq
+            self.flags['CR_step'] = True
+            self.parent.parent.EXP.data.meta.cal_step.jump = 'COMPLETE'
         print('Slope Fit STEP: DONE')
+
         if debug:
             plt.show()
 
+    def calc_mean_rate(self,debug=False,radius=10,hot_pix_limit=4):
+        im = self.parent.parent.EXP.int_slopes[:,0].copy()
+        sigim = self.parent.parent.EXP.int_sigslopes[:,0].copy()
+        dqim = self.parent.parent.EXP.int_pixeldq[:,0].copy()
+        n_int = im.shape[0]
+        mask_im = np.ones((n_int,im.shape[1],im.shape[2]))
+        mean_im = np.mean(im,axis=0)
+
+        #set kernel
+        radius = radius
+        filter_kernel = np.zeros((2 * radius + 1, 2 * radius + 1))
+        for i in range(filter_kernel.shape[0]):
+            for j in range(filter_kernel.shape[1]):
+                if (i - radius) ** 2 + (j - radius) ** 2 <= radius ** 2:
+                    filter_kernel[i, j] = 1
+
+        if debug:
+            fig,ax = plt.subplots(2, n_int+1, sharex=True, sharey=True)
+        for i in range(n_int):
+            x  = im[i]/mean_im - 1
+            x[np.isnan(x)] = 0
+            x[x > hot_pix_limit] = 0
+            x[x < -hot_pix_limit] = 0
+
+            #smooth diff
+            npix = scipy.signal.convolve2d(np.ones_like(x), filter_kernel, mode='same', boundary='fill', fillvalue=0)
+            x_smoothed = scipy.signal.convolve2d(x, filter_kernel, mode='same', boundary='fill', fillvalue=0) / npix
+
+            mask_im[i][x_smoothed>0.1] = 0
+
+        #ignore CR events
+        if 1:
+            mask_cr = np.zeros_like(im)
+            for i in range(n_int):
+                mask_cr[i] = (np.bitwise_and(dqim[i],dqflags.pixel['JUMP_DET'])).astype(bool)
+            mask_cr_shower = 1 - mask_im
+            mask_cr_tot = mask_cr + mask_cr_shower
+
+            mask_cr_tot = np.sum(mask_cr_tot.astype(bool),axis=0)
+            for i in range(n_int):
+                mask_im[i][(mask_cr[i] == 1) * (mask_cr_tot != n_int)] = 0
+
+        for i in range(n_int):
+            if debug:
+                ax[0,i].imshow(im[i],vmin=0,vmax=2)
+                ax[1,i].imshow(x_smoothed, vmin=-0.3, vmax=0.3)
+                xi, yi = np.arange(x_smoothed.shape[1]), np.arange(x_smoothed.shape[0])
+                zi = x_smoothed
+                ax[1,i].contour(xi, yi, zi, levels=[-0.1, 0.1], linewidths=0.5, colors='k')
+
+
+        imsig_inv = np.power(sigim,-2)
+        imtot = np.nansum(im*imsig_inv*mask_im,axis=0)/np.nansum(imsig_inv*mask_im,axis=0)
+        imtotsig = np.power(np.nansum(imsig_inv*mask_im,axis=0),-0.5)
+
+        if debug:
+            ax[0,n_int].imshow(imtot, vmin=0, vmax=2)
+            plt.show()
+        self.parent.parent.EXP.mean_slope = imtot
+        self.parent.parent.EXP.mean_slope_sig = imtotsig
+
+        ramp_fit = self.parent.parent.EXP.ramp_fit
+        group_time = ramp_fit[0].meta.exposure.group_time
+        ramp_fit[0].data = imtot/group_time
+        ramp_fit[0].err = imtotsig/group_time
+        #self.parent.parent.EXP.int_slopes = ramp_info[0] * group_time
+        #self.parent.parent.EXP.int_sigslopes = ramp_info[1] * group_time
+
+
     def read_slopes(self,input_file = None):
-        if self.flags['slope_fit_step'] == True:
+        group_time = self.parent.parent.EXP.data.meta.exposure.group_time
+        algorithm = self.parent.parent.exp_pars.FitAlgorithm_mode.currentText()
+        if self.flags['slope_fit_step'] == True and algorithm == 'OLS':
             print('Read Slope Fits from local files:')
             ramp_fit = self.parent.parent.EXP.ramp_fit
             if input_file == None:
@@ -1108,7 +1308,7 @@ class EXPlistTable(pg.TableWidget):
             #hdulist = fits.open(sci_file)
             #sci_arr =hdulist['SCI'].data[:, :]
             #hdulist.close()
-            num_groups = ramp_fit[0].meta.exposure.ngroups
+            #num_groups = ramp_fit[0].meta.exposure.ngroups
             group_time = ramp_fit[0].meta.exposure.group_time
             print('Time per group:', group_time, ' in s')
             #group_times = np.arange(num_groups) * group_time
@@ -1121,8 +1321,41 @@ class EXPlistTable(pg.TableWidget):
             self.parent.parent.EXP.local_slopes = local_slopes * group_time  # in DN/groups
             self.parent.parent.EXP.local_slopes_err = local_sig_slopes * group_time  # in DN/groups
             self.flags['read_fit_slopes'] = True
+        elif self.flags['slope_fit_step'] == True and algorithm == 'CHI2':
+            print('Read Slope Fits from local files:')
 
-        else:
+            ramp_fit = self.parent.parent.EXP.ramp_fit
+            ramp_info = self.parent.parent.EXP.ramp_fit_info
+            data = self.parent.parent.EXP.data.data
+            dataerr = self.parent.parent.EXP.data.err
+            self.parent.parent.EXP.int_slopes = ramp_info[0]*group_time
+            self.parent.parent.EXP.int_sigslopes = ramp_info[1] * group_time
+            self.parent.parent.EXP.int_pixeldq = ramp_fit[1].dq
+            if 1:
+                first_gr,last_gr = int(self.parent.parent.exp_pars.n_group_dropped.text()),self.parent.parent.EXP.data.groupdq.shape[1]-1
+            self.parent.parent.EXP.data.groupdq[:,first_gr:last_gr,:,:] = ramp_info[7]
+            self.parent.parent.EXP.int_jumps = ramp_info[8]
+            self.parent.parent.EXP.slopes = ramp_fit[0].data * group_time  # in DN/groups
+            self.parent.parent.EXP.slopes_err = ramp_fit[0].err * group_time  # in DN/groups
+
+            self.flags['read_fit_slopes'] = True
+
+            if 1:
+                gdq = ramp_info[7]
+                nrows,ncols = ramp_fit[0].data.shape[0],ramp_fit[0].data.shape[1]
+                self.parent.parent.EXP.itercepts = np.zeros((1,1,nrows,ncols))
+                self.parent.parent.EXP.itercepts_err = np.zeros((1,1,nrows,ncols))
+                for i in range(ramp_fit[0].data.shape[0]):
+                    for j in range(ramp_fit[0].data.shape[1]):
+                        #print(i,j,gdq[0, :, i, j])
+                        if 0 in gdq[0,:,i,j]:
+                            i_gr = np.where(gdq[0,:,i,j] == 0)[0][0]
+                            self.parent.parent.EXP.itercepts[0,0,i,j] = data[0,i_gr,i,j]
+                            self.parent.parent.EXP.itercepts_err[0,0,i,j] = dataerr[0,i_gr,i,j]
+                        else:
+                            self.parent.parent.EXP.itercepts[0,0,i, j] = 0
+                            self.parent.parent.EXP.itercepts_err[0,0,i, j] = np.inf
+        elif 0:
             print('Read Slope Fits from Final files')
             if input_file == None:
                 input_file = self.parent.parent.EXP.input_file
@@ -1213,6 +1446,101 @@ class EXPlistTable(pg.TableWidget):
 
             else:
                 print('There is no saved files')
+        else:
+            print('Read Slope Fits from Final files')
+            if input_file == None:
+                input_file = self.parent.parent.EXP.input_file
+            input_file_base = os.path.basename(input_file).replace('uncal.fits', '')
+            output_dir = './output/results/' #self.parent.parent.EXP.output_dir
+
+
+            files = os.listdir(output_dir)
+            if np.sum(input_file_base in f for f in files):
+                # Generate the name of the optional output file
+                int_file = os.path.join(output_dir, '{}rateints.fits'.format(input_file_base))
+                hdulist = fits.open(int_file)
+                int_slopes = hdulist['SCI'].data
+                int_sig_slopes = hdulist['ERR'].data
+                int_dq = hdulist['DQ'].data
+                int_header = hdulist[0].header
+                hdulist.close()
+
+
+                data_shape = self.parent.parent.EXP.data.data.shape
+                self.parent.parent.EXP.int_slopes = np.zeros((data_shape[0],1,data_shape[2],data_shape[3]))
+                self.parent.parent.EXP.int_sigslopes= np.zeros((data_shape[0],1,data_shape[2],data_shape[3]))
+
+                self.parent.parent.EXP.int_slopes[:,0,:,:] = int_slopes * group_time
+                self.parent.parent.EXP.int_sigslopes[:,0,:,:] = int_sig_slopes * group_time
+                self.parent.parent.EXP.int_pixeldq = int_dq
+                self.parent.parent.EXP.int_jumps = np.zeros_like(self.parent.parent.EXP.data.data)
+
+                if 1:
+                    rate_file = os.path.join('./output/results/', '{}rate.fits'.format(input_file_base))
+                    rate_ints_file = os.path.join('./output/results/', '{}rateints.fits'.format(input_file_base))
+
+                    from stdatamodels.jwst import datamodels
+                    miri_rate = datamodels.open(rate_file)
+                    miri_rateints = datamodels.open(rate_ints_file)
+                    self.parent.parent.EXP.ramp_fit = miri_rate,miri_rateints
+
+                #rate_file = os.path.join('./output/results/', '{}rate.fits'.format(input_file_base))
+                #hdulist = fits.open(rate_file)
+                #rate = hdulist['SCI'].data
+                #rate_err = hdulist['ERR'].data
+                #input, ints_model = self.parent.parent.EXP.ramp_fit
+
+                self.parent.parent.EXP.mean_slope = miri_rate.data
+                self.parent.parent.EXP.mean_slope_sig = miri_rate.err
+                print(int_header.keys())
+                self.parent.parent.EXP.data.meta.cal_step.dark_sub = int_header['S_DARK']
+                self.parent.parent.EXP.data.meta.cal_step.dq_init = int_header['S_DQINIT']
+                if 'S_FRSTFR' in int_header.keys():
+                    self.parent.parent.EXP.data.meta.cal_step.firstframe = int_header['S_FRSTFR']
+                if 'S_JUMP' in int_header.keys():
+                    self.parent.parent.EXP.data.meta.cal_step.jump = int_header['S_JUMP']
+                else:
+                    self.parent.parent.EXP.data.meta.cal_step.jump = 'None'
+                self.parent.parent.EXP.data.meta.cal_step.lastframe = int_header['S_LASTFR']
+                self.parent.parent.EXP.data.meta.cal_step.linearity = int_header['S_LINEAR']
+                self.parent.parent.EXP.data.meta.cal_step.ramp_fit = int_header['S_RAMP']
+                self.parent.parent.EXP.data.meta.cal_step.refpix = int_header['S_REFPIX']
+                self.parent.parent.EXP.data.meta.cal_step.reset = int_header['S_RESET']
+                self.parent.parent.EXP.data.meta.cal_step.rscd = int_header['S_RSCD']
+                self.parent.parent.EXP.data.meta.cal_step.saturation = int_header['S_SATURA']
+
+                self.flags=self.flags.fromkeys(self.flags, True)
+                self.flags['show_saturated'] = False
+                self.flags['show_CR'] = False
+                self.flags['show_multi_CR'] = False
+                self.flags['show_dnu'] = False
+                flags_dict = {}
+                flags_dict['COMPLETE'] = True
+                flags_dict['SKIPPED'] = False
+                flags_dict['None'] = False
+                self.flags['saturation_step'] = flags_dict[self.parent.parent.EXP.data.meta.cal_step.saturation]
+                self.flags['CR_step'] = flags_dict[self.parent.parent.EXP.data.meta.cal_step.jump]
+                self.flags['slope_fit_step'] = flags_dict[self.parent.parent.EXP.data.meta.cal_step.ramp_fit]
+
+                #print('flags after reading',self.flags)
+                #def val2log(val='1'):
+                #    val = val.replace("\n", "")
+                #    if val == '2':
+                #        return None
+                #    else:
+                #        return val
+                #cal_steps_file = output_dir + input_file_base+'cal_steps.csw'
+                #with open(cal_steps_file, 'r') as f:
+                #    for k, line in enumerate(f):
+                #        values = [s for s in line.split(',')]
+                #self.parent.parent.EXP.data.meta.cal_step.linearity = val2log(values[0])
+                #self.parent.parent.EXP.data.meta.cal_step.rscd = val2log(values[1])
+                #self.parent.parent.EXP.data.meta.cal_step.dark_sub = val2log(values[2])
+                #self.parent.parent.EXP.data.meta.cal_step.refpix = val2log(values[3])
+                #print('self.parent.parent.EXP.data.meta.cal_step.refpix',self.parent.parent.EXP.data.meta.cal_step.refpix)
+
+            else:
+                print('There is no saved files')
 
     def show_slope_image(self):
         if self.flags['slope_fit_step'] == True:
@@ -1230,7 +1558,7 @@ class EXPlistTable(pg.TableWidget):
             plt.show()
 
 
-    def save_slope_fit(self,output_dir=None,copy_add_data=True):
+    def save_slope_fit(self,output_dir=None,save_other_data=False):
         if self.flags['slope_fit_step'] == True:
             from jwst.pipeline import calwebb_detector1
             miri1 = calwebb_detector1.Detector1Pipeline()
@@ -1243,6 +1571,7 @@ class EXPlistTable(pg.TableWidget):
             if output_dir != None:
                 miri1.output_file =  self.parent.parent.EXP.name
                 input, ints_model = self.parent.parent.EXP.ramp_fit
+                print('save rate models')
                 if ints_model is not None:
                     miri1.save_model(ints_model, 'rateints')
                 if input is not None:
@@ -1265,7 +1594,7 @@ class EXPlistTable(pg.TableWidget):
                 with open(target + exp_name + '_cal_steps.csw', 'w') as f:
                     csv_writer = csv.writer(f, delimiter=',')
                     csv_writer.writerows([lst])
-            if output_dir == 'final' and copy_add_data==True:
+            if output_dir == 'final' and save_other_data==True:
                 # Providing the folder path
                 origin = self.parent.parent.EXP.output_dir
                 target = miri1.output_dir
@@ -1291,6 +1620,19 @@ class EXPlistTable(pg.TableWidget):
         self.parent.parent.stage2.__init__(miri_uncal_file=exp_name, path=path, output_dir=output2_dir,spec2_cachedir=spec2_cachedir)
         if self.parent.parent.stage2.data != None:
             self.current_pipeline_stage = 'stage2'
+        if 1:
+            flags_dict = {}
+            flags_dict['COMPLETE'] = True
+            flags_dict['SKIPPED'] = False
+            flags_dict['None'] = False
+            cal_step = self.parent.parent.stage2.data.meta.cal_step.instance
+            self.flags['saturation_step'] = flags_dict[cal_step['saturation']]
+            #self.flags['CR_step'] = flags_dict[cal_step['jump']]
+            self.flags['slope_fit_step'] = flags_dict[cal_step['ramp_fit']]
+            if 'jump' not in cal_step.keys():
+                self.flags['CR_step'] = True
+            else:
+                self.flags['CR_step'] = flags_dict[cal_step['jump']]
         instrument = self.parent.parent.stage2.data.meta.instrument.detector
         return instrument
 
@@ -1298,28 +1640,94 @@ class EXPlistTable(pg.TableWidget):
         print('stage2: compare maps')
         inimapname = self.parent.parent.stage2_commands.compare_init_map_choice.currentText()
         secmapname = self.parent.parent.stage2_commands.compare_sec_map_choice.currentText()
+        if 1:
+            data = self.parent.parent.stage2.data
+            if 0:
+                def _get_references(self, data, exposure_type):
+                    """Retrieve required CRDS reference files
+
+                    Parameters
+                    ----------
+                    data : DataModel
+                        The data to base the CRDS lookups on.
+
+                    exposure_type : str
+                        The exposure type keyword value
+
+                    Returns
+                    -------
+                    reference_file_models : {str: DataModel{,...}}
+                        Dictionary matching reference file types to open models
+                    """
+
+                    # Get reference file paths
+                    reference_file_names = {}
+                    for reftype in self.reference_file_types:
+                        reffile = self.get_reference_file(data, reftype)
+                        reference_file_names[reftype] = reffile if reffile != 'N/A' else None
+
+                    # Define mapping between reftype and datamodel type
+                    model_type = dict(
+                        flat=datamodels.FlatModel,
+                        fflat=datamodels.NirspecFlatModel,
+                        sflat=datamodels.NirspecFlatModel,
+                        dflat=datamodels.NirspecFlatModel,
+                    )
+                    if exposure_type == "NRS_MSASPEC":
+                        model_type["fflat"] = datamodels.NirspecQuadFlatModel
+
+                    # Open the relevant reference files as datamodels
+                    reference_file_models = {}
+                    for reftype, reffile in reference_file_names.items():
+                        if reffile is not None:
+                            reference_file_models[reftype] = model_type[reftype](reffile)
+                            self.log.info('Using %s reference file: %s', reftype.upper(), reffile)
+                        else:
+                            self.log.info('No reference found for type %s', reftype.upper())
+                            reference_file_models[reftype] = None
+
+                    return reference_file_models
+                exposure_type = data.meta.exposure.type.upper()
+                reference_file_models = data._get_references(data, exposure_type)
         self.parent.parent.stage2.compare_maps(first_map_name=inimapname,second_map_name=secmapname)
 
     def stage2_read_steps(self):
         print('stage2: Read results')
-        step_name = self.parent.parent.stage2_commands.read_step_choice.currentText()
-        self.parent.parent.stage2.read_step_results(step_name=step_name)
+        #step_name = self.parent.parent.stage2_commands.read_step_choice.currentText()
+        self.parent.parent.stage2.read_step_results_version2(step_name='cal')
 
     def stage2_fix_hot_pix(self):
-        self.parent.parent.stage2.select_hot_pix()
+        self.parent.parent.stage2.select_hot_pix(output_dir='./data/Hot_pixels/ID02441/')
+        self.parent.parent.stage2.fix_hot_pix_step(debug=0)
+        self.parent.parent.stage2.fix_cold_pix_step(debug=0)
+
+    def stage2_fix_hot_pix_version2(self):
+        table = self.parent.parent.Exposures.table
+        debug = bool(self.parent.parent.exp_pars.debug.currentIndex())
+        self.parent.parent.stage2.select_hot_pix_version2(filelist=table,debug=debug,fast_mode=False)
+        #self.parent.parent.stage2.fix_hot_pix_step(debug=0)
+        #self.parent.parent.stage2.fix_cold_pix_step(debug=0)
 
     def stage2_call_wcs(self):
         print('Call_WCS')
+        save_res_flag = int(self.parent.parent.exp_pars.save_tmp_res.currentIndex())
         self.parent.parent.stage2.assignwcsstep()
 
-    def stage2_background_subtraction(self):
-        print('Background Subtraction - Stage 2 - skipped')
+    def stage2_background_model(self):
+        #print('Background Subtraction - Stage 2 - skipped')
+        table = self.parent.parent.Exposures.table
+        shothing_rad = int(self.parent.parent.exp_pars.cr_shower_r_correction.text())
+        debug = bool(self.parent.parent.exp_pars.debug.currentIndex())
+        bkgr, bkgr_sig = self.parent.parent.stage2.create_background_model(filelist=table,shothing_rad=shothing_rad,debug=debug)
+        self.parent.parent.stage2.subtract_bkgr_model(bkgr_model=bkgr,bkgr_model_sig=bkgr_sig,debug=debug)
         #self.parent.parent.stage2.background_subtraction()
 
 
     def stage2_flat_field(self):
         print('Flat Field Step - Stage 2')
-        self.parent.parent.stage2.flat_field_step()
+        save_res_flag = int(self.parent.parent.exp_pars.save_tmp_res.currentIndex())
+        debug = bool(self.parent.parent.exp_pars.debug.currentIndex())
+        self.parent.parent.stage2.flat_field_step(save_results=False,debug=debug)
 
     def stage2_source_identification(self):
         print('Source ID Step - Stage 2')
@@ -1327,18 +1735,26 @@ class EXPlistTable(pg.TableWidget):
 
     def stage2_stray_light(self):
         print('Source ID Step - Stage 2')
-        self.parent.parent.stage2.stray_light_step()
+        debug = bool(self.parent.parent.exp_pars.debug.currentIndex())
+        self.parent.parent.stage2.stray_light_step(debug=debug)
 
     def stage2_fringe_flat_correction(self):
         print('Source ID Step - Stage 2')
-        self.parent.parent.stage2.fringe_flat_step()
+        debug = bool(self.parent.parent.exp_pars.debug.currentIndex())
+        self.parent.parent.stage2.fringe_flat_step(debug=debug)
 
     def stage2_residual_fringe_correction(self):
-        self.parent.parent.stage2.res_fringe_step()
+        debug = bool(self.parent.parent.exp_pars.debug.currentIndex())
+        self.parent.parent.stage2.res_fringe_step(debug=debug)
 
     def stage2_flux_calibration(self):
         print('Source ID Step - Stage 2')
-        self.parent.parent.stage2.flux_calibration_step()
+        save_results = int(self.parent.parent.exp_pars.save_tmp_res.currentIndex())
+        debug = bool(self.parent.parent.exp_pars.debug.currentIndex())
+        self.parent.parent.stage2.flux_calibration_step(save_results=bool(save_results),debug=debug)
+
+    def stage2_show_trace(self,trace_order=0,trace_size=0):
+        self.parent.parent.stage2.show_trace(trace_order=trace_order,trace_size=trace_size)
 
 class chooseExpWidget(QWidget):
     """
@@ -1502,14 +1918,17 @@ class expParsWidget(QWidget):
         l.addWidget(self.nINT)
         nintmax = 'XX'
         if 1:
-            name = self.parent.Exposures.filelist.keys()
-            for key in name:
-                name=key
-                break
-            fname = self.parent.Exposures.filelist[name]
-            hdu = fits.open(self.parent.EXP.path+'/'+fname)
-            nintmax =hdu['SCI'].data.shape[0]
-            hdu.close()
+            if hasattr(self.parent.EXP.data,'data'):
+                nintmax = self.parent.EXP.nint
+            else:
+                name = self.parent.Exposures.filelist.keys()
+                for key in name:
+                    name=key
+                    break
+                fname = self.parent.Exposures.filelist[name]
+                hdu = fits.open(self.parent.EXP.path+'/'+fname)
+                nintmax =hdu['SCI'].data.shape[0]
+                hdu.close()
         l.addWidget(QLabel(' of '+str(nintmax)))
 
         l.addWidget(QLabel('Group:'))
@@ -1528,9 +1947,15 @@ class expParsWidget(QWidget):
         self.addneighbors = QCheckBox('4NeighPix')
         self.addneighbors.setChecked(True)
         horizontal_layout.addWidget(self.addneighbors)
-        self.debug = QCheckBox('Show Debug')
-        self.debug.setChecked(False)
+        horizontal_layout.addWidget(QLabel('Debug:'))
+        self.debug = QComboBox()
+        self.debug.addItems(['No', 'Yes'])
+        self.debug.setCurrentIndex(0)
+        cb = self.debug
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
         horizontal_layout.addWidget(self.debug)
+
         horizontal_layout.addStretch(1)
         layout.addLayout(horizontal_layout)
 
@@ -1553,9 +1978,28 @@ class expParsWidget(QWidget):
         cb.setFixedWidth(width)
         #self.CRlimit.resize(90, 30)
         horizontal_layout.addWidget(self.CRlimit)
-        self.addCRneighbors = QCheckBox('4NeighPix')
-        self.addCRneighbors.setChecked(True)
+        #self.addCRneighbors = QCheckBox('4NeighPix', checkable=True)
+        #self.addCRneighbors.setChecked(True)
+        #horizontal_layout.addWidget(self.addCRneighbors)
+        horizontal_layout.addWidget(QLabel('4neighbors:'))
+        self.addCRneighbors = QComboBox()
+        self.addCRneighbors.addItems(['No','Yes'])
+        self.addCRneighbors.setCurrentIndex(1)
+        cb = self.addCRneighbors
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
         horizontal_layout.addWidget(self.addCRneighbors)
+        horizontal_layout.addWidget(QLabel('showers:'))
+        self.find_CRshowers = QComboBox()
+        self.find_CRshowers.addItems(['No', 'Yes'])
+        self.find_CRshowers.setCurrentIndex(1)
+        cb = self.find_CRshowers
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
+        horizontal_layout.addWidget(self.find_CRshowers)
+
+
+
         horizontal_layout.addWidget(QLabel('VaryMed:'))
         self.CR_recalc_flag = QComboBox()
         self.CR_recalc_flag.addItems(['No','Yes'])
@@ -1578,6 +2022,42 @@ class expParsWidget(QWidget):
         horizontal_layout.addStretch(1)
         layout.addLayout(horizontal_layout)
 
+        horizontal_layout = QHBoxLayout(self)
+        horizontal_layout.addWidget(QLabel('Custom:'))
+        horizontal_layout.addWidget(QLabel('ExoTiC:'))
+        self.ExoTiC_mode = QComboBox()
+        self.ExoTiC_mode.addItems(['No', 'Yes'])
+        self.ExoTiC_mode.setCurrentIndex(0)
+        cb = self.ExoTiC_mode
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
+        horizontal_layout.addWidget(self.ExoTiC_mode)
+        horizontal_layout.addWidget(QLabel('Drop#gr:'))
+        self.n_group_dropped = QLineEdit()
+        self.n_group_dropped.setText(str(6))
+        cb = self.n_group_dropped
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
+        horizontal_layout.addWidget(self.n_group_dropped)
+        horizontal_layout.addWidget(QLabel('Fit:'))
+        self.FitAlgorithm_mode = QComboBox()
+        self.FitAlgorithm_mode.addItems(['OLS', 'CHI2'])
+        self.FitAlgorithm_mode.setCurrentIndex(1)
+        cb = self.FitAlgorithm_mode
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
+        horizontal_layout.addWidget(self.FitAlgorithm_mode)
+
+        horizontal_layout.addWidget(QLabel('Rshow:'))
+        self.cr_shower_r_correction = QLineEdit()
+        self.cr_shower_r_correction.setText(str(10))
+        cb = self.cr_shower_r_correction
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
+        horizontal_layout.addWidget(self.cr_shower_r_correction)
+
+        horizontal_layout.addStretch(1)
+        layout.addLayout(horizontal_layout)
 
 
         layout.addStretch(1)
@@ -1618,11 +2098,20 @@ class expRunWidget(QWidget):
         cb.setFixedWidth(width)
         #self.show_slope.resize(200, 60)
         horizontal_layout.addWidget(self.show_slope)
+
+        self.show_rate = QPushButton('Show Rate')
+        self.show_rate.clicked[bool].connect(partial(self.show_Image, 'rate'))
+        cb = self.show_rate
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
+        # self.show_slope.resize(200, 60)
+        horizontal_layout.addWidget(self.show_rate)
+
         horizontal_layout.addStretch(1)
         l.addLayout(horizontal_layout)
 
         horizontal_layout = QHBoxLayout(self)
-        self.set_dq_map = QPushButton('Read DQ')
+        self.set_dq_map = QPushButton('Init DQ')
         self.set_dq_map.clicked[bool].connect(partial(self.set_DQ_map, False))
         self.set_dq_map.resize(150, 60)
         horizontal_layout.addWidget(self.set_dq_map)
@@ -1708,8 +2197,13 @@ class expRunWidget(QWidget):
         self.slope_fit_step.resize(250, 60)
         horizontal_layout.addWidget(self.slope_fit_step)
 
+        self.mean_rate_step = QPushButton('10. Rate')
+        self.mean_rate_step.clicked[bool].connect(partial(self.GetMeanRate))
+        self.mean_rate_step.resize(250, 60)
+        horizontal_layout.addWidget(self.mean_rate_step)
+
         self.run_all_stage1 = QPushButton('Run stage(1)')
-        self.run_all_stage1.clicked[bool].connect(partial(self.RunAllStage1))
+        self.run_all_stage1.clicked[bool].connect(partial(self.RunAllStage1, True))
         self.run_all_stage1.resize(250, 60)
         horizontal_layout.addWidget(self.run_all_stage1)
 
@@ -1744,6 +2238,9 @@ class expRunWidget(QWidget):
 
 
     def set_DQ_map(self, debug = False):
+        if int(self.parent.exp_pars.ExoTiC_mode.currentIndex()) == 1:
+        #nt(self.parent.parent.exp_pars.CR_recalc_flag.currentIndex())
+            self.parent.Exposures.table.calc_ExoTiC_models()
         print('set_DQ_map, debug:', debug)
         self.parent.Exposures.table.set_dq()
 
@@ -1767,6 +2264,7 @@ class expRunWidget(QWidget):
     def FirstLastStep(self, debug = False):
         self.parent.Exposures.table.first_group()
         self.parent.Exposures.table.last_group()
+        self.parent.Exposures.table.exotic_drop_groups()
 
     def ResetStep(self, debug=False):
         self.parent.Exposures.table.reset_correction()
@@ -1774,6 +2272,9 @@ class expRunWidget(QWidget):
 
     def LinearStep(self, debug=False):
         self.parent.Exposures.table.linear_correction()
+
+    def LinearityModel(self):
+        self.parent.Exposures.table.linearity_model()
 
     def ShowLinearCorrection(self, debug=False):
         self.parent.Exposures.table.show_linear_correction()
@@ -1801,6 +2302,9 @@ class expRunWidget(QWidget):
         self.parent.Exposures.table.read_slopes()
         self.parent.Exposures.table.save_slope_fit(output_dir='local')
 
+    def GetMeanRate(self, debug=False):
+        self.parent.Exposures.table.calc_mean_rate(debug=True)
+
     def RunAllStage1(self,save_fit=True):
         print('Run all stage 1:')
         print('Init_Stage2:')
@@ -1811,6 +2315,7 @@ class expRunWidget(QWidget):
         print('First Last')
         self.parent.Exposures.table.first_group()
         self.parent.Exposures.table.last_group()
+        self.parent.Exposures.table.exotic_drop_groups()
         print('Reset correction')
         self.parent.Exposures.table.reset_correction()
         print('Linear corr')
@@ -1821,14 +2326,25 @@ class expRunWidget(QWidget):
         self.parent.Exposures.table.dark_correction()
         print('Reference pixels')
         self.parent.Exposures.table.reference_pix_correction()
-        print('Jump detection')
-        self.parent.Exposures.table.jump_detection()
-        print('Slope Fit')
-        self.parent.Exposures.table.slope_fit()
-        self.parent.Exposures.table.read_slopes()
+
+        algorithm = self.parent.exp_pars.FitAlgorithm_mode.currentText()
+        if algorithm == 'OLS':
+            print('Jump detection')
+            self.parent.Exposures.table.jump_detection()
+            print('Slope Fit')
+            self.parent.Exposures.table.slope_fit()
+        elif algorithm == 'CHI2':
+            self.parent.Exposures.table.slope_fit()
+
+        nint = self.parent.EXP.nint
+        if nint>0:
+            self.parent.Exposures.table.read_slopes()
+            print('Calc mean rate for ', nint,' integrations')
+            self.parent.Exposures.table.calc_mean_rate(debug=False)
+        #self.parent.Exposures.table.read_slopes()
         if save_fit:
             print('Save Fit')
-            self.parent.Exposures.table.save_slope_fit(output_dir='final', copy_add_data=False)
+            self.parent.Exposures.table.save_slope_fit(output_dir='final', save_other_data=False)
             print('Run all: done.')
 
     def run_stage1_table(self):
@@ -1848,8 +2364,8 @@ class expRunWidget(QWidget):
             if runcode:
                 self.RunAllStage1(save_fit=False)
                 print('Save Fit')
-                # set copy_add_data to False to do not copy tmp data,
-                self.parent.Exposures.table.save_slope_fit(output_dir='final', copy_add_data=False)
+                # set save_other_data to False to do not copy tmp data,
+                self.parent.Exposures.table.save_slope_fit(output_dir='final', save_other_data=False)
                 self.parent.plot_image.add(name, add=False)
 
     def ShowSlopeFit(self, debug=False):
@@ -1891,7 +2407,7 @@ class expPipeline2Widget(QWidget):
         self.init_rate.resize(200, 60)
         horizontal_layout.addWidget(self.init_rate)
 
-        self.init_rate = QPushButton('Show Rate')
+        self.init_rate = QPushButton('Show')
         self.init_rate.clicked[bool].connect(partial(self.Show_Rate_stage2))
         self.init_rate.resize(200, 60)
         horizontal_layout.addWidget(self.init_rate)
@@ -1935,10 +2451,10 @@ class expPipeline2Widget(QWidget):
         horizontal_layout.addWidget(self.run_wcs_step)
 
 
-        self.run_bkgr_sub = QPushButton('(2.Bkgr Subtr)')
-        self.run_bkgr_sub.clicked[bool].connect(partial(self.Bkgr_Subtraction))
-        self.run_bkgr_sub.resize(200, 60)
-        horizontal_layout.addWidget(self.run_bkgr_sub)
+        self.run_bkgr_step = QPushButton('2.Bkgr Model')
+        self.run_bkgr_step.clicked[bool].connect(partial(self.Bkgr_Model))
+        self.run_bkgr_step.resize(200, 60)
+        horizontal_layout.addWidget(self.run_bkgr_step)
 
         self.run_flat_field = QPushButton('3.FlatField')
         self.run_flat_field.clicked[bool].connect(partial(self.Flat_Field ))
@@ -1997,16 +2513,34 @@ class expPipeline2Widget(QWidget):
         self.read_steps_stage2.clicked[bool].connect(partial(self.Read_steps_stage2))
         self.read_steps_stage2.resize(150, 60)
         horizontal_layout.addWidget(self.read_steps_stage2)
-        self.read_step_choice = QComboBox()
-        flags = ['Initial', 'BkgrSub', 'Flatfield', 'Straylight', 'Fringe','FluxCalib','ResFringe']
-        self.read_step_choice.addItems(flags)
-        self.read_step_choice.setCurrentIndex(6)
-        cb = self.read_step_choice
+
+        self.show_trace_stage2 = QPushButton('Trace')
+        self.show_trace_stage2.clicked[bool].connect(partial(self.Show_trace_stage2))
+        self.show_trace_stage2.resize(150, 60)
+        horizontal_layout.addWidget(self.show_trace_stage2)
+        self.num_trace = QLineEdit()
+        self.num_trace.setText(str(1))
+        cb = self.num_trace
         width = cb.minimumSizeHint().width()
         cb.setFixedWidth(width)
+        horizontal_layout.addWidget(self.num_trace)
+        self.trace_size_button = QPushButton('D:')
+        horizontal_layout.addWidget(self.trace_size_button)
+        self.size_trace = QLineEdit()
+        self.size_trace.setText(str(0))
+        cb = self.size_trace
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
+        horizontal_layout.addWidget(self.size_trace)
+        #self.read_step_choice = QComboBox()
+        #flags = ['Initial', 'BkgrSub', 'Flatfield', 'Straylight', 'Fringe','FluxCalib','ResFringe']
+        #self.read_step_choice.addItems(flags)
+        #self.read_step_choice.setCurrentIndex(6)
+        #cb = self.read_step_choice
+        #width = cb.minimumSizeHint().width()
+        #cb.setFixedWidth(width)
         #self.read_step_choice.resize(140, 30)
-        horizontal_layout.addWidget(self.read_step_choice)
-
+        #horizontal_layout.addWidget(self.read_step_choice)
         horizontal_layout.addStretch(1)
         l.addLayout(horizontal_layout)
 
@@ -2032,16 +2566,19 @@ class expPipeline2Widget(QWidget):
 
     def FixHotPix(self, debug=False):
         print('SelectHotPixels:')
-        self.parent.Exposures.table.stage2_fix_hot_pix()
-
+        #self.parent.Exposures.table.stage2_fix_hot_pix()
+        self.parent.Exposures.table.stage2_fix_hot_pix_version2()
     def AssignWCS(self):
         print('AssignWCS')
         self.parent.Exposures.table.stage2_call_wcs()
 
-    def Bkgr_Subtraction(self, debug=False, group=None):
-        print('Bkgr_Subtraction, debug:', debug)
-        self.parent.Exposures.table.stage2_background_subtraction()
-
+    def Bkgr_Model(self, debug=False, group=None):
+        print('Bkgr_Model')
+        if 0:
+            # default pipeline bkgr sub - pix by pix
+            self.parent.Exposures.table.stage2_background_subtraction()
+        if 1:
+            self.parent.Exposures.table.stage2_background_model()
     def Flat_Field(self):
         print('Flat_Field')
         self.parent.Exposures.table.stage2_flat_field()
@@ -2074,10 +2611,10 @@ class expPipeline2Widget(QWidget):
         if detector != 'MIRIMAGE':
             print('AssignWCS')
             self.parent.Exposures.table.stage2_call_wcs()
-            print('Select Hot Pixels')
-            self.parent.Exposures.table.stage2_fix_hot_pix()
+            print('Fix hot Pix')
+            self.FixHotPix()
             print('Bkgr_Subtraction')
-            self.parent.Exposures.table.stage2_background_subtraction()
+            self.Bkgr_Model() #parent.Exposures.table.stage2_background_model()
             print('Flat_Field')
             self.parent.Exposures.table.stage2_flat_field()
             print('Source_identification')
@@ -2086,18 +2623,23 @@ class expPipeline2Widget(QWidget):
             self.parent.Exposures.table.stage2_stray_light()
             print('Fringe Flat correction')
             self.parent.Exposures.table.stage2_fringe_flat_correction()
-            print('Flux_calibration')
-            self.parent.Exposures.table.stage2_flux_calibration()
             print('Residual flux correction')
             self.parent.Exposures.table.stage2_residual_fringe_correction()
+            print('Flux_calibration')
+            self.parent.Exposures.table.stage2_flux_calibration()
             print('Run all: done.')
         else:
-            print('Error: You try to run pipilimne stage2 for IMAGE data')
+            print('Error: You try to run pipiline stage2 for IMAGE data')
 
     def Read_steps_stage2(self):
         print('Read step')
         self.parent.Exposures.table.stage2_read_steps()
         self.parent.Exposures.table.show_image(mode='stage2')
+
+    def Show_trace_stage2(self):
+        self.parent.Exposures.table.stage2_show_trace(trace_order=int(self.num_trace.text()),trace_size=int(self.size_trace.text()))
+
+
 
 
     def run_stage2_table(self):
