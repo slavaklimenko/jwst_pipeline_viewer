@@ -659,7 +659,22 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
         elif self.cube_name == 'B':
             self.data = self.parent.CUBE_B.data.data
         data_mean = np.nanmean(self.data,axis=0)
-        pos = np.argwhere(data_mean == np.nanmax(data_mean))[0]
+        if 1:
+            spatial_mask = data_mean != 0
+            spatial_mask[:, 0] = 0
+            spatial_mask[:, -1] = 0
+            spatial_mask[0, :] = 0
+            spatial_mask[-1, :] = 0
+            for k in range(3):
+                pos = np.where(spatial_mask > 0)
+                spatial_mask2 = np.array(spatial_mask)
+                for i, j in zip(pos[0], pos[1]):
+                    if spatial_mask[i - 1, j] == 0 or spatial_mask[i + 1, j] == 0 or spatial_mask[i, j - 1] == 0 or \
+                            spatial_mask[i, j + 1] == 0:
+                        spatial_mask2[i, j] = 0
+                spatial_mask = np.array(spatial_mask2)
+            del (spatial_mask2)
+        pos = np.argwhere((data_mean == np.nanmax(data_mean))*spatial_mask)[0]
         if debug:
             plt.subplots()
             plt.imshow(data_mean)
@@ -678,49 +693,40 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
             #self.image_levels.setSymbol('o')
             if self.cube_name == 'A':
                 image = self.parent.CUBE_A.data.data
+                name = self.parent.CUBE_A.cubename
             elif self.cube_name == 'B':
                 image = self.parent.CUBE_B.data.data
-
+                name = self.parent.CUBE_B.cubename
+            name = (name.split('/')[-1]).split('_3sd')[0]
             if local:
                 (self.t, self.time) = self.timeIndex(self.timeLine)
                 image_comb = image[self.time,:,:]
             else:
                 image_comb = np.nanmean(image, axis=0)
+
+            if 1:
+                spatial_mask = image_comb != 0
+                spatial_mask[:, 0] = 0
+                spatial_mask[:, -1] = 0
+                spatial_mask[0, :] = 0
+                spatial_mask[-1, :] = 0
+                for k in range(3):
+                    pos = np.where(spatial_mask > 0)
+                    spatial_mask2 = np.array(spatial_mask)
+                    for i, j in zip(pos[0], pos[1]):
+                        if spatial_mask[i - 1, j] == 0 or spatial_mask[i + 1, j] == 0 or spatial_mask[i, j - 1] == 0 or \
+                                spatial_mask[i, j + 1] == 0:
+                            spatial_mask2[i, j] = 0
+                    spatial_mask = np.array(spatial_mask2)
+                del (spatial_mask2)
+            image_max_flux = np.nanmax(image_comb*spatial_mask)
             x,y = np.arange(image_comb.shape[0]),np.arange(image_comb.shape[1])
-            if 0:
-                from scipy import interpolate, integrate, optimize
-                def func(level, conf=0.683, x=None, y=None, z=None):
-                    zs = np.copy(z)
-                    zs[zs < level] = 0
-                    return integrate.simps(integrate.simps(zs, y, axis=0), x) - conf
-
-
-                def level(conf=0.683,x=None, y=None,z=None):
-                    """
-                    Level of pdf at given confidence level
-                    parameters:
-                        - conf           :  confidence level
-
-                    return: level
-                        - level          :  pdf value above pdf contains conf level of probability
-                    """
-                    x1, y1 = np.linspace(np.min(x), np.max(x), 300), np.linspace(np.min(y), np.max(y),300)
-                    inter = interpolate.interp2d(x, y, z, kind='cubic', fill_value=0)
-                    z1 = inter(x1, y1)
-                    if 1:
-                        res = optimize.bisect(self.func, 0, self.zmax, args=(conf, x1, y1, z1), xtol=self.xtol,
-                                              disp=self.debug)
-
-                    if self.debug:
-                        print('fsolve:', res)
-
-                    return res
-
-                l1 = level(x=x,y=y,z=image_comb)
-
+            X, Y = np.meshgrid(y,x)
             plt.subplots()
-            #plt.imshow(image_comb/np.nanmax(image_comb),origin='lower',cmap='coolwarm')
-            plt.imshow(image_comb, origin='lower', cmap='coolwarm')
+            plt.imshow(image_comb, origin='lower', cmap='coolwarm',vmin=0,vmax=image_max_flux)
+            plt.colorbar()
+            plt.contour(X, Y, image_comb, levels=np.array([0.01,0.05,0.1,0.68,0.95,0.99])*image_max_flux, colors='black')
+            plt.savefig('/home/slava/science/codes/python/jwst/output/detector3/images/'+name+'.png')
             #plt.xticks([])
             #plt.yticks([])
             #plt.colorbar()
@@ -739,7 +745,7 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
                 ax[0].hist(image_comb.flatten()[~np.isnan(image_comb.flatten())])
                 ax[1].plot(im_hist[1],np.cumsum(im_flux_dist))
 
-            d = image_comb/np.nanmax(image_comb)
+            d = image_comb/image_max_flux
 
 
             d[np.isnan(d)]=0
@@ -973,31 +979,34 @@ class plotImage(pg.ImageView): #(pg.PlotWidget):
                 nexp[3] = 2 #int(self.parent.exp_pars.nEXP3.text())
                 nexp[4] = 3 #int(self.parent.exp_pars.nEXP4.text())
                 self.Nscreen = Nscreen
-                print('add cube name:',name)
                 asn_filename = self.parent.Cubes_A.associtations_list[name] #.split('/')[-1]
                 self.parent.CUBE_A.load3asn(asn_filename)
 
-                rate_filename = self.parent.CUBE_A.ratefiles[nexp[Nscreen]]
-                f = rate_filename['expname']
-                path = self.parent.stage2[Nscreen-1].path
-                exp_name = f.split('/')[-1].replace('cal.fits', '')
-                output2_dir, spec2_cachedir = self.parent.stage2[Nscreen-1].output_dir, self.parent.stage2[Nscreen-1].spec2_cachedir
-                self.parent.stage2[Nscreen-1].__init__(miri_uncal_file=exp_name, path=path, output_dir=output2_dir,
-                                                   spec2_cachedir=spec2_cachedir)
-                print('add stage2 name:', exp_name)
-                f = rate_filename['expname']
-                self.parent.stage2[Nscreen-1].read_step_results(step_name='ResFringe')
-                print('Show image of' + self.parent.stage2[Nscreen-1].name)
-                data = self.parent.stage2[Nscreen-1].data.data
-                zmin, zmax = np.nanquantile(data.flatten(), 0.05), np.nanquantile(data.flatten(), 0.95)
-                x, y = (1, 0)
-                self.data = data
-                self.setImage(data, autoRange=True,  # levels=[-1, 5],
-                              axes={'t': None, 'x': x, 'y': y, 'c': None}, levels=[zmin, zmax])
-                self.vb.hoverEvent = self.imageHoverEvent
-                hist = self.getHistogramWidget()
-                hist.setHistogramRange(mn=-100,mx=500)
-                #hist.vb.state['viewRange'] = [[-1,1],[-200,400]]
+                nexposures = len(self.parent.CUBE_A.ratefiles)
+                if Nscreen<=nexposures:
+                    print('N screen', Nscreen)
+                    print('add cube name:', name)
+                    rate_filename = self.parent.CUBE_A.ratefiles[nexp[Nscreen]]
+                    f = rate_filename['expname']
+                    path = self.parent.stage2[Nscreen-1].path
+                    exp_name = f.split('/')[-1].replace('cal.fits', '')
+                    output2_dir, spec2_cachedir = self.parent.stage2[Nscreen-1].output_dir, self.parent.stage2[Nscreen-1].spec2_cachedir
+                    self.parent.stage2[Nscreen-1].__init__(miri_uncal_file=exp_name, path=path, output_dir=output2_dir,
+                                                       spec2_cachedir=spec2_cachedir)
+                    print('add stage2 name:', exp_name)
+                    f = rate_filename['expname']
+                    self.parent.stage2[Nscreen-1].read_step_results(step_name='ResFringe')
+                    print('Show image of' + self.parent.stage2[Nscreen-1].name)
+                    data = self.parent.stage2[Nscreen-1].data.data
+                    zmin, zmax = np.nanquantile(data.flatten(), 0.05), np.nanquantile(data.flatten(), 0.95)
+                    x, y = (1, 0)
+                    self.data = data
+                    self.setImage(data, autoRange=True,  # levels=[-1, 5],
+                                  axes={'t': None, 'x': x, 'y': y, 'c': None}, levels=[zmin, zmax])
+                    self.vb.hoverEvent = self.imageHoverEvent
+                    hist = self.getHistogramWidget()
+                    hist.setHistogramRange(mn=-100,mx=500)
+                    #hist.vb.state['viewRange'] = [[-1,1],[-200,400]]
 
 
 
@@ -1919,60 +1928,72 @@ class CUBElistTable(pg.TableWidget):
                     self.parent.parent.plot_3dcubeB.selectPixels(add=self.flags['show_ROI'], x=y, y=x, color='m',
                                                                  type='cr_multi')
                 if self.flags['show_roi_detector'] == True:
-                    wcs1 = self.parent.parent.stage2[0].data.meta.wcs
-                    cal_world_to_detector1 = wcs1.get_transform('world', 'detector')
-                    (x_det1, y_det1) = cal_world_to_detector1(x_world, y_world, lam_world)
-                    mask = (x_det1>=0)*(x_det1<=self.parent.parent.stage2[0].data.data.shape[0])*(y_det1>-1)
-                    x_det1,y_det1 = np.array(x_det1[mask],dtype=int),np.array(y_det1[mask],dtype=int)
-                    text = 'ROI: %.2f' % (np.nansum(self.parent.parent.stage2[0].data.data[y_det1,x_det1])) #/np.size(x_det1))
-                    print(text)
-                    self.parent.parent.plot_2dimage1.Roilabel.setText(text)
-                    #self.parent.parent.plot_2dimage1.resize(400, 40)
+                    if len(self.parent.parent.stage2)>0:
+                        wcs1 = self.parent.parent.stage2[0].data.meta.wcs
+                        cal_world_to_detector1 = wcs1.get_transform('world', 'detector')
+                        (x_det1, y_det1) = cal_world_to_detector1(x_world, y_world, lam_world)
+                        mask = (x_det1>=0)*(x_det1<=self.parent.parent.stage2[0].data.data.shape[0])*(y_det1>-1)
+                        x_det1,y_det1 = np.array(x_det1[mask],dtype=int),np.array(y_det1[mask],dtype=int)
+                        text = 'ROI: %.2f' % (np.nansum(self.parent.parent.stage2[0].data.data[y_det1,x_det1])) #/np.size(x_det1))
+                        print(text)
+                        self.parent.parent.plot_2dimage1.Roilabel.setText(text)
+                        #self.parent.parent.plot_2dimage1.resize(400, 40)
 
-                    wcs2 = self.parent.parent.stage2[1].data.meta.wcs
-                    cal_world_to_detector2 = wcs2.get_transform('world', 'detector')
-                    (x_det2, y_det2) = cal_world_to_detector2(x_world, y_world, lam_world)
-                    mask = (x_det2 >= 0) * (x_det2 <= self.parent.parent.stage2[1].data.shape[0])*(y_det2>-1)
-                    x_det2,y_det2 = np.array(x_det2[mask],dtype=int),np.array(y_det2[mask],dtype=int)
-                    text = 'ROI: %.2f' % (np.nansum(self.parent.parent.stage2[1].data.data[y_det2,x_det2])) #/ np.size(x_det2))
-                    print(text)
-                    self.parent.parent.plot_2dimage2.Roilabel.setText(text)
+                        self.parent.parent.plot_2dimage1.selectPixels(add=self.flags['show_ROI'], x=x_det1, y=y_det1,
+                                                                      color='m', type='cr_multi')
+                        self.parent.parent.plot_2dimage1.vb.setRange(xRange=(np.min(x_det1) * 0.95, np.max(x_det1) * 1.05),
+                            yRange=(np.min(y_det1) * 0.95, np.max(y_det1) * 1.05))
 
-                    wcs3 = self.parent.parent.stage2[2].data.meta.wcs
-                    cal_world_to_detector3 = wcs3.get_transform('world', 'detector')
-                    (x_det3, y_det3) = cal_world_to_detector3(x_world, y_world, lam_world)
-                    mask = (x_det3 >= 0) * (x_det3 <= self.parent.parent.stage2[2].data.shape[0])*(y_det3>0)
-                    x_det3,y_det3 = np.array(x_det3[mask],dtype=int),np.array(y_det3[mask],dtype=int)
-                    text = 'ROI: %.2f' % (np.nansum(self.parent.parent.stage2[2].data.data[y_det3, x_det3]) )#/ np.size(x_det3))
-                    print(text)
-                    self.parent.parent.plot_2dimage3.Roilabel.setText(text)
+                    if len(self.parent.parent.stage2) > 1:
+                        wcs2 = self.parent.parent.stage2[1].data.meta.wcs
+                        cal_world_to_detector2 = wcs2.get_transform('world', 'detector')
+                        (x_det2, y_det2) = cal_world_to_detector2(x_world, y_world, lam_world)
+                        mask = (x_det2 >= 0) * (x_det2 <= self.parent.parent.stage2[1].data.shape[0])*(y_det2>-1)
+                        x_det2,y_det2 = np.array(x_det2[mask],dtype=int),np.array(y_det2[mask],dtype=int)
+                        text = 'ROI: %.2f' % (np.nansum(self.parent.parent.stage2[1].data.data[y_det2,x_det2])) #/ np.size(x_det2))
+                        print(text)
+                        self.parent.parent.plot_2dimage2.Roilabel.setText(text)
 
-                    wcs4 = self.parent.parent.stage2[3].data.meta.wcs
-                    cal_world_to_detector4 = wcs4.get_transform('world', 'detector')
-                    (x_det4, y_det4) = cal_world_to_detector4(x_world, y_world, lam_world)
-                    mask = (x_det4 >= 0) * (x_det4 <= self.parent.parent.stage2[3].data.shape[0])*(y_det4>0)
-                    x_det4,y_det4 = np.array(x_det4[mask],dtype=int),np.array(y_det4[mask],dtype=int)
-                    text = 'ROI: %.2f' % (np.nansum(self.parent.parent.stage2[3].data.data[y_det4, x_det4])) #/ np.size(x_det4))
-                    print(text)
-                    self.parent.parent.plot_2dimage4.Roilabel.setText(text)
+                        self.parent.parent.plot_2dimage2.selectPixels(add=self.flags['show_ROI'], x=x_det2, y=y_det2,
+                                                                      color='m', type='cr_multi')
+                        self.parent.parent.plot_2dimage2.vb.setRange(
+                            xRange=(np.min(x_det2) * 0.95, np.max(x_det2) * 1.05),
+                            yRange=(np.min(y_det2) * 0.95, np.max(y_det2) * 1.05))
+                    if len(self.parent.parent.stage2) > 2:
+                        wcs3 = self.parent.parent.stage2[2].data.meta.wcs
+                        cal_world_to_detector3 = wcs3.get_transform('world', 'detector')
+                        (x_det3, y_det3) = cal_world_to_detector3(x_world, y_world, lam_world)
+                        mask = (x_det3 >= 0) * (x_det3 <= self.parent.parent.stage2[2].data.shape[0])*(y_det3>0)
+                        x_det3,y_det3 = np.array(x_det3[mask],dtype=int),np.array(y_det3[mask],dtype=int)
+                        text = 'ROI: %.2f' % (np.nansum(self.parent.parent.stage2[2].data.data[y_det3, x_det3]) )#/ np.size(x_det3))
+                        print(text)
+                        self.parent.parent.plot_2dimage3.Roilabel.setText(text)
+
+                        self.parent.parent.plot_2dimage3.selectPixels(add=self.flags['show_ROI'], x=x_det3, y=y_det3,
+                                                                      color='m', type='cr_multi')
+                        self.parent.parent.plot_2dimage3.vb.setRange(
+                            xRange=(np.min(x_det3) * 0.95, np.max(x_det3) * 1.05),
+                            yRange=(np.min(y_det3) * 0.95, np.max(y_det3) * 1.05))
+
+                    if len(self.parent.parent.stage2) > 3:
+                        wcs4 = self.parent.parent.stage2[3].data.meta.wcs
+                        cal_world_to_detector4 = wcs4.get_transform('world', 'detector')
+                        (x_det4, y_det4) = cal_world_to_detector4(x_world, y_world, lam_world)
+                        mask = (x_det4 >= 0) * (x_det4 <= self.parent.parent.stage2[3].data.shape[0])*(y_det4>0)
+                        x_det4,y_det4 = np.array(x_det4[mask],dtype=int),np.array(y_det4[mask],dtype=int)
+                        text = 'ROI: %.2f' % (np.nansum(self.parent.parent.stage2[3].data.data[y_det4, x_det4])) #/ np.size(x_det4))
+                        print(text)
+                        self.parent.parent.plot_2dimage4.Roilabel.setText(text)
+
+                        self.parent.parent.plot_2dimage4.selectPixels(add=self.flags['show_ROI'], x=x_det4, y=y_det4,
+                                                                      color='m', type='cr_multi')
+                        self.parent.parent.plot_2dimage4.vb.setRange(
+                            xRange=(np.min(x_det4) * 0.95, np.max(x_det4) * 1.05),
+                            yRange=(np.min(y_det4) * 0.95, np.max(y_det4) * 1.05))
 
 
 
-                    #x,y = np.array(x_det),np.array(y_det)
-                    self.parent.parent.plot_2dimage1.selectPixels(add=self.flags['show_ROI'], x=x_det1, y=y_det1,color='m',type='cr_multi')
-                    print('x_det1')
-                    print(x_det1)
-                    #self.parent.parent.plot_2dimage1.vb.setLimits(xMin=np.min(x_det1), xMax=np.max(x_det1), yMin=np.min(y_det1), yMax=np.max(x_det1))
-                    self.parent.parent.plot_2dimage1.vb.setRange(xRange=(np.min(x_det1)*0.95,np.max(x_det1)*1.05), yRange=(np.min(y_det1)*0.95,np.max(y_det1)*1.05))
-                    self.parent.parent.plot_2dimage2.selectPixels(add=self.flags['show_ROI'], x=x_det2, y=y_det2,color='m',type='cr_multi')
-                    self.parent.parent.plot_2dimage2.vb.setRange(xRange=(np.min(x_det2) * 0.95, np.max(x_det2) * 1.05),
-                                                                 yRange=(np.min(y_det2) * 0.95, np.max(y_det2) * 1.05))
-                    self.parent.parent.plot_2dimage3.selectPixels(add=self.flags['show_ROI'], x=x_det3, y=y_det3,color='m',type='cr_multi')
-                    self.parent.parent.plot_2dimage3.vb.setRange(xRange=(np.min(x_det3) * 0.95, np.max(x_det3) * 1.05),
-                                                                 yRange=(np.min(y_det3) * 0.95, np.max(y_det3) * 1.05))
-                    self.parent.parent.plot_2dimage4.selectPixels(add=self.flags['show_ROI'], x=x_det4, y=y_det4,color='m',type='cr_multi')
-                    self.parent.parent.plot_2dimage4.vb.setRange(xRange=(np.min(x_det4) * 0.95, np.max(x_det4) * 1.05),
-                                                                 yRange=(np.min(y_det4) * 0.95, np.max(y_det4) * 1.05))
+
 
 
 
@@ -3060,7 +3081,7 @@ class expRunWidget(QWidget):
         self.show_gradient.resize(200, 60)
         horizontal_layout.addWidget(self.show_gradient)
         self.level_value = QLineEdit()
-        self.level_value.setText(str(0.68))
+        self.level_value.setText(str(0.9))
         #self.level_value.resize(60, 30)
         cb = self.level_value
         width = cb.minimumSizeHint().width()
@@ -3156,13 +3177,16 @@ class expRunWidget(QWidget):
                 filename = './output/detector3/cash/median_cube.fits'
                 self.parent.plot_3dcube_median.show()
 
-    def ShowGrad(self):
+    def ShowGrad(self,add=None):
         level = float(self.level_value.text())
         if self.level_type.currentText() == 'LOC':
             local = True
         elif self.level_type.currentText() == 'TOT':
             local = False
-        self.parent.Cubes_A.table.show_gradient_command(add=self.parent.exp_commands.show_gradient.isChecked(),level=1-level,local=local)
+        if add == None:
+            add=self.parent.exp_commands.show_gradient.isChecked()
+
+        self.parent.Cubes_A.table.show_gradient_command(add=add,level=1-level,local=local)
 
 
     def SetRoi_radius(self,add=True, roi_type=None,roi_size=None):
@@ -3175,14 +3199,6 @@ class expRunWidget(QWidget):
         if 1:
             (timeind, time) = self.parent.plot_3dcubeA.timeIndex(self.parent.plot_3dcubeA.timeLine)
             lambda_local = self.parent.CUBE_A.data.wavelength[timeind]
-
-            #def miri_psf_pix(lam):
-            #    # interpolation of miri psf https://jwst-docs.stsci.edu/jwst-mid-in
-            #    f = np.loadtxt('./data/miri_psf_pix.dat')
-            #    print(f[:, 0])
-            #    f1d = interp1d(f[:, 0], f[:, 1], fill_value='extrapolate')
-            #    print('miri psf =', f1d(lam))
-            #    return f1d(lam)
 
             if 0:
                 miri_psf_fwhm = miri_psf_pix(lambda_local)
@@ -3216,11 +3232,15 @@ class expRunWidget(QWidget):
     def prepare_extraction_test(self):
         #self.CalcMedCube()
         #self.SubtractMedFlux()
-        self.SetRoi_radius()
+        self.ShowGrad(add=True)
+        self.ShowGrad(add=False)
+        #self.SetRoi_radius()
         self.make_fringe_correction()
-        #self.SetRoi_radius(roi_type='green',roi_size=2)
+        self.SetRoi_radius(roi_type='green',roi_size=2)
+        self.SetRoi_radius(roi_type='red', roi_size=3)
         #self.SetRoi_radius(roi_type='red',roi_size=2)
         self.extract_Roi()
+
 
     def extract_mean_background(self):
         cube_choice = self.name_cube_subtracted.currentText()
@@ -3235,13 +3255,13 @@ class expRunWidget(QWidget):
             spec1d[:,2] = spec/50
             np.savetxt('./output/detector3/background/'+name+'.dat',spec1d)
 
-    def make_fringe_correction(self,s=None,flag_update_data=True):
+    def make_fringe_correction(self,s=None,flag_update_data=True,debug=False):
 
         from scripts.fringe_correction import spectrum as sp
         from scripts.fringe_correction import fringe_custom_correction,fringe_custom_correction_second_pixel
 
         #select pixel within 90% of the highest flux
-        level = 0.9
+        level = 0.95
         cube_name = self.extract_1d_roi_cube.currentText()
         if cube_name == '(A)':
             image = self.parent.CUBE_A.data
@@ -3250,10 +3270,26 @@ class expRunWidget(QWidget):
             image = self.parent.CUBE_B.data
             wavel = self.parent.CUBE_B.data.wavelength
         image_comb = np.nansum(image.data, axis=0)/wavel.shape[0]
+
+        #set spatial mask
+        if 1:
+            spatial_mask = image_comb != 0
+            spatial_mask[:,0] = 0
+            spatial_mask[:, -1] = 0
+            spatial_mask[0,:] = 0
+            spatial_mask[-1, :] = 0
+            for k in range(3):
+                pos = np.where(spatial_mask > 0)
+                spatial_mask2 = np.array(spatial_mask)
+                for i,j in zip(pos[0],pos[1]):
+                    if spatial_mask[i-1,j] == 0 or spatial_mask[i+1,j]==0 or spatial_mask[i,j-1] == 0 or spatial_mask[i,j+1]==0:
+                        spatial_mask2[i , j] = 0
+                spatial_mask = np.array(spatial_mask2)
+            del(spatial_mask2)
         d = image_comb / np.nanmax(image_comb)
         d[np.isnan(d)] = 0
-        mask_warm_pixels = d>1-level
-        print('fringe correction: number of waarm pixels', np.sum(mask_warm_pixels))
+        mask_warm_pixels = (d>1-level)*spatial_mask
+        print('fringe correction: number of warm pixels', np.sum(mask_warm_pixels))
 
         #define spec of the brightest pixel
         image_comb[np.isnan(image_comb)] = 0
@@ -3274,32 +3310,29 @@ class expRunWidget(QWidget):
             fig, ax = plt.subplots(1, 2, sharex=True, sharey=True)
             ax[0].imshow(image_comb)
             ax[1].imshow(mask_warm_pixels)
+            ax[1].set_title('mask for warm pixels')
             plt.show()
 
         #(x,y,yerr, fringe_best_pix_model) = fringe_custom_correction(s_pix=sp_brightest,s_mean=sp_integrated,debug=True,  show_fit_chunks=True,chiqlimit=7)
-        (sp_model, fr_model) = fringe_custom_correction(s_pix=sp_brightest, s_mean=sp_integrated, debug=True,
+        (sp_model, fr_model) = fringe_custom_correction(s_pix=sp_brightest, s_mean=sp_integrated, debug=debug,
                                                        show_fit_chunks=0, chiqlimit=7)
         #
         pos = np.where(mask_warm_pixels == True)
+        pix_number = 0
         for posx, posy in zip(pos[0], pos[1]):
-            print(posx, posy,d[posx,posy])
+            print(pix_number,' from ',pos[0].shape[0])
+            print('pix coord:',posx, posy,' relative brightness: ',d[posx,posy])
+            pix_number+=1
             flux = np.array(image.data[:, posx, posy])
             ferr = np.array(image.err[:, posx, posy])
             sp_i = sp(x=wavel, y=flux, err=ferr)
             #(x, y, yerr, fr_model2) = fringe_custom_correction_second_pixel(s_pix = sp_i,s_mean=sp_integrated,
             #                                                            debug=False, show_fit_chunks=False, chiqlimit=7,
             #                                                            fringe_init=fringe_best_pix_model)
-            (sp_i_model, fr_model_i) = fringe_custom_correction_second_pixel(s_pix= sp_i, s_mean=sp_integrated, debug=True,
+            (sp_i_model, fr_model_i) = fringe_custom_correction_second_pixel(s_pix= sp_i, s_mean=sp_integrated, debug=debug,
                                                                          show_fit_chunks=0, fringe_init=fr_model,
                                                                              label = str(round(posx,1))+' '+str(round(posy,1)))
-
-            print('flag_update_data',flag_update_data)
             if flag_update_data:
-                if 0:
-                    plt.subplots()
-                    plt.plot(wavel,image.data[:, posx, posy])
-                    plt.plot(wavel, sp_i_model.y)
-                    plt.show()
                 image.data[:, posx, posy] = sp_i_model.y
 
     def set_DQ_map(self, debug = False):
