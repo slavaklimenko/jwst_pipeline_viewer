@@ -660,12 +660,13 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
             self.data = self.parent.CUBE_B.data.data
         data_mean = np.nanmean(self.data,axis=0)
         if 1:
-            spatial_mask = data_mean != 0
+            data_mean[np.isnan(data_mean)]=0
+            spatial_mask = (data_mean != 0)*(~np.isnan(data_mean))
             spatial_mask[:, 0] = 0
             spatial_mask[:, -1] = 0
             spatial_mask[0, :] = 0
             spatial_mask[-1, :] = 0
-            for k in range(3):
+            for k in range(4):
                 pos = np.where(spatial_mask > 0)
                 spatial_mask2 = np.array(spatial_mask)
                 for i, j in zip(pos[0], pos[1]):
@@ -674,6 +675,7 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
                         spatial_mask2[i, j] = 0
                 spatial_mask = np.array(spatial_mask2)
             del (spatial_mask2)
+        print(np.argwhere((data_mean == np.nanmax(data_mean))*spatial_mask))
         pos = np.argwhere((data_mean == np.nanmax(data_mean))*spatial_mask)[0]
         if debug:
             plt.subplots()
@@ -726,7 +728,7 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
             plt.imshow(image_comb, origin='lower', cmap='coolwarm',vmin=0,vmax=image_max_flux)
             plt.colorbar()
             plt.contour(X, Y, image_comb, levels=np.array([0.01,0.05,0.1,0.68,0.95,0.99])*image_max_flux, colors='black')
-            plt.savefig('/home/slava/science/codes/python/jwst/output/detector3/images/'+name+'.png')
+            plt.savefig('./output/detector3/images/'+name+'.png')
             #plt.xticks([])
             #plt.yticks([])
             #plt.colorbar()
@@ -1864,8 +1866,12 @@ class CUBElistTable(pg.TableWidget):
                 y_err = np.zeros(cube.data.shape[0])
                 for i in range(cube.data.shape[0]):
                     d = data.data[i, :, :]
-                    mask = (roi.roi_mask)*(~np.isnan(d))
+                    #remove nan pixels
+                    #mask = (roi.roi_mask) * (~np.isnan(d))
+                    mask = (roi.roi_mask)
                     d = d[mask]
+                    if np.sum(np.isnan(d))>0:
+                        d = np.nan
                     derr = data.err[i, :, :]
                     derr = derr[mask]
                     w = np.power(derr,2)
@@ -2887,7 +2893,7 @@ class expRunWidget(QWidget):
         self.sourse_listA = QComboBox()
         lst = self.parent.exp_pars.readfolder(self.parent.CUBE_A.path)
         self.sourse_listA.addItems(lst)  # ['Object', 'Background','Both'])
-        self.sourse_listA.setCurrentIndex(23)
+        self.sourse_listA.setCurrentIndex(15)
         # p = self.asn_source.currentText()
         # print(self.asn_source.itemData[0])
         # self.asn_source.setFixedSize(90, 30)
@@ -2904,7 +2910,7 @@ class expRunWidget(QWidget):
         self.sourse_listB = QComboBox()
         lst = self.parent.exp_pars.readfolder(self.parent.CUBE_B.path)
         self.sourse_listB.addItems(lst)  # ['Object', 'Background','Both'])
-        self.sourse_listB.setCurrentIndex(23)
+        self.sourse_listB.setCurrentIndex(15)
         # p = self.asn_source.currentText()
         # print(self.asn_source.itemData[0])
         # self.asn_source.setFixedSize(90, 30)
@@ -3255,13 +3261,12 @@ class expRunWidget(QWidget):
             spec1d[:,2] = spec/50
             np.savetxt('./output/detector3/background/'+name+'.dat',spec1d)
 
-    def make_fringe_correction(self,s=None,flag_update_data=True,debug=False):
+    def make_fringe_correction(self,s=None,flag_update_data=True,debug=False,level = 0.95):
 
         from scripts.fringe_correction import spectrum as sp
         from scripts.fringe_correction import fringe_custom_correction,fringe_custom_correction_second_pixel
 
-        #select pixel within 90% of the highest flux
-        level = 0.95
+        #select pixel within the level % of the highest flux
         cube_name = self.extract_1d_roi_cube.currentText()
         if cube_name == '(A)':
             image = self.parent.CUBE_A.data
@@ -3293,11 +3298,11 @@ class expRunWidget(QWidget):
 
         #define spec of the brightest pixel
         image_comb[np.isnan(image_comb)] = 0
-        pos = np.argwhere(image_comb==np.max(image_comb.flatten()))[0]
+        pos_brightest = np.argwhere(image_comb==np.max(image_comb.flatten()))[0]
         #pos = np.argwhere(data_mean == np.nanmax(data_mean))[0]
-        sp_brightest = sp(x=wavel, y=np.array(image.data[:,pos[0],pos[1]]), err=np.array(image.err[:,pos[0],pos[1]]))
+        sp_brightest = sp(x=wavel, y=np.array(image.data[:,pos_brightest[0],pos_brightest[1]]), err=np.array(image.err[:,pos_brightest[0],pos_brightest[1]]))
         image_ind = np.indices((image_comb.shape[0],image_comb.shape[1]))
-        mask_warm_pixels *= (np.abs(image_ind[0]-pos[0])<5)*(np.abs(image_ind[1]-pos[1])<5)
+        mask_warm_pixels *= (np.abs(image_ind[0]-pos_brightest[0])<5)*(np.abs(image_ind[1]-pos_brightest[1])<5)
 
         # calc integrated_flux
         pos = np.where(mask_warm_pixels == True)
@@ -3305,16 +3310,18 @@ class expRunWidget(QWidget):
         ferr = np.power(
             np.nansum([np.power(image.err[:, posx, posy], 2) for posx, posy in zip(pos[0], pos[1])], axis=0), 0.5)
         sp_integrated = sp(x=wavel, y=np.array(flux), err=np.array(ferr))
-
+        sp_integrated_copy = sp(x=wavel,y=np.array(sp_integrated.y), err=np.array(sp_integrated.err))
         if 1:
-            fig, ax = plt.subplots(1, 2, sharex=True, sharey=True)
+            fig, ax = plt.subplots(1, 4, sharex=False, sharey=False)
             ax[0].imshow(image_comb)
             ax[1].imshow(mask_warm_pixels)
+            ax[2].plot(sp_integrated.x,np.array(sp_integrated.y),label='integr. (before correction)')
+            ax[3].plot(sp_brightest.x, sp_brightest.y, label='brightest. (before correction)')
             ax[1].set_title('mask for warm pixels')
-            plt.show()
+            #plt.show()
 
         #(x,y,yerr, fringe_best_pix_model) = fringe_custom_correction(s_pix=sp_brightest,s_mean=sp_integrated,debug=True,  show_fit_chunks=True,chiqlimit=7)
-        (sp_model, fr_model) = fringe_custom_correction(s_pix=sp_brightest, s_mean=sp_integrated, debug=debug,
+        (sp_model, fr_model) = fringe_custom_correction(s_pix=sp_brightest, s_mean=sp_integrated_copy, debug=True,
                                                        show_fit_chunks=0, chiqlimit=7)
         #
         pos = np.where(mask_warm_pixels == True)
@@ -3326,14 +3333,25 @@ class expRunWidget(QWidget):
             flux = np.array(image.data[:, posx, posy])
             ferr = np.array(image.err[:, posx, posy])
             sp_i = sp(x=wavel, y=flux, err=ferr)
+            sp_integrated_copy = sp(x=wavel,y=np.array(sp_integrated.y), err=np.array(sp_integrated.err))
             #(x, y, yerr, fr_model2) = fringe_custom_correction_second_pixel(s_pix = sp_i,s_mean=sp_integrated,
             #                                                            debug=False, show_fit_chunks=False, chiqlimit=7,
             #                                                            fringe_init=fringe_best_pix_model)
-            (sp_i_model, fr_model_i) = fringe_custom_correction_second_pixel(s_pix= sp_i, s_mean=sp_integrated, debug=debug,
+            (sp_i_model, fr_model_i) = fringe_custom_correction_second_pixel(s_pix= sp_i, s_mean=sp_integrated_copy, debug=debug,
                                                                          show_fit_chunks=0, fringe_init=fr_model,
                                                                              label = str(round(posx,1))+' '+str(round(posy,1)))
             if flag_update_data:
                 image.data[:, posx, posy] = sp_i_model.y
+        if 1:
+            flux = np.nansum([image.data[:, posx, posy] for posx, posy in zip(pos[0], pos[1])], axis=0)
+            ax[2].plot(sp_integrated.x, flux,ls='--',label='integr (fringe corrected)')
+            sp_brightest = sp(x=wavel, y=np.array(image.data[:, pos_brightest[0], pos_brightest[1]]),
+                              err=np.array(image.err[:, pos_brightest[0], pos_brightest[1]]))
+            ax[3].plot(sp_brightest.x, sp_brightest.y, label='brightest. (after correction)')
+            ax[2].legend()
+            ax[3].legend()
+
+            plt.show()
 
     def set_DQ_map(self, debug = False):
         print('set_DQ_map, debug:', debug)
@@ -3572,4 +3590,3 @@ if __name__ == '__main__':
     app = QApplication(sys.argv)
     ex2 = JWST_spec_viewer()
     sys.exit(app.exec_())
-

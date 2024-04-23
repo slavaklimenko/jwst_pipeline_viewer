@@ -8,7 +8,7 @@ import numpy as np
 import sys, os
 from scipy.interpolate import interp1d, UnivariateSpline
 from functools import partial
-
+import matplotlib.pyplot as plt
 
 class spectrum():
     def __init__(self, x=None, y=None, err=None,name=None):
@@ -90,7 +90,11 @@ class Slider(QWidget):
         self.filename_box = QComboBox(self)
         self.filename_box.addItems(filenamelist)
         self.filename_box.setCurrentIndex(0)
-        self.filename_box.setFixedSize(200, 30)
+        self.filename_box.setFixedSize(100, 30)
+        #self.filename_box.resize(30, 30)
+        #cb = self.filename_box
+        #width = cb.minimumSizeHint().width()
+        #cb.setFixedWidth(width)
 
         self.horizontalLayout0.addWidget(self.filename_box)
         self.verticalLayout.addLayout(self.horizontalLayout0)
@@ -99,15 +103,22 @@ class Slider(QWidget):
         self.horizontalLayout1 = QHBoxLayout(self)
         self.horizontalLayout1.addWidget(QLabel(name))
         self.value_label = QLineEdit(self)
-        self.value_label.setText(str(0))
-        self.value_label.setFixedSize(60, 30)
+        self.value_label.setText(str(val))
+        #self.value_label.setFixedSize(60, 30)
+        self.value_label.resize(60, 30)
+        cb = self.value_label
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
         self.horizontalLayout1.addWidget(self.value_label)
         self.horizontalLayout1.addStretch(1)
         self.verticalLayout.addLayout(self.horizontalLayout1)
-
         self.up_label = QLineEdit(self)
         self.up_label.setText(str(maximum))
-        self.up_label.setFixedSize(60, 30)
+        #self.up_label.setFixedSize(60, 30)
+        self.up_label.resize(60, 30)
+        cb = self.up_label
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
         self.verticalLayout.addWidget(self.up_label)
         self.horizontalLayout = QHBoxLayout(self)
         spacerItem = QSpacerItem(0, 100, QSizePolicy.Expanding, QSizePolicy.Minimum)
@@ -120,7 +131,11 @@ class Slider(QWidget):
         self.verticalLayout.addLayout(self.horizontalLayout)
         self.low_label = QLineEdit(self)
         self.low_label.setText(str(minimum))
-        self.low_label.setFixedSize(60, 30)
+        #self.low_label.setFixedSize(60, 30)
+        self.low_label.resize(60, 30)
+        cb = self.low_label
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
         self.verticalLayout.addWidget(self.low_label)
         self.resize(self.sizeHint())
 
@@ -253,38 +268,70 @@ class Viewer(QWidget):
         self.objname_box = QComboBox(self)
         self.objname_box.addItems(objnamelist)
         self.objname_box.setCurrentIndex(0)
-        self.objname_box.setFixedSize(200, 30)
+        #self.objname_box.setFixedSize(200, 30)
+        self.objname_box.resize(200, 30)
+        cb = self.objname_box
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
         self.horizontalLayout.addWidget(self.objname_box)
         self.obj_name_win = QPushButton('ReadSpecList')
         self.obj_name_win.clicked[bool].connect(self.setObjName)
-        self.obj_name_win.setFixedSize(200, 60)
+        #self.obj_name_win.setFixedSize(200, 60)
+        self.obj_name_win.resize(200, 60)
+        cb = self.obj_name_win
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
         self.horizontalLayout.addWidget(self.obj_name_win)
         self.comb_dithers_win = QPushButton('CombineDithers')
-        self.comb_dithers_win.clicked[bool].connect(self.comb_dithers)
-        self.comb_dithers_win.setFixedSize(200, 60)
+        self.comb_dithers_win.clicked.connect(self.comb_dithers)
+        #self.comb_dithers_win.setFixedSize(200, 60)
+        self.comb_dithers_win.resize(200, 60)
+        cb = self.comb_dithers_win
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
         self.horizontalLayout.addWidget(self.comb_dithers_win)
         self.save_data_win = QPushButton('SaveSpec')
         #self.build_cube.clicked[bool].connect(partial(self.call_build_3dCube))
         self.save_data_win.clicked[bool].connect(partial(self.saveObj))
-        self.save_data_win.setFixedSize(200, 60)
+        #self.save_data_win.setFixedSize(200, 60)
+        self.save_data_win.resize(200, 60)
+        cb = self.save_data_win
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
         self.horizontalLayout.addWidget(self.save_data_win)
         self.save_data_filename = QLineEdit()
         self.save_data_filename.setText('filename')
-        self.save_data_filename.setFixedSize(150, 30)
+        #self.save_data_filename.setFixedSize(150, 30)
+        self.save_data_filename.resize(200, 60)
+        cb = self.save_data_filename
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
         self.horizontalLayout.addWidget(self.save_data_filename)
         self.combine_win = QPushButton('Combine')
         # self.build_cube.clicked[bool].connect(partial(self.call_build_3dCube))
         self.combine_win.clicked[bool].connect(partial(self.combineChunks))
-        self.combine_win.setFixedSize(200, 60)
+        #self.combine_win.setFixedSize(200, 60)
+        self.combine_win.resize(200, 60)
+        cb = self.combine_win
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
         self.horizontalLayout.addWidget(self.combine_win)
         self.rebin_win = QPushButton('Rebin')
         # self.build_cube.clicked[bool].connect(partial(self.call_build_3dCube))
         self.rebin_win.clicked[bool].connect(partial(self.RebinIt))
-        self.rebin_win.setFixedSize(200, 60)
+        #self.rebin_win.setFixedSize(200, 60)
+        self.rebin_win.resize(200, 60)
+        cb = self.rebin_win
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
         self.horizontalLayout.addWidget(self.rebin_win)
         self.rebin_n_pix = QLineEdit()
         self.rebin_n_pix.setText('1 pix')
-        self.rebin_n_pix.setFixedSize(100, 30)
+        #self.rebin_n_pix.setFixedSize(100, 30)
+        self.rebin_n_pix.resize(100, 30)
+        cb = self.rebin_n_pix
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
         self.horizontalLayout.addWidget(self.rebin_n_pix)
         self.horizontalLayout.addStretch(1)
         self.mainLayout.addLayout(self.horizontalLayout)
@@ -330,7 +377,8 @@ class Viewer(QWidget):
             self.w12 = Slider(0, 3, name='c12:',filenamelist=filenamelist,path =  self.spec_folder,val=1)
             self.horizontalLayout.addWidget(self.w12)
 
-            self.w13 = Slider(0, 3, name='tmplate:', filenamelist=['cassis_yaaar_spcfw_15121152t-copy-red_norm.dat'], path=self.spec_tmp,val=1)
+            #self.w13 = Slider(0, 3, name='tmplate:', filenamelist=['cassis_yaaar_spcfw_15121152t-copy-red_norm.dat'], path=self.spec_tmp,val=1)
+            self.w13 = Slider(0, 3, name='c13:', filenamelist=filenamelist, path=self.spec_folder, val=1)
             self.horizontalLayout.addWidget(self.w13)
         self.mainLayout.addLayout(self.horizontalLayout)
         #self.p6 = self.win.addPlot(title="My Plot")
@@ -356,8 +404,6 @@ class Viewer(QWidget):
         if 1:
             self.w1.slider.valueChanged.connect(self.update_slider)
             self.w1.value_label.textChanged.connect(self.update_plot)
-
-
             self.w2.slider.valueChanged.connect(self.update_slider)
             self.w3.slider.valueChanged.connect(self.update_plot)
             self.w4.slider.valueChanged.connect(self.update_plot)
@@ -450,7 +496,7 @@ class Viewer(QWidget):
         self.w11.value_label.setText("%.1f" % (self.w11.x))
         self.w12.value_label.setText("%.1f" % (self.w12.x))
 
-    def setObjName(self):
+    def setObjName(self,click=1,secret=''):
         filenamelist = ['None'] + self.readfolder(obj_name=self.objname_box.currentText())
 
         self.w1.filename_box.clear()
@@ -479,75 +525,113 @@ class Viewer(QWidget):
         self.w12.filename_box.addItems(filenamelist)
 
         for f in filenamelist:
-            if '1A' in f:
+            if '1A' in f or 'ch1-short' in f and secret in f:
                 self.w1.filename_box.setCurrentText(f)
-            if '1B' in f:
+            if '1B' in f or 'ch1-medium' in f and secret in f:
                 self.w2.filename_box.setCurrentText(f)
-            if '1C' in f:
+            if '1C' in f or 'ch1-long' in f and secret in f:
                 self.w3.filename_box.setCurrentText(f)
-            if '2A' in f:
+            if '2A' in f or 'ch2-short' in f and secret in f:
                 self.w4.filename_box.setCurrentText(f)
-            if '2B' in f:
+            if '2B' in f or 'ch2-medium' in f and secret in f:
                 self.w5.filename_box.setCurrentText(f)
-            if '2C' in f:
+            if '2C' in f or 'ch2-long' in f and secret in f:
                 self.w6.filename_box.setCurrentText(f)
-            if '3A' in f:
+            if '3A' in f or 'ch3-short' in f and secret in f:
                 self.w7.filename_box.setCurrentText(f)
-            if '3B' in f:
+            if '3B' in f or 'ch3-medium' in f and secret in f:
                 self.w8.filename_box.setCurrentText(f)
-            if '3C' in f:
+            if '3C' in f or 'ch3-long' in f and secret in f:
                 self.w9.filename_box.setCurrentText(f)
-            if '4A' in f:
+            if '4A' in f  or 'ch4-short' in f and secret in f:
                 self.w10.filename_box.setCurrentText(f)
-            if '4B' in f:
+            if '4B' in f  or 'ch4-medium' in f and secret in f:
                 self.w11.filename_box.setCurrentText(f)
-            if '4C' in f:
+            if '4C' in f  or 'ch4-long' in f and secret in f:
                 self.w12.filename_box.setCurrentText(f)
 
-    def comb_dithers(self):
-        filenamelist = self.readfolder(obj_name=self.objname_box.currentText(),dith=True)
+    def comb_dithers(self, click=False, debug = True,   sigma_clip_level = 3,appendix='_sci'):
+        filenamelist = self.readfolder(obj_name=self.objname_box.currentText(),dith=True,appendix=appendix)
 
         for ch in ['ch1','ch2','ch3','ch4']:
             for band in ['short','medium','long']:
+
                 exp_list_names = []
-                for f in filenamelist:
-                    if 'dith' in f and ch in f and band in f:
-                        exp_list_names.append(f)
-                print(exp_list_names)
-                exp_list = []
-                for f in exp_list_names:
-                    d = np.loadtxt(fname=self.spec_folder + f)
-                    exp_list.append(spectrum(x=d[:, 0], y=d[:, 1], err=d[:, 2], name=f))
-                import matplotlib.pyplot as plt
+                if len(filenamelist)>0:
+                    for f in filenamelist:
+                        if 'dith' in f and ch in f and band in f:
+                            exp_list_names.append(f)
+                    print(exp_list_names)
+                    exp_list = []
+                    for f in exp_list_names:
+                        d = np.loadtxt(fname=self.spec_folder + f)
+                        exp_list.append(spectrum(x=d[:, 0], y=d[:, 1], err=d[:, 2], name=f))
 
-                comb = exp_list[0].copy()
-                f = np.array([s.y for s in exp_list])
-                comb.y = np.nanmedian(f,axis=0)
+                    if len(exp_list)>0:
+                        # scale exposures to one level
+                        from lmfit import Model
+                        def func(x, scale_factor):
+                            return x*scale_factor
+                        fmodel = Model(func)
+                        for i, s in enumerate(exp_list):
+                            if i>0:
+                                scale_factor = 1
+                                mask_nan = (s.y==0)+(exp_list[0].y==0)
+                                result = fmodel.fit(exp_list[0].y[~mask_nan], x=s.y[~mask_nan], scale_factor=scale_factor)
+                                print(result.fit_report())
+                                s_f = result.best_values['scale_factor']
+                                s.y *=s_f
+                                s.err *=s_f
 
-                mask_exp = np.zeros((len(exp_list),comb.x.shape[0]))
-                for i,s in enumerate(exp_list):
-                    mask = np.abs(s.y-comb.y)/s.err<5
-                    mask_exp[i,:] = mask.copy()
+                        #correction for nan
+                        for s in exp_list:
+                            s.y[s.y==0] = np.nan
+                        comb = exp_list[0].copy()
+                        f = np.array([s.y for s in exp_list])
+                        comb.y = np.nanmedian(f,axis=0)
+                        comb.std = np.nanstd(np.array([s.y - comb.y for s in exp_list]),axis=0)
+                        comb.std_mean = np.nanstd(np.array([s.y-comb.y for s in exp_list]))
 
-                f = np.array([s.y for s in exp_list])
-                err = np.array([s.err for s in exp_list])
-                inv = np.power(err,-2)
-                comb.y = np.nansum(f*inv*mask_exp,axis=0)/np.nansum(inv*mask_exp,axis=0)
-                comb.err = np.power(np.nansum(inv*mask_exp,axis=0),-0.5)
+                        # mask good pixels by selecting outliers with a threshold of sigma_clip_level sigma
+                        mask_exp_good_pixels = np.zeros((len(exp_list),comb.x.shape[0]))
+                        for i,s in enumerate(exp_list):
+                            mask = np.abs(s.y-comb.y)/comb.std_mean<sigma_clip_level
+                            mask_exp_good_pixels[i,:] = mask.copy()
 
-                fig,ax = plt.subplots()
-                for s in exp_list:
-                    ax.errorbar(s.x,s.y,yerr=s.err)
-                ax.errorbar(comb.x,comb.y,yerr=comb.err,color='black',lw=2)
-                ax.set_title(ch+band)
-                plt.show()
+                        if debug:
+                            fig,ax = plt.subplots(2,1,sharex=True,sharey=True)
+                            for i, s in enumerate(exp_list):
+                                ax[0].step(s.x,s.y,ls='-',where='mid')
+                                mask = mask_exp_good_pixels[i,:].astype(bool)
+                                ax[0].plot(s.x[~mask], s.y[~mask],marker='*',markersize=10)
+                            ax[0].step(s.x,comb.y,color='red',lw=2,ls='-',where='mid')
+                            ax[0].fill_between(s.x,comb.y-sigma_clip_level*comb.std_mean,comb.y+sigma_clip_level*comb.std_mean,color='red',alpha=0.2)
+                            plt.show()
 
-                filename = self.spec_folder + self.objname_box.currentText()+'_combined_'+ch+band+'_sci.spec1d'
-                with open(filename, 'w') as fout:
-                    # for x,y,e in zip(wavel,roi_mean_w_flux,roi_mean_w_f_error):
-                    for x, y, e in zip(comb.x, comb.y, comb.err):
-                        fout.write('%.4e %.4e %.4e \n' % (x, y, e))
-                fout.close()
+                        f = np.array([s.y for s in exp_list])
+                        err = np.array([s.err for s in exp_list])
+                        inv = np.power(err,-2)
+                        comb.y = (np.nansum(f*inv*mask_exp_good_pixels,axis=0))/np.nansum(inv*mask_exp_good_pixels,axis=0)
+                        comb.err = np.power(np.nansum(inv*mask_exp_good_pixels,axis=0),-0.5)
+
+                        mask_bad_pixels = np.sum(mask_exp_good_pixels,axis=0) == 0
+                        comb.y[mask_bad_pixels] = 0.0
+                        comb.err[mask_bad_pixels] = 1.0
+                        if debug:
+                            for s in exp_list:
+                                ax[1].errorbar(s.x,s.y,yerr=s.err,label=s.name)
+                            ax[1].errorbar(comb.x,comb.y,yerr=comb.err,color='black',lw=2)
+                            ax[1].set_title(ch+band)
+                            plt.legend()
+                            plt.show()
+
+                        filename = self.spec_folder + self.objname_box.currentText()+'_combined_'+ch+'-'+band+appendix+'.spec1d'
+                        with open(filename, 'w') as fout:
+                            # for x,y,e in zip(wavel,roi_mean_w_flux,roi_mean_w_f_error):
+                            for x, y, e in zip(comb.x, comb.y, comb.err):
+                                fout.write('%.4e %.4e %.4e \n' % (x, y, e))
+                        fout.close()
+        self.setObjName(secret='combined')
 
     def saveObj(self):
         s = spectrum(x=self.w1.data.x,y=self.w1.data.y*self.w1.x,err=self.w1.data.err*self.w1.x)
@@ -697,7 +781,7 @@ class Viewer(QWidget):
         #self.win.plot_spec(fname='Combined', add=False, show_err_bar=False)
         #self.win.plot_spec(fname='Combined', fcolor='green', data=self.combined_spec, coef=1, show_err_bar=False)
 
-    def readfolder(self,path=None,obj_name='',dith=True):
+    def readfolder(self,path=None,obj_name='',dith=True,appendix='_sci'):
         if path==None:
            path = self.spec_folder
 
@@ -705,11 +789,11 @@ class Viewer(QWidget):
         for (dirpath, dirname, filenames) in os.walk(path):
             for k, f in enumerate(filenames):
                 if dith == False:
-                    if f.endswith('_sci.spec1d') and obj_name in f and 'dith' not in f:
+                    if f.endswith(appendix+'.spec1d') and obj_name in f and 'dith' not in f:
                 #if f.endswith('_s3d.dat') and obj_name in f:
                         lst.append(f)
                 elif dith == True:
-                    if f.endswith('_sci.spec1d') and obj_name in f:
+                    if f.endswith(appendix+'.spec1d') and obj_name in f:
                         lst.append(f)
         return sorted(lst)
 
