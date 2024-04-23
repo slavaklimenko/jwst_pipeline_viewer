@@ -79,7 +79,7 @@ class spectrum():
 
 
 class Slider(QWidget):
-    def __init__(self, minimum, maximum, parent=None,name='c1:',filenamelist=['file'],path ='',val=None):
+    def __init__(self, minimum, maximum, parent=None,name='ch1A:',filenamelist=['file'],path ='',val=None):
         super(Slider, self).__init__(parent=parent)
         self.name = name
         self.spec_files_path = path
@@ -90,11 +90,7 @@ class Slider(QWidget):
         self.filename_box = QComboBox(self)
         self.filename_box.addItems(filenamelist)
         self.filename_box.setCurrentIndex(0)
-        self.filename_box.setFixedSize(100, 30)
-        #self.filename_box.resize(30, 30)
-        #cb = self.filename_box
-        #width = cb.minimumSizeHint().width()
-        #cb.setFixedWidth(width)
+        self.filename_box.setFixedSize(200, 30)
 
         self.horizontalLayout0.addWidget(self.filename_box)
         self.verticalLayout.addLayout(self.horizontalLayout0)
@@ -104,21 +100,14 @@ class Slider(QWidget):
         self.horizontalLayout1.addWidget(QLabel(name))
         self.value_label = QLineEdit(self)
         self.value_label.setText(str(val))
-        #self.value_label.setFixedSize(60, 30)
-        self.value_label.resize(60, 30)
-        cb = self.value_label
-        width = cb.minimumSizeHint().width()
-        cb.setFixedWidth(width)
+        self.value_label.setFixedSize(60, 30)
         self.horizontalLayout1.addWidget(self.value_label)
         self.horizontalLayout1.addStretch(1)
         self.verticalLayout.addLayout(self.horizontalLayout1)
+
         self.up_label = QLineEdit(self)
         self.up_label.setText(str(maximum))
-        #self.up_label.setFixedSize(60, 30)
-        self.up_label.resize(60, 30)
-        cb = self.up_label
-        width = cb.minimumSizeHint().width()
-        cb.setFixedWidth(width)
+        self.up_label.setFixedSize(60, 30)
         self.verticalLayout.addWidget(self.up_label)
         self.horizontalLayout = QHBoxLayout(self)
         spacerItem = QSpacerItem(0, 100, QSizePolicy.Expanding, QSizePolicy.Minimum)
@@ -131,11 +120,7 @@ class Slider(QWidget):
         self.verticalLayout.addLayout(self.horizontalLayout)
         self.low_label = QLineEdit(self)
         self.low_label.setText(str(minimum))
-        #self.low_label.setFixedSize(60, 30)
-        self.low_label.resize(60, 30)
-        cb = self.low_label
-        width = cb.minimumSizeHint().width()
-        cb.setFixedWidth(width)
+        self.low_label.setFixedSize(60, 30)
         self.verticalLayout.addWidget(self.low_label)
         self.resize(self.sizeHint())
 
@@ -268,70 +253,38 @@ class Viewer(QWidget):
         self.objname_box = QComboBox(self)
         self.objname_box.addItems(objnamelist)
         self.objname_box.setCurrentIndex(0)
-        #self.objname_box.setFixedSize(200, 30)
-        self.objname_box.resize(200, 30)
-        cb = self.objname_box
-        width = cb.minimumSizeHint().width()
-        cb.setFixedWidth(width)
+        self.objname_box.setFixedSize(200, 30)
         self.horizontalLayout.addWidget(self.objname_box)
         self.obj_name_win = QPushButton('ReadSpecList')
         self.obj_name_win.clicked[bool].connect(self.setObjName)
-        #self.obj_name_win.setFixedSize(200, 60)
-        self.obj_name_win.resize(200, 60)
-        cb = self.obj_name_win
-        width = cb.minimumSizeHint().width()
-        cb.setFixedWidth(width)
+        self.obj_name_win.setFixedSize(200, 60)
         self.horizontalLayout.addWidget(self.obj_name_win)
         self.comb_dithers_win = QPushButton('CombineDithers')
         self.comb_dithers_win.clicked.connect(self.comb_dithers)
-        #self.comb_dithers_win.setFixedSize(200, 60)
-        self.comb_dithers_win.resize(200, 60)
-        cb = self.comb_dithers_win
-        width = cb.minimumSizeHint().width()
-        cb.setFixedWidth(width)
+        self.comb_dithers_win.setFixedSize(200, 60)
         self.horizontalLayout.addWidget(self.comb_dithers_win)
         self.save_data_win = QPushButton('SaveSpec')
         #self.build_cube.clicked[bool].connect(partial(self.call_build_3dCube))
         self.save_data_win.clicked[bool].connect(partial(self.saveObj))
-        #self.save_data_win.setFixedSize(200, 60)
-        self.save_data_win.resize(200, 60)
-        cb = self.save_data_win
-        width = cb.minimumSizeHint().width()
-        cb.setFixedWidth(width)
+        self.save_data_win.setFixedSize(200, 60)
         self.horizontalLayout.addWidget(self.save_data_win)
         self.save_data_filename = QLineEdit()
         self.save_data_filename.setText('filename')
-        #self.save_data_filename.setFixedSize(150, 30)
-        self.save_data_filename.resize(200, 60)
-        cb = self.save_data_filename
-        width = cb.minimumSizeHint().width()
-        cb.setFixedWidth(width)
+        self.save_data_filename.setFixedSize(150, 30)
         self.horizontalLayout.addWidget(self.save_data_filename)
         self.combine_win = QPushButton('Combine')
         # self.build_cube.clicked[bool].connect(partial(self.call_build_3dCube))
         self.combine_win.clicked[bool].connect(partial(self.combineChunks))
-        #self.combine_win.setFixedSize(200, 60)
-        self.combine_win.resize(200, 60)
-        cb = self.combine_win
-        width = cb.minimumSizeHint().width()
-        cb.setFixedWidth(width)
+        self.combine_win.setFixedSize(200, 60)
         self.horizontalLayout.addWidget(self.combine_win)
         self.rebin_win = QPushButton('Rebin')
         # self.build_cube.clicked[bool].connect(partial(self.call_build_3dCube))
         self.rebin_win.clicked[bool].connect(partial(self.RebinIt))
-        #self.rebin_win.setFixedSize(200, 60)
-        self.rebin_win.resize(200, 60)
-        cb = self.rebin_win
-        width = cb.minimumSizeHint().width()
-        cb.setFixedWidth(width)
+        self.rebin_win.setFixedSize(200, 60)
         self.horizontalLayout.addWidget(self.rebin_win)
         self.rebin_n_pix = QLineEdit()
         self.rebin_n_pix.setText('1 pix')
-        #self.rebin_n_pix.setFixedSize(100, 30)
-        self.rebin_n_pix.resize(100, 30)
-        cb = self.rebin_n_pix
-        width = cb.minimumSizeHint().width()
-        cb.setFixedWidth(width)
+        self.rebin_n_pix.setFixedSize(100, 30)
         self.horizontalLayout.addWidget(self.rebin_n_pix)
         self.horizontalLayout.addStretch(1)
         self.mainLayout.addLayout(self.horizontalLayout)
@@ -341,44 +294,43 @@ class Viewer(QWidget):
         self.horizontalLayout = QHBoxLayout(self)
         if 1:
             filenamelist = ['None']+self.readfolder(obj_name=self.objname_box.currentText())
-            self.w1 = Slider(0, 3, name='c1:', filenamelist=filenamelist, path=self.spec_folder,val=1)
+            self.w1 = Slider(0, 3, name='ch1A:', filenamelist=filenamelist, path=self.spec_folder,val=1)
             self.horizontalLayout.addWidget(self.w1)
 
-            self.w2 = Slider(0, 3,name='c2:',filenamelist=filenamelist,path =  self.spec_folder,val=1)
+            self.w2 = Slider(0, 3,name='ch1B:',filenamelist=filenamelist,path =  self.spec_folder,val=1)
             self.horizontalLayout.addWidget(self.w2)
 
-            self.w3 = Slider(0, 3,name='c3:',filenamelist=filenamelist,path =  self.spec_folder,val=1)
+            self.w3 = Slider(0, 3,name='ch1C:',filenamelist=filenamelist,path =  self.spec_folder,val=1)
             self.horizontalLayout.addWidget(self.w3)
 
-            self.w4 = Slider(0, 3,name='c4:',filenamelist=filenamelist,path =  self.spec_folder,val=1)
+            self.w4 = Slider(0, 3,name='ch2A:',filenamelist=filenamelist,path =  self.spec_folder,val=1)
             self.horizontalLayout.addWidget(self.w4)
 
-            self.w5 = Slider(0, 3, name='c5:',filenamelist=filenamelist,path =  self.spec_folder,val=1)
+            self.w5 = Slider(0, 3, name='ch2B:',filenamelist=filenamelist,path =  self.spec_folder,val=1)
             self.horizontalLayout.addWidget(self.w5)
 
-            self.w6 = Slider(0, 3, name='c6:',filenamelist=filenamelist,path =  self.spec_folder,val=1)
+            self.w6 = Slider(0, 3, name='ch2C:',filenamelist=filenamelist,path =  self.spec_folder,val=1)
             self.horizontalLayout.addWidget(self.w6)
 
-            self.w7 = Slider(0, 3, name='c7:',filenamelist=filenamelist,path =  self.spec_folder,val=1)
+            self.w7 = Slider(0, 3, name='ch3A:',filenamelist=filenamelist,path =  self.spec_folder,val=1)
             self.horizontalLayout.addWidget(self.w7)
 
-            self.w8 = Slider(0, 3, name='c8:',filenamelist=filenamelist,path =  self.spec_folder,val=1)
+            self.w8 = Slider(0, 3, name='ch3B:',filenamelist=filenamelist,path =  self.spec_folder,val=1)
             self.horizontalLayout.addWidget(self.w8)
 
-            self.w9 = Slider(0, 3, name='c9:',filenamelist=filenamelist,path =  self.spec_folder,val=1)
+            self.w9 = Slider(0, 3, name='ch3C:',filenamelist=filenamelist,path =  self.spec_folder,val=1)
             self.horizontalLayout.addWidget(self.w9)
 
-            self.w10 = Slider(0, 3, name='c10:',filenamelist=filenamelist,path =  self.spec_folder,val=1)
+            self.w10 = Slider(0, 3, name='ch4A:',filenamelist=filenamelist,path =  self.spec_folder,val=1)
             self.horizontalLayout.addWidget(self.w10)
 
-            self.w11 = Slider(0, 3, name='c11:',filenamelist=filenamelist,path =  self.spec_folder,val=1)
+            self.w11 = Slider(0, 3, name='ch4B:',filenamelist=filenamelist,path =  self.spec_folder,val=1)
             self.horizontalLayout.addWidget(self.w11)
 
-            self.w12 = Slider(0, 3, name='c12:',filenamelist=filenamelist,path =  self.spec_folder,val=1)
+            self.w12 = Slider(0, 3, name='ch4C:',filenamelist=filenamelist,path =  self.spec_folder,val=1)
             self.horizontalLayout.addWidget(self.w12)
 
-            #self.w13 = Slider(0, 3, name='tmplate:', filenamelist=['cassis_yaaar_spcfw_15121152t-copy-red_norm.dat'], path=self.spec_tmp,val=1)
-            self.w13 = Slider(0, 3, name='c13:', filenamelist=filenamelist, path=self.spec_folder, val=1)
+            self.w13 = Slider(0, 3, name='tmplate:', filenamelist=['cassis_yaaar_spcfw_15121152t-copy-red_norm.dat'], path=self.spec_tmp,val=1)
             self.horizontalLayout.addWidget(self.w13)
         self.mainLayout.addLayout(self.horizontalLayout)
         #self.p6 = self.win.addPlot(title="My Plot")
@@ -404,6 +356,8 @@ class Viewer(QWidget):
         if 1:
             self.w1.slider.valueChanged.connect(self.update_slider)
             self.w1.value_label.textChanged.connect(self.update_plot)
+
+
             self.w2.slider.valueChanged.connect(self.update_slider)
             self.w3.slider.valueChanged.connect(self.update_plot)
             self.w4.slider.valueChanged.connect(self.update_plot)
@@ -550,8 +504,8 @@ class Viewer(QWidget):
             if '4C' in f  or 'ch4-long' in f and secret in f:
                 self.w12.filename_box.setCurrentText(f)
 
-    def comb_dithers(self, click=False, debug = True,   sigma_clip_level = 3,appendix='_sci'):
-        filenamelist = self.readfolder(obj_name=self.objname_box.currentText(),dith=True,appendix=appendix)
+    def comb_dithers(self, click=False, debug = True,   sigma_clip_level = 3):
+        filenamelist = self.readfolder(obj_name=self.objname_box.currentText(),dith=True)
 
         for ch in ['ch1','ch2','ch3','ch4']:
             for band in ['short','medium','long']:
@@ -576,16 +530,13 @@ class Viewer(QWidget):
                         for i, s in enumerate(exp_list):
                             if i>0:
                                 scale_factor = 1
-                                mask_nan = (s.y==0)+(exp_list[0].y==0)
-                                result = fmodel.fit(exp_list[0].y[~mask_nan], x=s.y[~mask_nan], scale_factor=scale_factor)
+                                result = fmodel.fit(exp_list[0].y, x=s.y, scale_factor=scale_factor)
                                 print(result.fit_report())
                                 s_f = result.best_values['scale_factor']
                                 s.y *=s_f
                                 s.err *=s_f
 
-                        #correction for nan
-                        for s in exp_list:
-                            s.y[s.y==0] = np.nan
+
                         comb = exp_list[0].copy()
                         f = np.array([s.y for s in exp_list])
                         comb.y = np.nanmedian(f,axis=0)
@@ -625,7 +576,7 @@ class Viewer(QWidget):
                             plt.legend()
                             plt.show()
 
-                        filename = self.spec_folder + self.objname_box.currentText()+'_combined_'+ch+'-'+band+appendix+'.spec1d'
+                        filename = self.spec_folder + self.objname_box.currentText()+'_combined_'+ch+'-'+band+'_sci.spec1d'
                         with open(filename, 'w') as fout:
                             # for x,y,e in zip(wavel,roi_mean_w_flux,roi_mean_w_f_error):
                             for x, y, e in zip(comb.x, comb.y, comb.err):
@@ -700,6 +651,7 @@ class Viewer(QWidget):
                 hdu1 = fits.BinTableHDU.from_columns(cols)
                 hdul = fits.HDUList([empty_primary, hdu1])
                 hdul.writeto(filename + '.fits', overwrite=True)
+        #normalization to f at 7.6 micron
         if 1:
             mask_N = (s.x>7.6)*(s.x<7.7)
             factor_N = np.mean(s.y[mask_N])
@@ -781,7 +733,7 @@ class Viewer(QWidget):
         #self.win.plot_spec(fname='Combined', add=False, show_err_bar=False)
         #self.win.plot_spec(fname='Combined', fcolor='green', data=self.combined_spec, coef=1, show_err_bar=False)
 
-    def readfolder(self,path=None,obj_name='',dith=True,appendix='_sci'):
+    def readfolder(self,path=None,obj_name='',dith=True):
         if path==None:
            path = self.spec_folder
 
@@ -789,11 +741,11 @@ class Viewer(QWidget):
         for (dirpath, dirname, filenames) in os.walk(path):
             for k, f in enumerate(filenames):
                 if dith == False:
-                    if f.endswith(appendix+'.spec1d') and obj_name in f and 'dith' not in f:
+                    if f.endswith('_sci.spec1d') and obj_name in f and 'dith' not in f:
                 #if f.endswith('_s3d.dat') and obj_name in f:
                         lst.append(f)
                 elif dith == True:
-                    if f.endswith(appendix+'.spec1d') and obj_name in f:
+                    if f.endswith('_sci.spec1d') and obj_name in f:
                         lst.append(f)
         return sorted(lst)
 

@@ -112,11 +112,14 @@ class detector2():
         if det1_dir != None:
             sstring = det1_dir + '/'+'*rate.fits'
             ratefiles = sorted(glob.glob(sstring))
-            for f in ratefiles:
-                if input_file_base in f:
-                    self.rate_file = f
-                    if debug:
-                        print('Read input file:', f)
+            for (dirpath, dirname, filenames) in os.walk(det1_dir):
+            #    print(filenames)
+            #for f in ratefiles:
+                for f in filenames:
+                    if input_file_base in f  and '_rate.fits' in f:
+                        self.rate_file = dirpath+'/'+f
+                        if debug:
+                            print('Read input file:', f)
     def read_associated_bkg_ratefiles(self,det1_dir =None, input_file_base = None, debug=1):
         if det1_dir != None:
             sstring = det1_dir + '/'+'*rate.fits'

@@ -404,7 +404,7 @@ class detector3():
             if subfilename == '':
                 asn_name = input_dir + '/'+ source + '_'+channel + bandname[band] + '.json'
             else:
-                asn_name = input_dir + '/' + source + subfilename + '.json'
+                asn_name = input_dir + '/' + source + subfilename + '_'+channel + bandname[band] +'.json'
             #exp_list = [exp_list[0],exp_list[1]]
             print('ASN_FILE',asn_name, [el for el in exp_list])
             self.writel3asn(exp_list, asn_name, source + '_'+channel + bandname[band])
