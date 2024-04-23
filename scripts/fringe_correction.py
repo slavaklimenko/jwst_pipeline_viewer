@@ -141,14 +141,14 @@ class fringe_model():
             self.chunk_size_delta = np.asarray(chunk_size_delta)
 
 def fringe_custom_correction(s_pix, s_mean,debug=False,show_fit_chunks=False,
-                             smooth_scale=50,chunk_size = 0.20,chunk_size_delta = 0.198,chiqlimit=7):
+                             smooth_scale=50,chunk_size = 0.2,chunk_size_delta = 0.19,chiqlimit=7,second_iteration=False):
 
     s_mean.normalize()
     s_pix.normalize()
 
     #correction for nan
-    s_pix.nan_interpolation()
-    s_mean.nan_interpolation()
+    #s_pix.nan_interpolation()
+    #s_mean.nan_interpolation()
 
     #smooth integrated spec
     #win = signal.windows.hann(smooth_scale)
@@ -165,9 +165,10 @@ def fringe_custom_correction(s_pix, s_mean,debug=False,show_fit_chunks=False,
 
     # calc POLYFIT correction
     X,Y = s_pix.x,s_pix.y-s_mean.y
-    z = np.polyfit(X, Y, 5)
+    mask_nan = np.isnan(s_pix.y) + np.isnan(s_mean.y)
+    z = np.polyfit(X[~mask_nan], Y[~mask_nan], 5)
     polynomial_fit = np.poly1d(z)
-    if debug and 1:
+    if debug and 0:
         plt.subplots()
         plt.plot(s_pix.x,s_pix.y,label='spaxel')
         plt.plot(s_mean.x,s_mean.y,label='integrated')
@@ -207,7 +208,7 @@ def fringe_custom_correction(s_pix, s_mean,debug=False,show_fit_chunks=False,
             #lmfit to fringe signal
             from lmfit import Model
             if i ==0:
-                init = [0.2, 5, 0, 0]
+                init = [0.1, 5, 0, 0]
 
             #set frequence using fft method
             from scipy.fft import fft, fftfreq
@@ -237,7 +238,11 @@ def fringe_custom_correction(s_pix, s_mean,debug=False,show_fit_chunks=False,
                 return a * np.sin(2 * np.pi * x  * fq+p) + b
 
             fmodel = Model(func)
-            result = fmodel.fit(data_y, x=data_x, a=init[0], p=init[2],b=init[3])
+            if np.sum(np.isnan(data_y))>0:
+                mask_nan = ~np.isnan(data_y)
+                result = fmodel.fit(data_y[mask_nan], x=data_x[mask_nan], a=init[0], p=init[2], b=init[3])
+            else:
+                result = fmodel.fit(data_y, x=data_x, a=init[0], p=init[2], b=init[3])
             #print(result.fit_report())
 
             init = [result.best_values['a'],fq, result.best_values['p'], result.best_values['b']]
@@ -330,31 +335,30 @@ def fringe_custom_correction(s_pix, s_mean,debug=False,show_fit_chunks=False,
     (y_fit, num_chunks,params_x,params_vals,params_chiq) = fit_to_wiggles(wave=wave,flux=flux,flux_err=flux_err,plot_parameter_stats=0,return_params_model=1)
 
     #second iteration
-    y_fit_2 = fit_to_wiggles(wave=y_fit.x, flux=flux-y_fit.y, flux_err=y_fit.err)
-    y_fit.y += y_fit_2.y
+    if second_iteration:
+        y_fit_2 = fit_to_wiggles(wave=y_fit.x, flux=flux-y_fit.y, flux_err=y_fit.err)
+        y_fit.y += y_fit_2.y
 
     #third iteration
     #y_fit_3 = fit_to_wiggles(wave=y_fit.x, flux=flux-y_fit.y, flux_err=y_fit.err)
     #y_fit.y += y_fit_3.y
 
     if debug:
-        fig, ax = plt.subplots(1, 2, sharex=True, sharey=False)
+        fig, ax = plt.subplots(1, 4, sharex=True, sharey=True)
         ax[0].plot(s_pix.x, s_pix.y, label='pixel')
-        ax[0].plot(s_mean.x, s_mean.y, label='integrated')
-        ax[0].plot(s_mean.x, s_pix.y - s_mean.y, label='fringes')
-        ax[0].plot(s_pix.x, y_fit.y, color='red', label='fit')
-        ax[0].plot(s_pix.x, s_pix.y - s_mean.y - y_fit.y - 0.2, color='tab:blue', label='subtracted')
+        ax[0].plot(s_mean.x, s_mean.y, label='integrated spectrum')
+        ax[1].plot(s_mean.x, s_pix.y - s_mean.y, label='fringes')
+        ax[1].plot(s_pix.x, y_fit.y, color='red', label='fit')
+        ax[2].plot(s_pix.x, s_pix.y, ls='-', color='black', label='spaxel')
+        # ax[2].plot(s_pix.x, s_mean.y + y_fit.y, ls='--', color='red', label='mean+fringes_fit')
+        ax[2].plot(s_pix.x, y_fit.y, ls='--', color='red', label='fringes')
+        ax[2].plot(s_mean.x, s_pix.y - y_fit.y, color='tab:blue', ls='-', label='spaxel-corrected for fringes')
+        ax[3].plot(s_mean.x, s_mean.y, color='grey', label='integrated spectrum')
+        ax[3].plot(s_mean.x, s_pix.y - y_fit.y, color='tab:blue', ls='-', label='spaxel-corrected for fringes')
+        ax[3].plot(s_mean.x, s_pix.y - y_fit.y-s_mean.y, color='tab:red', ls='-', label='difference')
 
-        ax[1].plot(s_pix.x, s_pix.y, ls='-', color='black', label='spaxel')
-        ax[1].plot(s_pix.x, s_mean.y+y_fit.y, ls='--', color='red', label='model=mean+fringes_fit')
-        #ax[1].plot(s_pix.x, y_fit.y, ls='--', color='red', label='model')
-
-        ax[1].plot(s_mean.x, s_pix.y - y_fit.y, color='green', ls='-', label='spaxel-fringe_correction')
-        ax[1].plot(s_mean.x, s_pix.y - y_fit.y - 0.2 - s_mean.y, color='tab:blue', ls='-', label='spaxel-fringe_correction-s_mean')
-        ax[1].axhline(-0.2)
-
-        ax[0].legend()
-        ax[1].legend()
+        for i in range(4):
+            ax[i].legend()
         plt.show()
 
 
@@ -369,13 +373,13 @@ def fringe_custom_correction(s_pix, s_mean,debug=False,show_fit_chunks=False,
     return s_corrected,wiggle_model
 
 def fringe_custom_correction_second_pixel(s_pix,s_mean,debug=False,show_fit_chunks=False,
-                             smooth_scale=50, fringe_init=None,label=''):
+                             smooth_scale=50, fringe_init=None,label='',second_iteration=False):
     s_mean.normalize()
     s_pix.normalize()
 
     # correction for nan
-    s_pix.nan_interpolation(label='spaxel')
-    s_mean.nan_interpolation(label='mean')
+    #s_pix.nan_interpolation(label='spaxel')
+    #s_mean.nan_interpolation(label='mean')
 
     # smooth integrated spec
     #win = signal.windows.hann(smooth_scale)
@@ -386,7 +390,8 @@ def fringe_custom_correction_second_pixel(s_pix,s_mean,debug=False,show_fit_chun
     # calc POLYFIT correction
     #X, Y = s_pix.x, s_pix.y - s_mean.smoothed
     X, Y = s_pix.x, s_pix.y - s_mean.y
-    z = np.polyfit(X, Y, 5)
+    mask_nan = np.isnan(s_pix.y) + np.isnan(s_mean.y)
+    z = np.polyfit(X[~mask_nan], Y[~mask_nan], 5)
     polynomial_fit = np.poly1d(z)
     if debug and 1:
         plt.subplots()
@@ -403,6 +408,8 @@ def fringe_custom_correction_second_pixel(s_pix,s_mean,debug=False,show_fit_chun
     wave = s_pix.x
     flux = s_pix.y - s_mean.y
     flux_err = s_pix.err
+    if np.sum(np.isnan(flux)>0):
+        print()
 
     def fit_to_wiggles_second(wave, flux, flux_err=None, plot_results=0, plot_parameter_stats=0, return_params_model=0,fringe_init=fringe_init):
 
@@ -429,7 +436,7 @@ def fringe_custom_correction_second_pixel(s_pix,s_mean,debug=False,show_fit_chun
             # lmfit to fringe signal
             from lmfit import Model
             if i == 0:
-                init = [0.2, 5, 0, 0]
+                init = [0.1, 5, 0, 0]
 
             # set frequence from fit to brightest pixel
             fq = fringe_init.fq[i]
@@ -438,7 +445,12 @@ def fringe_custom_correction_second_pixel(s_pix,s_mean,debug=False,show_fit_chun
                 return a * np.sin(2 * np.pi * x * fq + p) + b
 
             fmodel = Model(func)
-            result = fmodel.fit(data_y, x=data_x, a=init[0], p=init[2], b=init[3])
+            if np.sum(np.isnan(data_y))>0:
+                mask_nan = ~np.isnan(data_y)
+                result = fmodel.fit(data_y[mask_nan], x=data_x[mask_nan], a=init[0], p=init[2], b=init[3])
+            else:
+                result = fmodel.fit(data_y, x=data_x, a=init[0], p=init[2], b=init[3])
+
             #print(result.fit_report())
 
             init = [result.best_values['a'], fq, result.best_values['p'], result.best_values['b']]
@@ -671,32 +683,31 @@ def fringe_custom_correction_second_pixel(s_pix,s_mean,debug=False,show_fit_chun
             return y_fit
 
     # second iteration
-    y_fit_2 = fit_to_wiggles(wave=y_fit.x, flux=flux - y_fit.y, flux_err=y_fit.err)
-    y_fit.y += y_fit_2.y
+    if second_iteration:
+        y_fit_2 = fit_to_wiggles(wave=y_fit.x, flux=flux - y_fit.y, flux_err=y_fit.err)
+        y_fit.y += y_fit_2.y
 
     # third iteration
     # y_fit_3 = fit_to_wiggles(wave=y_fit.x, flux=flux-y_fit.y, flux_err=y_fit.err)
     # y_fit.y += y_fit_3.y
 
     if debug:
-        fig, ax = plt.subplots(1, 2, sharex=True, sharey=False)
+        fig, ax = plt.subplots(1, 5, sharex=True, sharey=True)
         ax[0].plot(s_pix.x, s_pix.y, label='pixel')
         ax[0].plot(s_mean.x, s_mean.y, label='integrated')
-        ax[0].plot(s_mean.x, s_pix.y - s_mean.y, label='fringes')
-        ax[0].plot(s_pix.x, y_fit.y, color='red', label='fit')
-        ax[0].plot(s_pix.x, s_pix.y - s_mean.y - y_fit.y - 0.2, color='tab:blue', label='subtracted')
+        ax[1].plot(s_mean.x, s_pix.y - s_mean.y, label='fringes')
+        ax[1].plot(s_pix.x, y_fit.y, color='red', label='fit')
 
-        ax[1].plot(s_pix.x, s_pix.y, ls='-', color='black', label='spaxel')
-        ax[1].plot(s_pix.x, s_mean.y + y_fit.y, ls='--', color='red', label='mean+fringes_fit')
-        # ax[1].plot(s_pix.x, y_fit.y, ls='--', color='red', label='model')
+        ax[2].plot(s_pix.x, s_pix.y, ls='-', color='black', label='spaxel')
+        #ax[2].plot(s_pix.x, s_mean.y + y_fit.y, ls='--', color='red', label='mean+fringes_fit')
+        ax[2].plot(s_pix.x, y_fit.y, ls='--', color='red', label='fringes')
 
-        ax[1].plot(s_mean.x, s_pix.y - y_fit.y, color='green', ls='-', label='after')
-        ax[1].plot(s_mean.x, s_pix.y - y_fit.y - 0.2 - s_mean.y, color='tab:blue', ls='-',
-                   label='diff with integrated corrected for polyfit')
-        ax[1].axhline(-0.2)
+        ax[2].plot(s_mean.x, s_pix.y - y_fit.y, color='tab:blue', ls='-', label='spaxel-corrected for fringes')
+        ax[3].plot(s_mean.x, s_mean.y, label='integrated')
+        ax[3].plot(s_mean.x, s_pix.y - y_fit.y, color='tab:blue', ls='-', label='spaxel-corrected for fringes')
         ax[0].set_title('Fringefit: '+label)
-        ax[0].legend()
-        ax[1].legend()
+        for i in range(4):
+            ax[i].legend()
         plt.show()
 
     s_pix.fringe_corrected = np.array(s_pix.y - y_fit.y)
