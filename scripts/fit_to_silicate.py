@@ -26,37 +26,146 @@ from astropy.io import fits
 from scipy import signal
 import scipy.signal
 
+
+
+class spectrum():
+    def __init__(self, x=None, y=None, err=None,name=None):
+        if any([v is not None for v in [x, y, err]]):
+            self.set_data(x=x, y=y, err=err,name=name)
+
+    def set_data(self, x=None, y=None, err=None,name=None):
+        if x is not None:
+            self.x = np.asarray(x)
+        if y is not None:
+            self.y = np.asarray(y)
+        if y is not None:
+            self.y = np.asarray(y)
+        if err is not None:
+            self.err = np.asarray(err)
+        if name is not None:
+            self.name = name
+
+    def normalize(self,x0=5,delta_x = 0.1):
+        if x0>self.x[0] and x0<self.x[-1]:
+            mask = (self.x >= x0-delta_x)*(self.x <= x0+delta_x)
+            norm_f = np.mean(self.y[mask])
+            self.y /=norm_f
+            self.err /=norm_f
+
+    def append(self,s,mode = 'mean disp',debug=False):
+        if not hasattr(self, 'x'):
+            if hasattr(s,'x'):
+                self.x = s.x.copy()
+                self.y = s.y.copy()
+                self.err = s.err.copy()
+        else:
+            if np.sum(s.x)>0:
+                mask_intersection = s.x <= self.x[-1]
+                mask_extension = ~mask_intersection
+                if debug:
+                    import matplotlib.pyplot as plt
+                    fig, ax = plt.subplots(1, 2)
+                    ax[0].plot(s.x,s.y/s.err,label='s')
+                    ax[0].plot(self.x,self.y/self.err,label='self')
+                    f = np.linspace(0.1,10,100)
+                    ax[1].plot(f,(f+5)*5/(25 + f**2))
+                    ax[0].legend()
+                    plt.show()
+
+
+                if np.sum(mask_intersection) > 0:
+                    s_interp = interp1d(s.x, s.y, bounds_error=False, fill_value=np.NaN)
+                    s_interp_err = interp1d(s.x, s.err, bounds_error=False, fill_value=np.NaN)
+                    mask_selfx_intersection = self.x>=s.x[0]
+                    comb = [self.y[mask_selfx_intersection],s_interp(self.x[mask_selfx_intersection])]
+                    e_comb = [self.err[mask_selfx_intersection],s_interp_err(self.x[mask_selfx_intersection])]
+                    if mode == 'mean weighted':
+                        w = np.power(e_comb,-2)
+                        f2 = np.nansum(comb * w, axis=0) / np.nansum(w, axis=0)
+                        self.y[mask_selfx_intersection] = f2
+                        self.err[mask_selfx_intersection] = np.power(np.nansum(w, axis=0), -0.5)
+                    elif mode == 'mean':
+                        self.y[mask_selfx_intersection] = np.nanmean(comb)
+                        self.err[mask_selfx_intersection] = np.power(np.nansum(np.power(e_comb, -2), axis=0), -0.5)
+                    elif mode == 'mean disp':
+                        self.y[mask_selfx_intersection] = np.nansum(comb,axis=0)/2
+                        f = comb-self.y[mask_selfx_intersection]
+                        f1 = np.power(f,2)
+                        self.err[mask_selfx_intersection] = np.power(np.nansum(f1,axis=0)/2, 0.5)
+
+                self.x = np.append(self.x,s.x[mask_extension])
+                self.y = np.append(self.y,s.y[mask_extension])
+                self.err = np.append(self.err,s.err[mask_extension])
+
+
+    def copy(self):
+        return spectrum(self.x,self.y,self.err)
+
+
+
 spectra = {}
-folder = '/home/slava/science/research/kulkarni/JWST-DLAs/ID2155/Normalized_spectra/'
-for (dirpath, dirname, filenames) in os.walk(folder):
-    print(dirpath, dirname, filenames)
-    for k, f in enumerate(filenames):
-        if f.endswith('fits'):
-            hdu = fits.open(folder+f)
-            data = hdu[1].data
-            col1 = data['WAVELENGTH']
-            col2 = data['FLUX']
-            col3 = data['ERROR']
-            spec = np.zeros((int(np.size(col1)),3))
-            spec[:,0] = col1
-            spec[:,1] = col2
-            spec[:,2] = col3
-            specname = f.split('.fits')[0]
-            spectra[specname] = spec
+folder = '/home/slava/science/codes/python/jwst/output/specviewer/'
+f = 'J1007_fringe_corrected_2sigma_aperture.fits'
+if f.endswith('fits'):
+    hdu = fits.open(folder+f)
+    data = hdu[1].data
+    col1 = data['WAVELENGTH']
+    col2 = data['FLUX']
+    col3 = data['ERROR']
+    spec = np.zeros((int(np.size(col1)),3))
+    spec[:,0] = col1
+    spec[:,1] = col2
+    spec[:,2] = col3
 
-trapezium_model = np.loadtxt('./../data/silicate_profiles/hannersilem.txt')
-olivine_model = np.loadtxt('./../data/silicate_profiles/olivinesilem.txt')
+sp  = spectrum(x=col1, y=col2, err=col3,name=f)
+sp.normalize(5)
+sp.z_abs = 0.8839
+sp.z_qso = 1.047
 
-spec_names= []
-for el in spectra.keys():
-    spec_names.append(el)
-print(spec_names)
-name = spec_names[6]
-print(name)
-sp = spectra[name]
-wave,flux,flux_err = sp[:,0],sp[:,1],sp[:,2]+0.03
-redshift =   0.524
-wave /= (1+redshift)
+fig,ax = plt.subplots(2,1)
+ax[0].plot(sp.x/(1+sp.z_abs),sp.y)
+ax[1].plot(sp.x/(1+sp.z_qso),sp.y)
+
+filename = '/home/slava/science/research/kulkarni/JWST-DLAs/lines_data/NGC7469.csv'
+l_w,l_n = [],[]
+import csv
+with open(filename, mode='r') as file:
+    csvFile = csv.reader(file)
+    for k, lines in enumerate(csvFile):
+        print(lines)
+        l_n.append(lines[0])
+        l_w.append(float(lines[1]))
+for axs in ax[:]:
+    for l,n in zip(l_w,l_n):
+        axs.axvline(l,ls='--')
+        axs.text(l,6,n,rotation=90,color='red')
+
+ax[0].set_ylabel('Flux')
+ax[0].set_xlabel('Wavelength (Galaxy)')
+ax[1].set_xlabel('Wavelength (Quasar)')
+
+plt.show()
+
+abs_model = np.loadtxt('./../data/dust_templates/Templates/profiles/Lab-Templates/SpoonAmOliv.dat')
+print('int:= ',np.trapz(abs_model[:,1],abs_model[:,0]))
+plt.subplots()
+plt.plot(abs_model[:,0],abs_model[:,1])
+plt.ylabel('flux')
+plt.xlabel('wavelength')
+plt.show()
+
+def continuum_model(x=sp.x, x0=5, alpha=1,y0=1):
+    f =  y0* (x / x0) ** alpha
+    return f
+
+fig,ax = plt.subplots()
+ax.plot(sp.x/(1+sp.z_abs),sp.y)
+ax.plot(sp.x/(1+sp.z_abs),continuum_model(x=sp.x/(1+sp.z_abs),x0=5/(1+sp.z_abs),alpha=1.25))
+plt.show()
+
+
+
+
 
 def fit_model(w=10, tau0=0,model='trapezium'):
     if model == 'trapezium':
@@ -117,7 +226,7 @@ def log_likelihood(theta,mode='olivine',wave=wave,flux=flux,flux_err=flux_err,de
 
 
 
-if 1:
+if 0:
     nwalkers = 500
     nsteps =300
     ndim = 3
