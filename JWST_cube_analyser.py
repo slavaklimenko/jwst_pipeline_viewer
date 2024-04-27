@@ -660,13 +660,12 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
             self.data = self.parent.CUBE_B.data.data
         data_mean = np.nanmean(self.data,axis=0)
         if 1:
-            data_mean[np.isnan(data_mean)]=0
-            spatial_mask = (data_mean != 0)*(~np.isnan(data_mean))
+            spatial_mask = data_mean != 0
             spatial_mask[:, 0] = 0
             spatial_mask[:, -1] = 0
             spatial_mask[0, :] = 0
             spatial_mask[-1, :] = 0
-            for k in range(4):
+            for k in range(3):
                 pos = np.where(spatial_mask > 0)
                 spatial_mask2 = np.array(spatial_mask)
                 for i, j in zip(pos[0], pos[1]):
@@ -675,7 +674,6 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
                         spatial_mask2[i, j] = 0
                 spatial_mask = np.array(spatial_mask2)
             del (spatial_mask2)
-        print(np.argwhere((data_mean == np.nanmax(data_mean))*spatial_mask))
         pos = np.argwhere((data_mean == np.nanmax(data_mean))*spatial_mask)[0]
         if debug:
             plt.subplots()
@@ -725,10 +723,10 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
             x,y = np.arange(image_comb.shape[0]),np.arange(image_comb.shape[1])
             X, Y = np.meshgrid(y,x)
             plt.subplots()
-            plt.imshow(image_comb, origin='lower', cmap='coolwarm',vmin=0,vmax=image_max_flux)
+            plt.imshow(np.log10(np.abs(image_comb/image_max_flux)), origin='lower', cmap='coolwarm')
             plt.colorbar()
-            plt.contour(X, Y, image_comb, levels=np.array([0.01,0.05,0.1,0.68,0.95,0.99])*image_max_flux, colors='black')
-            plt.savefig('./output/detector3/images/'+name+'.png')
+            plt.contour(X, Y, image_comb/image_max_flux, levels=np.array([0.01,0.05,0.1,0.68]), colors='black')
+            plt.savefig('/home/slava/science/codes/python/jwst/output/detector3/images/'+name+'.png')
             #plt.xticks([])
             #plt.yticks([])
             #plt.colorbar()
@@ -1844,7 +1842,7 @@ class CUBElistTable(pg.TableWidget):
                                              master_resample_spec_flag=master_resample_spec_flag,
                                              master_extract1d_flag=master_extract1d_flag)
 
-    def extract_roi(self, cube_name = '(A)',debug=False):
+    def extract_roi(self, cube_name = '(A)',debug=True):
         if cube_name == '(A)':
             cube = self.parent.parent.plot_3dcubeA
             data = self.parent.parent.CUBE_A.data
@@ -1858,20 +1856,101 @@ class CUBElistTable(pg.TableWidget):
         roi_name = ['sci','bkgr']
         for ir,roi in enumerate(cube.roi_list):
             if np.sum(roi.roi_mask) > 0:
-                num_pixels = np.sum(roi.roi_mask)
                 roi_mean_w_flux = np.zeros(cube.data.shape[0])
                 roi_mean_w_f_error = np.zeros(cube.data.shape[0])
                 roi_mean =  np.zeros(cube.data.shape[0])
+                roi_background1 = np.zeros(cube.data.shape[0]) #within annual aperture 5 - 8 miri psf sigma
+                roi_background2 = np.zeros(cube.data.shape[0]) #within all pixels > 5 sigma
                 y = np.zeros(cube.data.shape[0])
                 y_err = np.zeros(cube.data.shape[0])
+                # set background mask
+                if 1:
+                    image_comb = np.nansum(data.data, axis=0) / cube.data.shape[0]
+                    # set spatial mask
+                    if 1:
+                        spatial_mask = image_comb != 0
+                        spatial_mask[:, 0] = 0
+                        spatial_mask[:, -1] = 0
+                        spatial_mask[0, :] = 0
+                        spatial_mask[-1, :] = 0
+                        for k in range(3):
+                            pos = np.where(spatial_mask > 0)
+                            spatial_mask2 = np.array(spatial_mask)
+                            for i, j in zip(pos[0], pos[1]):
+                                if spatial_mask[i - 1, j] == 0 or spatial_mask[i + 1, j] == 0 or spatial_mask[
+                                    i, j - 1] == 0 or spatial_mask[i, j + 1] == 0:
+                                    spatial_mask2[i, j] = 0
+                            spatial_mask = np.array(spatial_mask2)
+                        del (spatial_mask2)
+
+                    d = image_comb / np.nanmax(image_comb[spatial_mask])
+                    pos_max = np.argwhere(d==1)[0]
+                    print('pos_max',pos_max)
+                    profile = np.nanmean(d[:,(pos_max[1])-1:(pos_max[1])+1],axis=1)
+
+                    miri_psf_fwhm = miri_psf_arcsec(wavel[0])
+                    if cube_name == '(A)':
+                        wcs1 = self.parent.parent.CUBE_A.data.wcs
+                    if cube_name == '(B)':
+                        wcs1 = self.parent.parent.CUBE_B.data.wcs
+                    delta_x = wcs1['CDELT1']
+                    miri_psf_fwhm *= 1 / 3600 / delta_x
+                    miri_psf_sigma = miri_psf_fwhm / 2.355
+
+
+
+                    def radial_dist(pos_max=pos_max,pos=[0,1]):
+                        return np.sqrt((pos_max[1]-pos[0])**2+(pos_max[0]-pos[1])**2)
+
+                    XX,YY = np.meshgrid(np.arange(image_comb.shape[1]),np.arange(image_comb.shape[0]))
+                    mask_radial = radial_dist(pos=[XX,YY])
+                    mask_radial[~spatial_mask] = 0
+                    mask_annual = (mask_radial>5* miri_psf_sigma)* (mask_radial<8* miri_psf_sigma)
+                    mask_bkgr1,mask_bkgr2 = np.array(mask_radial),np.array(mask_radial)
+                    mask_bkgr1[~mask_annual] = 0
+                    mask_bkgr2[mask_radial<5* miri_psf_sigma] = 0
+
+                    if debug:
+
+                        plt.subplots()
+                        plt.title('Source profile')
+                        plt.plot(profile)
+                        plt.axvline(pos_max[0])
+                        plt.axvline(pos_max[0] + 2 * miri_psf_sigma, ls='--', color='red')
+                        plt.axvline(pos_max[0] + 3 * miri_psf_sigma, ls=':', color='green')
+                        plt.axvline(pos_max[0] + 4 * miri_psf_sigma, ls=':', color='blue')
+                        plt.show()
+
+                        flux_bkgr1 = np.zeros(cube.data.shape[0])
+                        flux_bkgr2 = np.zeros(cube.data.shape[0])
+                        flux_s= np.zeros(cube.data.shape[0])
+                        for i in range(cube.data.shape[0]):
+                            flux_bkgr1[i] = np.nanmean(data.data[i,:,:][mask_bkgr1>0])
+                            flux_bkgr2[i] = np.nanmean(data.data[i, :, :][mask_bkgr2>0])
+                            d1 = data.data[i, :, :]
+                            mask = (roi.roi_mask) * (~np.isnan(d1))
+                            d1 = d1[mask]
+                            flux_s[i] = np.nansum(d1, axis=0)
+
+                        plt.subplots()
+                        plt.plot(flux_bkgr1*np.sum(mask),label='bkgr1')
+                        plt.plot(flux_bkgr2*np.sum(mask),label='bkgr2')
+                        plt.plot(flux_s, label='bkgr2')
+                        plt.legend()
+                        plt.subplots()
+                        plt.imshow(mask_bkgr1/miri_psf_sigma)
+                        plt.colorbar()
+                        plt.subplots()
+                        plt.imshow(np.log10(np.abs(d)))
+                        plt.colorbar()
+                        plt.show()
+
+
+
                 for i in range(cube.data.shape[0]):
                     d = data.data[i, :, :]
-                    #remove nan pixels
-                    #mask = (roi.roi_mask) * (~np.isnan(d))
-                    mask = (roi.roi_mask)
+                    mask = (roi.roi_mask)*(~np.isnan(d))
                     d = d[mask]
-                    if np.sum(np.isnan(d))>0:
-                        d = np.nan
                     derr = data.err[i, :, :]
                     derr = derr[mask]
                     w = np.power(derr,2)
@@ -1879,8 +1958,12 @@ class CUBElistTable(pg.TableWidget):
                     y_err[i] =  np.power(np.nansum(w, axis=0), 0.5)
                     roi_mean_w_flux[i] = np.nansum(d/derr**2) / np.nansum(1/derr**2)
                     roi_mean_w_f_error[i] = 1/np.nansum(1/derr**2)
-
                     roi_mean[i] = np.nansum(d) / np.size(d)
+                    #calculate background
+                    n_roi_pixels = np.sum(mask)
+                    roi_background1[i] = np.nanmean(data.data[i, :, :][mask_bkgr1 > 0])*n_roi_pixels
+                    roi_background2[i] = np.nanmean(data.data[i, :, :][mask_bkgr2 > 0])*n_roi_pixels
+
                 if debug:
                     fig,ax = plt.subplots()
                     ax.errorbar(x=np.arange(np.size(y)),y=y,yerr=y_err,label='w_weighted',lw =2)
@@ -1888,11 +1971,19 @@ class CUBElistTable(pg.TableWidget):
                     ax.plot(roi_mean, label = 'mean')
                     ax.legend()
                     plt.show()
+                #save spectrum
                 filename = './output/detector3/roi_spectra/'+name+'_'+cube_name+'_'+roi_name[ir]+'.spec1d'
                 with open(filename, 'w') as fout:
                     #for x,y,e in zip(wavel,roi_mean_w_flux,roi_mean_w_f_error):
-                    for x, y, e in zip(wavel, y, y_err):
-                        fout.write('%.4e %.4e %.4e \n' %(x,y,e))
+                    for x, f, e in zip(wavel, y, y_err):
+                        fout.write('%.4e %.4e %.4e \n' %(x,f,e))
+                fout.close()
+                #save background
+                filename = './output/detector3/roi_spectra/' + name + '_' + cube_name + '_' + roi_name[ir] + '_bkgr.spec1d'
+                with open(filename, 'w') as fout:
+                    # for x,y,e in zip(wavel,roi_mean_w_flux,roi_mean_w_f_error):
+                    for x, f, e in zip(wavel, roi_background1, y_err):
+                        fout.write('%.4e %.4e %.4e \n' % (x, f, e))
                 fout.close()
 
 
@@ -2893,7 +2984,7 @@ class expRunWidget(QWidget):
         self.sourse_listA = QComboBox()
         lst = self.parent.exp_pars.readfolder(self.parent.CUBE_A.path)
         self.sourse_listA.addItems(lst)  # ['Object', 'Background','Both'])
-        self.sourse_listA.setCurrentIndex(15)
+        self.sourse_listA.setCurrentIndex(23)
         # p = self.asn_source.currentText()
         # print(self.asn_source.itemData[0])
         # self.asn_source.setFixedSize(90, 30)
@@ -2910,7 +3001,7 @@ class expRunWidget(QWidget):
         self.sourse_listB = QComboBox()
         lst = self.parent.exp_pars.readfolder(self.parent.CUBE_B.path)
         self.sourse_listB.addItems(lst)  # ['Object', 'Background','Both'])
-        self.sourse_listB.setCurrentIndex(15)
+        self.sourse_listB.setCurrentIndex(23)
         # p = self.asn_source.currentText()
         # print(self.asn_source.itemData[0])
         # self.asn_source.setFixedSize(90, 30)
@@ -3205,19 +3296,15 @@ class expRunWidget(QWidget):
         if 1:
             (timeind, time) = self.parent.plot_3dcubeA.timeIndex(self.parent.plot_3dcubeA.timeLine)
             lambda_local = self.parent.CUBE_A.data.wavelength[timeind]
-
-            if 0:
-                miri_psf_fwhm = miri_psf_pix(lambda_local)
-            else:
-                miri_psf_fwhm = miri_psf_arcsec(lambda_local)
-                if roi_type in ['green', 'red']:
-                    wcs1 = self.parent.CUBE_A.data.wcs
-                if roi_type in ['purple','yellow']:
-                    wcs1 = self.parent.CUBE_B.data.wcs
-                delta_x = wcs1['CDELT1']
-                # print(delta_x, miri_psf_fwhm)
-                # delta_y = wcs1['CDELT2']
-                miri_psf_fwhm *= 1 / 3600 / delta_x
+            miri_psf_fwhm = miri_psf_arcsec(lambda_local)
+            if roi_type in ['green', 'red']:
+                wcs1 = self.parent.CUBE_A.data.wcs
+            if roi_type in ['purple','yellow']:
+                wcs1 = self.parent.CUBE_B.data.wcs
+            delta_x = wcs1['CDELT1']
+            # print(delta_x, miri_psf_fwhm)
+            # delta_y = wcs1['CDELT2']
+            miri_psf_fwhm *= 1 / 3600 / delta_x
         if hasattr(self.parent.plot_3dcubeA,'roi_list'):
             rois['green'] = self.parent.plot_3dcubeA.roi_list[0]
             rois['red'] = self.parent.plot_3dcubeA.roi_list[1]
@@ -3261,12 +3348,13 @@ class expRunWidget(QWidget):
             spec1d[:,2] = spec/50
             np.savetxt('./output/detector3/background/'+name+'.dat',spec1d)
 
-    def make_fringe_correction(self,s=None,flag_update_data=True,debug=False,level = 0.95):
+    def make_fringe_correction(self,s=None,flag_update_data=True,debug=False):
 
         from scripts.fringe_correction import spectrum as sp
         from scripts.fringe_correction import fringe_custom_correction,fringe_custom_correction_second_pixel
 
-        #select pixel within the level % of the highest flux
+        #select pixel within 90% of the highest flux
+        level = 0.95
         cube_name = self.extract_1d_roi_cube.currentText()
         if cube_name == '(A)':
             image = self.parent.CUBE_A.data
@@ -3291,18 +3379,18 @@ class expRunWidget(QWidget):
                         spatial_mask2[i , j] = 0
                 spatial_mask = np.array(spatial_mask2)
             del(spatial_mask2)
-        d = image_comb / np.nanmax(image_comb)
+        d = image_comb / np.nanmax(image_comb[spatial_mask])
         d[np.isnan(d)] = 0
         mask_warm_pixels = (d>1-level)*spatial_mask
         print('fringe correction: number of warm pixels', np.sum(mask_warm_pixels))
 
         #define spec of the brightest pixel
         image_comb[np.isnan(image_comb)] = 0
-        pos_brightest = np.argwhere(image_comb==np.max(image_comb.flatten()))[0]
+        pos = np.argwhere(image_comb==np.max(image_comb.flatten()))[0]
         #pos = np.argwhere(data_mean == np.nanmax(data_mean))[0]
-        sp_brightest = sp(x=wavel, y=np.array(image.data[:,pos_brightest[0],pos_brightest[1]]), err=np.array(image.err[:,pos_brightest[0],pos_brightest[1]]))
+        sp_brightest = sp(x=wavel, y=np.array(image.data[:,pos[0],pos[1]]), err=np.array(image.err[:,pos[0],pos[1]]))
         image_ind = np.indices((image_comb.shape[0],image_comb.shape[1]))
-        mask_warm_pixels *= (np.abs(image_ind[0]-pos_brightest[0])<5)*(np.abs(image_ind[1]-pos_brightest[1])<5)
+        mask_warm_pixels *= (np.abs(image_ind[0]-pos[0])<5)*(np.abs(image_ind[1]-pos[1])<5)
 
         # calc integrated_flux
         pos = np.where(mask_warm_pixels == True)
@@ -3310,18 +3398,16 @@ class expRunWidget(QWidget):
         ferr = np.power(
             np.nansum([np.power(image.err[:, posx, posy], 2) for posx, posy in zip(pos[0], pos[1])], axis=0), 0.5)
         sp_integrated = sp(x=wavel, y=np.array(flux), err=np.array(ferr))
-        sp_integrated_copy = sp(x=wavel,y=np.array(sp_integrated.y), err=np.array(sp_integrated.err))
+
         if 1:
-            fig, ax = plt.subplots(1, 4, sharex=False, sharey=False)
+            fig, ax = plt.subplots(1, 2, sharex=True, sharey=True)
             ax[0].imshow(image_comb)
             ax[1].imshow(mask_warm_pixels)
-            ax[2].plot(sp_integrated.x,np.array(sp_integrated.y),label='integr. (before correction)')
-            ax[3].plot(sp_brightest.x, sp_brightest.y, label='brightest. (before correction)')
             ax[1].set_title('mask for warm pixels')
-            #plt.show()
+            plt.show()
 
         #(x,y,yerr, fringe_best_pix_model) = fringe_custom_correction(s_pix=sp_brightest,s_mean=sp_integrated,debug=True,  show_fit_chunks=True,chiqlimit=7)
-        (sp_model, fr_model) = fringe_custom_correction(s_pix=sp_brightest, s_mean=sp_integrated_copy, debug=True,
+        (sp_model, fr_model) = fringe_custom_correction(s_pix=sp_brightest, s_mean=sp_integrated, debug=True,
                                                        show_fit_chunks=0, chiqlimit=7)
         #
         pos = np.where(mask_warm_pixels == True)
@@ -3333,25 +3419,14 @@ class expRunWidget(QWidget):
             flux = np.array(image.data[:, posx, posy])
             ferr = np.array(image.err[:, posx, posy])
             sp_i = sp(x=wavel, y=flux, err=ferr)
-            sp_integrated_copy = sp(x=wavel,y=np.array(sp_integrated.y), err=np.array(sp_integrated.err))
             #(x, y, yerr, fr_model2) = fringe_custom_correction_second_pixel(s_pix = sp_i,s_mean=sp_integrated,
             #                                                            debug=False, show_fit_chunks=False, chiqlimit=7,
             #                                                            fringe_init=fringe_best_pix_model)
-            (sp_i_model, fr_model_i) = fringe_custom_correction_second_pixel(s_pix= sp_i, s_mean=sp_integrated_copy, debug=debug,
+            (sp_i_model, fr_model_i) = fringe_custom_correction_second_pixel(s_pix= sp_i, s_mean=sp_integrated, debug=debug,
                                                                          show_fit_chunks=0, fringe_init=fr_model,
                                                                              label = str(round(posx,1))+' '+str(round(posy,1)))
             if flag_update_data:
                 image.data[:, posx, posy] = sp_i_model.y
-        if 1:
-            flux = np.nansum([image.data[:, posx, posy] for posx, posy in zip(pos[0], pos[1])], axis=0)
-            ax[2].plot(sp_integrated.x, flux,ls='--',label='integr (fringe corrected)')
-            sp_brightest = sp(x=wavel, y=np.array(image.data[:, pos_brightest[0], pos_brightest[1]]),
-                              err=np.array(image.err[:, pos_brightest[0], pos_brightest[1]]))
-            ax[3].plot(sp_brightest.x, sp_brightest.y, label='brightest. (after correction)')
-            ax[2].legend()
-            ax[3].legend()
-
-            plt.show()
 
     def set_DQ_map(self, debug = False):
         print('set_DQ_map, debug:', debug)
@@ -3590,3 +3665,4 @@ if __name__ == '__main__':
     app = QApplication(sys.argv)
     ex2 = JWST_spec_viewer()
     sys.exit(app.exec_())
+

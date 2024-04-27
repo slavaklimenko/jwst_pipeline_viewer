@@ -74,7 +74,7 @@ class spectrum():
 
 
     def copy(self):
-        return spectrum(self.x,self.y,self.err)
+        return spectrum(np.array(self.x),np.array(self.y),np.array(self.err))
 
 
 
@@ -286,6 +286,11 @@ class Viewer(QWidget):
         self.rebin_n_pix.setText('1 pix')
         self.rebin_n_pix.setFixedSize(100, 30)
         self.horizontalLayout.addWidget(self.rebin_n_pix)
+        self.recalc_errorbar =  QPushButton('RecalcStd')
+        self.recalc_errorbar.clicked[bool].connect(partial(self.RecalcStd))
+        self.recalc_errorbar.setFixedSize(200, 60)
+        self.horizontalLayout.addWidget(self.recalc_errorbar)
+
         self.horizontalLayout.addStretch(1)
         self.mainLayout.addLayout(self.horizontalLayout)
 
@@ -585,82 +590,39 @@ class Viewer(QWidget):
         self.setObjName(secret='combined')
 
     def saveObj(self):
-        s = spectrum(x=self.w1.data.x,y=self.w1.data.y*self.w1.x,err=self.w1.data.err*self.w1.x)
-        label='CH1'
-        if self.w2.data != None and self.w2.x != 0:
-            s2 = spectrum(x=self.w2.data.x, y=self.w2.data.y * self.w2.x, err=self.w2.data.err * self.w2.x)
-            s.append(s2)
-            label += '+CH2'
-        if self.w3.data != None and self.w3.x != 0:
-            s3 = spectrum(x=self.w3.data.x, y=self.w3.data.y * self.w3.x, err=self.w3.data.err * self.w3.x)
-            s.append(s3)
-            label += '+CH3'
-        if self.w4.data != None and self.w4.x != 0:
-            s4 = spectrum(x=self.w4.data.x, y=self.w4.data.y * self.w4.x, err=self.w4.data.err * self.w4.x)
-            s.append(s4)
-            label += '+CH4'
-        if self.w5.data != None and self.w5.x != 0:
-            s5 = spectrum(x=self.w5.data.x, y=self.w5.data.y * self.w5.x, err=self.w5.data.err * self.w5.x)
-            s.append(s5)
-            label += '+CH5'
-        if self.w6.data != None and self.w6.x != 0:
-            s6 = spectrum(x=self.w6.data.x, y=self.w6.data.y * self.w6.x, err=self.w6.data.err * self.w6.x)
-            s.append(s6)
-            label += '+CH6'
-        if self.w7.data != None and self.w7.x != 0:
-            s7 = spectrum(x=self.w7.data.x, y=self.w7.data.y * self.w7.x, err=self.w7.data.err * self.w7.x)
-            s.append(s7)
-            label += '+CH7'
-        if self.w8.data != None and self.w8.x != 0:
-            s8 = spectrum(x=self.w8.data.x, y=self.w8.data.y * self.w8.x, err=self.w8.data.err * self.w8.x)
-            s.append(s8)
-            label += '+CH8'
-        if self.w9.data != None and self.w9.x != 0:
-            s9 = spectrum(x=self.w9.data.x, y=self.w9.data.y * self.w9.x, err=self.w9.data.err * self.w9.x)
-            s.append(s9)
-            label += '+CH9'
-        if self.w10.data != None and self.w10.x != 0:
-            s10 = spectrum(x=self.w10.data.x, y=self.w10.data.y * self.w10.x, err=self.w10.data.err * self.w10.x)
-            s.append(s10)
-            label += '+CH10'
-        if self.w11.data != None and self.w11.x != 0:
-            s11 = spectrum(x=self.w11.data.x, y=self.w11.data.y * self.w11.x, err=self.w11.data.err * self.w11.x)
-            s.append(s11)
-            label += '+CH11'
-        if self.w12.data != None and self.w12.x != 0:
-            s12 = spectrum(x=self.w12.data.x, y=self.w12.data.y * self.w12.x, err=self.w12.data.err * self.w12.x)
-            s.append(s12)
-            label += '+CH12'
-
-
-        if 1:
-            def savefits(filename='test', wave=[999], flux=[999], err=[999],objname='None',channels='None'):
-                from astropy.io import fits
-                hdr = fits.Header()
-                hdr['TELESCOP'] = 'JWST'
-                hdr['INSTRUME'] = 'MIRI'
-                hdr['AUTHOR'] = 'V.KLIMENKO'
-                hdr['OBJECT'] = objname
-                hdr['CHNNELS'] = channels
-                hdr['COMMENT'] = "This file was created by Spectro"
-                empty_primary = fits.PrimaryHDU(header=hdr)
-                col1 = fits.Column(name='WAVELENGTH', format='D', array=wave)
-                col2 = fits.Column(name='FLUX    ', format='E', array=flux)
-                col3 = fits.Column(name='ERROR    ', format='E', array=err)
-                cols = fits.ColDefs([col1, col2, col3])
-                hdu1 = fits.BinTableHDU.from_columns(cols)
-                hdul = fits.HDUList([empty_primary, hdu1])
-                hdul.writeto(filename + '.fits', overwrite=True)
-        #normalization to f at 7.6 micron
-        if 1:
-            mask_N = (s.x>7.6)*(s.x<7.7)
-            factor_N = np.mean(s.y[mask_N])
-            s.y /=factor_N
-            s.err /= factor_N
-        if 1:
-            f = './output/specviewer/' + self.save_data_filename.text()
-            savefits(f,wave=s.x,flux=s.y,err=s.err,objname=self.objname_box.currentText(),channels=label)
-
+        if hasattr(self,'combined_spec'):
+            s = self.combined_spec
+            label = s.label
+            if 1:
+                def savefits(filename='test', wave=[999], flux=[999], err=[999],objname='None',channels='None'):
+                    from astropy.io import fits
+                    hdr = fits.Header()
+                    hdr['TELESCOP'] = 'JWST'
+                    hdr['INSTRUME'] = 'MIRI'
+                    hdr['AUTHOR'] = 'V.KLIMENKO'
+                    hdr['OBJECT'] = objname
+                    hdr['CHNNELS'] = channels
+                    hdr['COMMENT'] = "This file was created by Spectro"
+                    empty_primary = fits.PrimaryHDU(header=hdr)
+                    col1 = fits.Column(name='WAVELENGTH', format='D', array=wave)
+                    col2 = fits.Column(name='FLUX    ', format='E', array=flux)
+                    col3 = fits.Column(name='ERROR    ', format='E', array=err)
+                    cols = fits.ColDefs([col1, col2, col3])
+                    hdu1 = fits.BinTableHDU.from_columns(cols)
+                    hdul = fits.HDUList([empty_primary, hdu1])
+                    hdul.writeto(filename + '.fits', overwrite=True)
+            #normalization to f at 5 micron
+            if 0:
+                mask_N = np.abs(s.x-5)<0.1
+                factor_N = np.mean(s.y[mask_N])
+                s.y /=factor_N
+                s.err /= factor_N
+            if 1:
+                f = './output/specviewer/' + self.save_data_filename.text()
+                savefits(f,wave=s.x,flux=s.y,err=s.err,objname=self.objname_box.currentText(),channels=label)
+            print("Combined spectrum is saved to ", f)
+        else:
+            print("Error: Can't save file. There is no combined spectrum")
 
     def combineChunks(self):
         s = spectrum()
@@ -716,6 +678,9 @@ class Viewer(QWidget):
 
         self.combined_spec = s.copy()
         self.combined_spec.name = 'Combined'
+        self.combined_spec.dq = self.combined_spec.y != 0
+        self.combined_spec.label = label
+
         self.win.plot_spec(fname='Combined', add=False, show_err_bar=True)
         self.win.plot_spec(fname='Combined', fcolor='green', data=self.combined_spec, coef=1, show_err_bar=True)
 
@@ -729,6 +694,73 @@ class Viewer(QWidget):
         self.rebinned_spec = spectrum(self.spec_save.x, y,err,'rebinned')
         self.win.plot_spec(fname='Rebinned', add=False, show_err_bar=False)
         self.win.plot_spec(fname='Rebinned', fcolor='red', data=self.rebinned_spec, coef=1, show_err_bar=False)
+
+    def RecalcStd(self):
+        debug=True
+        spec_tmp = self.combined_spec.copy()
+        npix =spec_tmp.x.shape[0]
+
+        from scipy import signal
+        win_size = 50
+        win = signal.windows.hann(win_size)
+        filtered = signal.convolve(spec_tmp.y, win, mode='same') / sum(win)
+        s = np.arange(npix)
+        mask = (s > win_size / 2) * (s < len(spec_tmp.x) - win_size / 2)
+        spec_tmp.y[mask] = filtered[mask]
+        spec_tmp.y[s <= win_size / 2] = np.mean(spec_tmp.y[s < win_size / 2])
+        spec_tmp.y[s >= len(spec_tmp.x) - win_size / 2] = np.mean(spec_tmp.y[s >= len(spec_tmp.x) - win_size / 2])
+
+        if debug:
+            plt.subplots()
+            plt.plot(self.combined_spec.x,self.combined_spec.y,label='combined')
+            plt.plot(spec_tmp.x,spec_tmp.y,ls='--',label='convolved')
+            plt.show()
+
+        spec_tmp.y =  self.combined_spec.y-spec_tmp.y
+
+        #select outliers:
+        outlier_limit = 3*np.std(spec_tmp.y)
+        mask_outliers = np.abs(spec_tmp.y)>outlier_limit
+
+        #calc pixels std
+        spec_std = np.zeros(npix)
+        win = 40
+        s = np.arange(npix)
+        for i in range(npix):
+            mask = (s<=i+win/2)*(s>=i-win/2)*self.combined_spec.dq*(~mask_outliers)
+            spec_std[i] =np.nanstd(spec_tmp.y[mask])
+        self.combined_spec.err = spec_std
+
+        if debug:
+            plt.subplots()
+            plt.plot(spec_tmp.x, spec_tmp.y, ls='-')
+            plt.plot(spec_tmp.x, spec_std, ls='-',color='red')
+            plt.axhline(np.std(spec_tmp.y),color='red',ls='--')
+            plt.show()
+
+            plt.subplots()
+            plt.hist(spec_tmp.y,bins=np.linspace(-2000,2000,100))
+            plt.axvline(np.std(spec_tmp.y))
+
+            if 0:
+                from specutils.spectra import Spectrum1D
+                from specutils.fitting import fit_lines
+                from astropy import units as u
+                from astropy.modeling import models
+                data,x = np.histogram(spec_tmp.y,bins=np.linspace(-2000,2000,100))
+                x = np.delete(x,0,0)
+                data = np.array(data+1e-5)
+                from astropy import modeling
+
+                fitter = modeling.fitting.LevMarLSQFitter()
+                model = modeling.models.Gaussian1D()  # depending on the data you need to give some initial values
+                fitted_model = fitter(model, x, data)
+                y = fitted_model(x)
+                plt.subplots()
+                plt.plot(x,data)
+                plt.plot(x,y)
+
+            plt.show()
 
         #self.win.plot_spec(fname='Combined', add=False, show_err_bar=False)
         #self.win.plot_spec(fname='Combined', fcolor='green', data=self.combined_spec, coef=1, show_err_bar=False)
