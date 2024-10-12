@@ -13,6 +13,24 @@ from scipy import signal
 from scipy.fft import fft, fftfreq
 from astropy import modeling
 
+
+def rebin_arr(a, factor):
+    n = a.shape[0] // factor
+    return a[:n*factor].reshape(a.shape[0] // factor, factor).sum(1)/factor
+
+def rebin_weight_mean(y, err,factor):
+    w = np.array(np.power(err,-2))
+    a = np.array(y)
+    n = a.shape[0] // factor
+    a*=w
+    a = a[:n*factor].reshape(n, factor)
+    w = w[:n * factor].reshape(n, factor)
+    a = a.sum(1)
+    w = w.sum(1)
+    return a/w,np.power(w,-0.5)
+
+
+
 class spectrum():
     def __init__(self, x=None, y=None, err=None,name=None):
         if any([v is not None for v in [x, y, err]]):
@@ -79,7 +97,7 @@ class spectrum():
 
 
     def copy(self):
-        return spectrum(self.x,self.y,self.err)
+        return spectrum(np.array(self.x),np.array(self.y),np.array(self.err))
 
     def normalize(self):
         norm = np.mean(self.y[10:40])
@@ -95,6 +113,10 @@ class spectrum():
         if hasattr(self,'fringe_corrected'):
             self.fringe_corrected *=self.norm_factor
 
+    def rebin(self,n=5):
+        x = rebin_arr(self.x, n)
+        y, err = rebin_weight_mean(self.y, self.err, n)
+        self.sp_rebinned = spectrum(x,y,err)
 
     def nan_interpolation(self, debug=True ,label='none'):
         def isNaN(x):
@@ -149,25 +171,29 @@ def fringe_custom_correction(s_pix, s_mean,debug=False,show_fit_chunks=False,
     s_pix.normalize()
 
     #correction for nan
-    s_pix.nan_interpolation()
-    s_mean.nan_interpolation()
+    #s_pix.nan_interpolation()
+    #s_mean.nan_interpolation()
+
 
     #smooth integrated spec
+    s_mean.rebin(n=50)
+    f = interp1d(s_mean.sp_rebinned.x,s_mean.sp_rebinned.y,fill_value='extrapolate')
+    s_mean.smoothed = f(s_mean.x)
     #win = signal.windows.hann(smooth_scale)
     #s_mean.smoothed = signal.convolve(s_mean.y, win, mode='same') / sum(win)
     #s_mean.smoothed[:25]=np.mean(s_mean.y[:25])
     #s_mean.smoothed[s_mean.x.shape[0]-25:]=np.mean(s_mean.y[s_mean.x.shape[0]-25:])
     #s_mean.y = np.array(s_mean.smoothed)
-    if 0:
+    if 1:
         plt.subplots()
         plt.plot(s_mean.x, s_mean.y, label='spaxel')
         plt.plot(s_mean.x, s_mean.smoothed, label='smoothed')
         s_mean.y = np.array(s_mean.smoothed)
         plt.show()
-
     # calc POLYFIT correction
     X,Y = s_pix.x,s_pix.y-s_mean.y
-    z = np.polyfit(X, Y, 5)
+    mask_nan = np.isnan(s_pix.y) + np.isnan(s_mean.y)
+    z = np.polyfit(X[~mask_nan], Y[~mask_nan], 5)
     polynomial_fit = np.poly1d(z)
     if debug and 1:
         plt.subplots()
@@ -245,7 +271,8 @@ def fringe_custom_correction(s_pix, s_mean,debug=False,show_fit_chunks=False,
                 fitter = modeling.fitting.LevMarLSQFitter()
                 model = modeling.models.Sine1D(frequency=fq)  # depending on the data you need to give some initial values
                 #model.frequency.fixed = True
-                fitted_model = fitter(model, data_x, data_y)
+                mask_nan = np.isnan(data_y)
+                fitted_model = fitter(model, data_x[~mask_nan], data_y[~mask_nan])
                 a = fitted_model.amplitude.value
                 fq = fitted_model.frequency.value
                 p = fitted_model.phase.value
@@ -401,8 +428,8 @@ def fringe_custom_correction_second_pixel(s_pix,s_mean,debug=False,show_fit_chun
     s_pix.normalize()
 
     # correction for nan
-    s_pix.nan_interpolation(label='spaxel')
-    s_mean.nan_interpolation(label='mean')
+    #s_pix.nan_interpolation(label='spaxel')
+    #s_mean.nan_interpolation(label='mean')
 
     # smooth integrated spec
     #win = signal.windows.hann(smooth_scale)
@@ -413,7 +440,8 @@ def fringe_custom_correction_second_pixel(s_pix,s_mean,debug=False,show_fit_chun
     # calc POLYFIT correction
     #X, Y = s_pix.x, s_pix.y - s_mean.smoothed
     X, Y = s_pix.x, s_pix.y - s_mean.y
-    z = np.polyfit(X, Y, 5)
+    mask_nan = np.isnan(s_pix.y) + np.isnan(s_mean.y)
+    z = np.polyfit(X[~mask_nan], Y[~mask_nan], 5)
     polynomial_fit = np.poly1d(z)
     if debug and 1:
         plt.subplots()
@@ -472,7 +500,8 @@ def fringe_custom_correction_second_pixel(s_pix,s_mean,debug=False,show_fit_chun
                 fitter = modeling.fitting.LevMarLSQFitter()
                 model = modeling.models.Sine1D(frequency=fq)  # depending on the data you need to give some initial values
                 model.frequency.fixed = True
-                fitted_model = fitter(model, data_x, data_y)
+                mask_nan = np.isnan(data_y)
+                fitted_model = fitter(model, data_x[~mask_nan], data_y[~mask_nan])
                 a = fitted_model.amplitude.value
                 fq = fitted_model.frequency.value
                 p = fitted_model.phase.value
@@ -564,169 +593,7 @@ def fringe_custom_correction_second_pixel(s_pix,s_mean,debug=False,show_fit_chun
     (y_fit, num_chunks, params_x, params_vals, params_chiq) = fit_to_wiggles_second(wave=wave, flux=flux, flux_err=flux_err,
                                                                              plot_parameter_stats=0, return_params_model=1)
 
-    def fit_to_wiggles(wave, flux, flux_err=None, plot_results=0, plot_parameter_stats=0, return_params_model=0):
 
-        # set x range binning
-        delta_x = wave[-1] - wave[0]
-        num_chunks = \
-        np.where(np.array([chunk_size * i - chunk_size_delta * (i - 1) for i in range(5000)]) < delta_x)[0][-1] + 1
-        params_vals = np.zeros((num_chunks, 4))
-        params_chiq = np.zeros(num_chunks)
-        params_x = np.zeros(num_chunks)
-
-        for i in range(num_chunks):
-            l_left = (chunk_size - chunk_size_delta) * i
-            l_right = chunk_size * (i + 1) - chunk_size_delta * i
-            mask = (wave >= wave[0] + l_left) * (wave < wave[0] + l_right)
-
-            # calc fringe signal in chunk
-            data_x = wave[mask]  # - s_pix.x[mask][0]
-            data_y = flux[mask]  # -polynomial_fit(s_pix.x[mask])
-            data_err = flux_err[mask]
-
-            # par_names = ["a", "f", "p",'b']
-            # lmfit to fringe signal
-            from lmfit import Model
-            if i == 0:
-                init = [0.2, 5, 0, 0]
-
-            # set frequence using fft method
-            # yf = fft(data_y-np.mean(data_y))
-            yf = fft(data_y)  # - np.mean(data_y))
-            N = data_x.shape[0]
-            # print('N=',N)
-            T = chunk_size / N
-            xf = fftfreq(N, T)[:N // 2]
-            yf_line = 2.0 / N * np.abs(yf[0:N // 2])
-
-            mask_yf = np.abs(yf_line - np.mean(yf_line)) < 2 * np.std(yf_line)
-            yf_mean = np.mean(yf_line[mask_yf])
-            yf_disp = np.std(yf_line[mask_yf])
-            # set fq value if significance is above 5sigma
-            yf_line[0] = 0
-            if yf_line[np.argmax(yf_line)] > yf_mean + 4.5 * yf_disp:
-                fq = xf[np.argmax(yf_line)]
-            else:
-                # set minimum value of fq as 5
-                fq = 5
-            if i > 0 and fq - init[1] > 5:
-                fq = init[1]
-
-            if 0:
-                def func(x, a, p, b):
-                    return a * np.sin(2 * np.pi * x * fq + p) + b
-
-                fmodel = Model(func)
-                result = fmodel.fit(data_y, x=data_x, a=init[0], p=init[2], b=init[3])
-                init = [result.best_values['a'], fq, result.best_values['p'], result.best_values['b']]
-            else:
-                fitter = modeling.fitting.LevMarLSQFitter()
-                model = modeling.models.Sine1D(
-                    frequency=fq)  # depending on the data you need to give some initial values
-                # model.frequency.fixed = True
-                fitted_model = fitter(model, data_x, data_y)
-                a = fitted_model.amplitude.value
-                fq = fitted_model.frequency.value
-                p = fitted_model.phase.value
-                b = 0
-                init = [a, fq, 2 * np.pi * p, b]
-
-                def func(x, a, p, b):
-                    return a * np.sin(2 * np.pi * x * fq + p) + b
-
-                if 0:
-                    plt.subplots()
-                    plt.plot(data_x, data_y)
-                    plt.plot(data_x, fitted_model(data_x), label='fit')
-                    plt.plot(data_x, func(data_x, a, p, b), label='fit')
-                    plt.legend()
-                    plt.show()
-
-            fit = func(data_x, init[0], init[2], init[3])
-            # calc chi2:
-            chiq = np.sum(np.power((data_y - fit) / np.std(data_y), 2))
-            chiqred = chiq / data_y.shape[0]
-            # print(i,init, 'chiq_red:',chiq/data_y.shape[0])
-
-            params_chiq[i] = chiqred
-            params_vals[i, :] = init
-            params_x[i] = wave[0] + l_left
-            if show_fit_chunks:
-                fig, ax = plt.subplots(1, 2)
-                ax[0].axhline(yf_mean, ls='-')
-                ax[0].axhline(yf_mean + 1 * yf_disp, ls='--')
-                ax[0].axhline(yf_mean + 5 * yf_disp)
-                ax[0].axvline(fq, ls='--')
-                ax[0].plot(xf, 2.0 / N * np.abs(yf[0:N // 2]), color='black')
-                ax[0].plot(xf, yf_line, color='red', ls='--')
-                ax[1].errorbar(data_x, data_y, yerr=data_err, color='black', label='data')
-                ax[1].plot(data_x, func(data_x, init[0], init[2], init[3]), label='lmfit: fq=' + str(round(fq, 2)))
-                ax[0].set_title('chunk' + str(i) + ': ' + str(wave[0] + l_left))
-                ax[1].set_title('chiq: ' + str(chiqred))
-                ax[1].legend()
-                plt.show()
-
-        # combine chunks
-        y_fit = spectrum(wave.copy(), flux.copy() * 0, flux_err.copy())
-        y_fit.npix = np.zeros_like(y_fit.x)
-
-        def func(x, a, fq, p, b):
-            return a * np.sin(2 * np.pi * x * fq + p) + b
-
-        for i in range(num_chunks):
-            res = params_vals[i, :]
-            chiq = params_chiq[i]
-            if 1:  # chiq<chiqlimit:
-                l_left = (chunk_size - chunk_size_delta) * i
-                l_right = chunk_size * (i + 1) - chunk_size_delta * i
-                mask = (wave >= wave[0] + l_left) * (wave < wave[0] + l_right)
-
-                data_x = wave[mask]
-                y = func(data_x, res[0], res[1], res[2], res[3])
-                y_fit.y[mask] += y
-                y_fit.npix[mask] += 1
-        y_fit.y /= y_fit.npix
-        # print('zeros_pix', np.sum(y_fit.npix==0),wave[np.where(y_fit.npix==0)[0]])
-
-        if plot_results:
-            plt.subplots()
-            plt.plot(wave, flux, label='data')
-            plt.plot(y_fit.x, y_fit.y, label='model')
-            plt.plot(y_fit.x, flux - y_fit.y - 0.2, label='corrected data')
-            plt.legend()
-            plt.show()
-
-        if plot_parameter_stats:
-            # correct params for outlliers
-            for i in range(4):
-                p = params_vals[:, i]
-                for j in range(p.shape[0]):
-                    if j > 0 and j < p.shape[0] - 1:
-                        if np.abs(p[j] - p[j - 1]) > np.abs(p[j + 1] - p[j - 1]) and np.abs(p[j + 1] - p[j]) > np.abs(
-                                p[j + 1] - p[j - 1]):
-                            f_interp_p = interp1d([j - 1, j + 1], [p[j - 1], p[j + 1]])
-                            p[j] = f_interp_p(j)
-            # show relation fit parameters with coordinate
-            if 1:
-                px = np.array([(chunk_size - chunk_size_delta) * i for i in range(num_chunks)]) + s_pix.x[0]
-                mask_good_points = params_vals[:, 1] > 0  # 5*np.median(params_vals[:, 1])
-                fig, ax = plt.subplots(1, 4, sharex=True)
-                # npoints = params_vals[:,0].shape[0]
-                x = np.linspace(px[0], px[-1], 100)
-                p_interp = []
-                for i in range(4):
-                    ax[i].plot(px[mask_good_points], params_vals[:, i][mask_good_points], 'o')
-                    f_interp = interp1d(px[mask_good_points], params_vals[:, i][mask_good_points],
-                                        fill_value='extrapolate')
-                    ax[i].plot(x, f_interp(x))
-                    p_interp.append(f_interp)
-
-                plt.show()
-
-        if return_params_model:
-            return y_fit, num_chunks, params_x, params_vals, params_chiq
-        else:
-            return y_fit
 
     #second iteration
     #y_fit_2 = fit_to_wiggles(wave=y_fit.x, flux=flux - y_fit.y, flux_err=y_fit.err)
