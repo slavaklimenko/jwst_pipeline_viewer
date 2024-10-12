@@ -625,11 +625,6 @@ class detector1():
         # jump step
         self.ramp_fit,self.ramp_fit_info = ramp_fit_step.run(input_file)
 
-        #with open('tmp.pkl', 'rb') as f:
-        #    self.ramp_fit = pickle.load(f)
-        #with open('tmp1.pkl', 'rb') as f:
-        #    self.ramp_fit_info = pickle.load(f)
-        #print('')
 
     def chiq_ramp_fit(self, input_file=None, debug=True, output_dir=None,save_results=False):
         if output_dir == None:
@@ -710,9 +705,6 @@ class detector1():
             rate[it] = fit.copy()
             err_rate[it] = err_fit.copy()
         return rate,err_rate, alljumps, pixdq,groupdq
-
-
-        #self.ramp_fit = ramp_fit_step.run(input_file)
 
 
     def plot_image(self,ngroup = 1,vmin = 3000,vmax=5000):

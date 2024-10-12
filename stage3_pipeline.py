@@ -139,11 +139,16 @@ class detector3():
             self.data.wmap = hdu1['WMAP'].data
             #self.data.hdrtab = hdu1['HDRTAB'].data
 
+
             self.data.asdf = hdu1['ASDF'].data
             header = hdu1[0].header
             self.data.objname =  header['TARGPROP']
-            self.data.band =  header['BAND']
-            self.data.channel =  header['CHANNEL']
+            if 'MIRI' in header['INSTRUME']:
+                self.data.band =  header['BAND']
+                self.data.channel =  header['CHANNEL']
+            elif 'NIRSPEC' in header['INSTRUME']:
+                self.data.band = header['FILTER']
+                self.data.channel = header['GRATING']
             header = hdu1['SCI'].header
             wcs = {}
             wcs['CRPIX1'] = header['CRPIX1']
@@ -154,7 +159,7 @@ class detector3():
             wcs['CRVAL3'] = header['CRVAL3']
             wcs['CDELT1'] = header['CDELT1']
             wcs['CDELT2'] = header['CDELT2']
-            wcs['CDELT3'] = header['CDELT3']
+            wcs['CDELT3'] =header['CDELT3']
             wcs['NAXIS1'] = header['NAXIS1']
             wcs['NAXIS2'] = header['NAXIS2']
             wcs['NAXIS3'] = header['NAXIS3']
@@ -187,7 +192,7 @@ class detector3():
             y_world = sky[0].dec.deg
             lam_world = wcs1['CRVAL3'] + (t - wcs1['CRPIX3'] + 1) * wcs1['CDELT3']
 
-        print('world coord:', x_world, y_world, lam_world)
+        #print('world coord:', x_world, y_world, lam_world)
         #print(self.data.wcs((t,x,y)))
         return lam_world,x_world,y_world
 
@@ -387,7 +392,8 @@ class detector3():
             bandname['MEDIUM'] = 'B'
             bandname['LONG'] = 'C'
 
-            sstring = input_dir + '/' + '*_cal.fits'
+            #sstring = input_dir + '/' + ('*bkgr_sub_cal.fits')
+            sstring = input_dir + '/' + ('*_cal.fits')
             cal_files = sorted(glob.glob(sstring))
             for f in cal_files:
                 hdulist = fits.open(f)
@@ -406,10 +412,11 @@ class detector3():
             else:
                 asn_name = input_dir + '/' + source + subfilename + '_'+channel + bandname[band] +'.json'
             #exp_list = [exp_list[0],exp_list[1]]
-            print('ASN_FILE',asn_name, [el for el in exp_list])
-            self.writel3asn(exp_list, asn_name, source + '_'+channel + bandname[band])
-            self.local_asn_file = asn_name
-            return asn_name
+            if len(exp_list)>0:
+                print('ASN_FILE',asn_name, [el for el in exp_list])
+                self.writel3asn(exp_list, asn_name, source + '_'+channel + bandname[band])
+                self.local_asn_file = asn_name
+                return asn_name
 
 
 
@@ -454,6 +461,7 @@ class detector3():
         spec3.cube_build.channel = channel
         spec3.cube_build.output_file = (input_file.split('/')[-1]).split('.')[0]
         spec3.extract_1d.skip = 1 - master_extract1d_flag
+        spec3.coord_system = 'ifualign'
         if band == 'ABC':
             spec3.cube_build.output_type = 'channel'
 

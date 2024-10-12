@@ -161,7 +161,7 @@ class plotImage(pg.ImageView): #(pg.PlotWidget):
     def add(self, name, add,mode=None):
         if add:
             if mode == None:
-                nint = int(self.parent.exp_pars.nINT.text())
+                nint = int(self.parent.exp_pars.nINT.text())-1
                 ngroup =  int(self.parent.exp_pars.nGROUP.text())
                 # number of group in integration
                 print('add name:',name)
@@ -192,7 +192,7 @@ class plotImage(pg.ImageView): #(pg.PlotWidget):
                     #self.redraw()
                 self.parent.EXP.get_readnoise()
             elif mode == 'image':
-                nint = int(self.parent.exp_pars.nINT.text())
+                nint = int(self.parent.exp_pars.nINT.text())-1
                 ngroup = int(self.parent.exp_pars.nGROUP.text())
                 # number of group in integration
                 nintmax = self.parent.EXP.data.data.shape[0]
@@ -218,7 +218,7 @@ class plotImage(pg.ImageView): #(pg.PlotWidget):
                 self.setImage(data, autoRange=True, levels=[zmin, zmax], axes={'t': None, 'x': x, 'y': y, 'c': None})
                 self.vb.hoverEvent = self.imageHoverEvent
             elif mode == 'slope':
-                nint = int(self.parent.exp_pars.nINT.text())
+                nint = int(self.parent.exp_pars.nINT.text())-1
                 if self.parent.Exposures.table.flags['read_fit_slopes']:
                     #data = self.parent.EXP.ramp_fit[0].data
                     data = self.parent.EXP.int_slopes[nint,0,:,:]
@@ -475,7 +475,7 @@ class plotPixProfile(pg.PlotWidget):
 
     def plot_profile(self, row=None, col=None, add=True,show_fit=False,sat_limit = 55000,debug=False):
         if add:
-            nint = int(self.parent.exp_pars.nINT.text())
+            nint = int(self.parent.exp_pars.nINT.text())-1
             if row <= self.parent.EXP.data.data.shape[2] and row>=0 and col <= self.parent.EXP.data.data.shape[3] and col>=0 and nint <= self.parent.EXP.data.data.shape[0]:
                 # number of group in integration
                 data = self.parent.EXP.data.data[nint, :,row,col]
@@ -726,7 +726,7 @@ class plotPixDiffs(pg.PlotWidget):
         if add:
             if row <= self.parent.EXP.data.data.shape[2] and row >= 0 and col <= self.parent.EXP.data.data.shape[
                 3] and col >= 0:
-                nint = int(self.parent.exp_pars.nINT.text())
+                nint = int(self.parent.exp_pars.nINT.text())-1
                 # number of group in integration
                 data = self.parent.EXP.data.data[nint, :,row, col]
                 error = np.array(self.parent.EXP.data.err[nint, :, row, col])
@@ -957,6 +957,30 @@ class EXPlistTable(pg.TableWidget):
             # self.parent.parent.plot_image.add(name=self.parent.parent.current_name, add=False)
             self.parent.parent.plot_image.add(name=self.parent.parent.current_name, add=True, mode='stage2')
 
+    def save_image(self,mode='stage2',save=False):
+        if save == True:
+            if mode == 'stage2':
+                input = self.parent.parent.stage2.data
+                from jwst.pipeline import calwebb_spec2
+                miri = calwebb_spec2.Spec2Pipeline()
+                miri.output_dir = './output/tmp/'
+                miri.output_file = self.parent.parent.stage2.name
+                miri.save_model(input, 'rate',force=True)
+            if mode == 'bkgr_sub':
+                input = self.parent.parent.stage2.data
+                from jwst.pipeline import calwebb_spec2
+                miri = calwebb_spec2.Spec2Pipeline()
+                miri.output_dir = './output/detector2/bkgr_subtracted/'
+                miri.output_file = self.parent.parent.stage2.name
+                miri.save_model(input, 'bkgr_sub',force=True)
+            if mode == 'masked_qso':
+                input = self.parent.parent.stage2.data
+                from jwst.pipeline import calwebb_spec2
+                miri = calwebb_spec2.Spec2Pipeline()
+                miri.output_dir = './output/detector2/masked_qso/'
+                miri.output_file = self.parent.parent.stage2.name
+                miri.save_model(input, 'masked_qso', force=True)
+
 
     def calc_ExoTiC_models(self):
         print('calc gain model')
@@ -1143,7 +1167,7 @@ class EXPlistTable(pg.TableWidget):
             if self.flags['show_CR'] == False:
                 self.flags['show_CR'] = True
                 if 1:
-                    nint = int(self.parent.parent.exp_pars.nINT.text())
+                    nint = int(self.parent.parent.exp_pars.nINT.text())-1
                     if hasattr(self.parent.parent.EXP,'int_pixeldq'):
                         pdq =self.parent.parent.EXP.int_pixeldq[nint]
                     elif self.parent.parent.Exposures.table.current_pipeline_stage == 'stage2':
@@ -1152,7 +1176,7 @@ class EXPlistTable(pg.TableWidget):
                         pdq = self.parent.parent.EXP.data.pixeldq
                     mask = np.where(np.bitwise_and(pdq, dqflags.pixel['JUMP_DET']))
                 else:
-                    nint = int(self.parent.parent.exp_pars.nINT.text())
+                    nint = int(self.parent.parent.exp_pars.nINT.text())-1
                     mask = np.zeros((self.parent.parent.EXP.nrows,self.parent.parent.EXP.ncols)).astype(int)
                     for i_gr in range(self.parent.parent.EXP.ngroup):
                         mask = np.bitwise_or(self.parent.parent.EXP.data.groupdq[nint,i_gr],mask)
@@ -1169,7 +1193,7 @@ class EXPlistTable(pg.TableWidget):
         if self.flags['CR_step'] == True:
             if self.flags['show_multi_CR'] == False:
                 self.flags['show_multi_CR'] = True
-                nint = int(self.parent.parent.exp_pars.nINT.text())
+                nint = int(self.parent.parent.exp_pars.nINT.text())-1
                 if hasattr(self.parent.parent.EXP, 'int_pixeldq'):
                     pdq = self.parent.parent.EXP.int_pixeldq[nint]
                 elif self.parent.parent.Exposures.table.current_pipeline_stage == 'stage2':
@@ -1213,76 +1237,81 @@ class EXPlistTable(pg.TableWidget):
         if debug:
             plt.show()
 
-    def calc_mean_rate(self,debug=False,radius=10,hot_pix_limit=4):
-        im = self.parent.parent.EXP.int_slopes[:,0].copy()
-        sigim = self.parent.parent.EXP.int_sigslopes[:,0].copy()
-        dqim = self.parent.parent.EXP.int_pixeldq[:,0].copy()
-        n_int = im.shape[0]
-        mask_im = np.ones((n_int,im.shape[1],im.shape[2]))
-        mean_im = np.mean(im,axis=0)
+    def calc_mean_rate(self,debug=False,radius=10,hot_pix_limit=4,algorithm='CHI2'):
+        if algorithm == 'CHI2':
+            im = self.parent.parent.EXP.int_slopes[:,0].copy()
+            sigim = self.parent.parent.EXP.int_sigslopes[:,0].copy()
+            dqim = self.parent.parent.EXP.int_pixeldq[:,0].copy()
+            n_int = im.shape[0]
+            mask_im = np.ones((n_int,im.shape[1],im.shape[2]))
+            mean_im = np.mean(im,axis=0)
 
-        #set kernel
-        radius = radius
-        filter_kernel = np.zeros((2 * radius + 1, 2 * radius + 1))
-        for i in range(filter_kernel.shape[0]):
-            for j in range(filter_kernel.shape[1]):
-                if (i - radius) ** 2 + (j - radius) ** 2 <= radius ** 2:
-                    filter_kernel[i, j] = 1
+            #set kernel
+            radius = radius
+            filter_kernel = np.zeros((2 * radius + 1, 2 * radius + 1))
+            for i in range(filter_kernel.shape[0]):
+                for j in range(filter_kernel.shape[1]):
+                    if (i - radius) ** 2 + (j - radius) ** 2 <= radius ** 2:
+                        filter_kernel[i, j] = 1
 
-        if debug:
-            fig,ax = plt.subplots(2, n_int+1, sharex=True, sharey=True)
-        for i in range(n_int):
-            x  = im[i]/mean_im - 1
-            x[np.isnan(x)] = 0
-            x[x > hot_pix_limit] = 0
-            x[x < -hot_pix_limit] = 0
-
-            #smooth diff
-            npix = scipy.signal.convolve2d(np.ones_like(x), filter_kernel, mode='same', boundary='fill', fillvalue=0)
-            x_smoothed = scipy.signal.convolve2d(x, filter_kernel, mode='same', boundary='fill', fillvalue=0) / npix
-
-            mask_im[i][x_smoothed>0.1] = 0
-
-        #ignore CR events
-        if 1:
-            mask_cr = np.zeros_like(im)
-            for i in range(n_int):
-                mask_cr[i] = (np.bitwise_and(dqim[i],dqflags.pixel['JUMP_DET'])).astype(bool)
-            mask_cr_shower = 1 - mask_im
-            mask_cr_tot = mask_cr + mask_cr_shower
-
-            mask_cr_tot = np.sum(mask_cr_tot.astype(bool),axis=0)
-            for i in range(n_int):
-                mask_im[i][(mask_cr[i] == 1) * (mask_cr_tot != n_int)] = 0
-
-        for i in range(n_int):
             if debug:
-                ax[0,i].imshow(im[i],vmin=0,vmax=2)
-                ax[1,i].imshow(x_smoothed, vmin=-0.3, vmax=0.3)
-                xi, yi = np.arange(x_smoothed.shape[1]), np.arange(x_smoothed.shape[0])
-                zi = x_smoothed
-                ax[1,i].contour(xi, yi, zi, levels=[-0.1, 0.1], linewidths=0.5, colors='k')
+                fig,ax = plt.subplots(2, n_int+1, sharex=True, sharey=True)
+            for i in range(n_int):
+                x  = im[i]/mean_im - 1
+                x[np.isnan(x)] = 0
+                x[x > hot_pix_limit] = 0
+                x[x < -hot_pix_limit] = 0
+
+                #smooth diff
+                npix = scipy.signal.convolve2d(np.ones_like(x), filter_kernel, mode='same', boundary='fill', fillvalue=0)
+                x_smoothed = scipy.signal.convolve2d(x, filter_kernel, mode='same', boundary='fill', fillvalue=0) / npix
+
+                mask_im[i][x_smoothed>0.1] = 0
+
+            #ignore CR events
+            if 1:
+                mask_cr = np.zeros_like(im)
+                for i in range(n_int):
+                    mask_cr[i] = (np.bitwise_and(dqim[i],dqflags.pixel['JUMP_DET'])).astype(bool)
+                mask_cr_shower = 1 - mask_im
+                mask_cr_tot = mask_cr + mask_cr_shower
+
+                mask_cr_tot = np.sum(mask_cr_tot.astype(bool),axis=0)
+                for i in range(n_int):
+                    mask_im[i][(mask_cr[i] == 1) * (mask_cr_tot != n_int)] = 0
+
+            for i in range(n_int):
+                if debug:
+                    ax[0,i].imshow(im[i],vmin=0,vmax=2)
+                    ax[1,i].imshow(x_smoothed, vmin=-0.3, vmax=0.3)
+                    xi, yi = np.arange(x_smoothed.shape[1]), np.arange(x_smoothed.shape[0])
+                    zi = x_smoothed
+                    ax[1,i].contour(xi, yi, zi, levels=[-0.1, 0.1], linewidths=0.5, colors='k')
 
 
-        imsig_inv = np.power(sigim,-2)
-        imtot = np.nansum(im*imsig_inv*mask_im,axis=0)/np.nansum(imsig_inv*mask_im,axis=0)
-        imtotsig = np.power(np.nansum(imsig_inv*mask_im,axis=0),-0.5)
+            imsig_inv = np.power(sigim,-2)
+            imtot = np.nansum(im*imsig_inv*mask_im,axis=0)/np.nansum(imsig_inv*mask_im,axis=0)
+            imtotsig = np.power(np.nansum(imsig_inv*mask_im,axis=0),-0.5)
 
-        if debug:
-            ax[0,n_int].imshow(imtot, vmin=0, vmax=2)
-            plt.show()
-        self.parent.parent.EXP.mean_slope = imtot
-        self.parent.parent.EXP.mean_slope_sig = imtotsig
+            if debug:
+                ax[0,n_int].imshow(imtot, vmin=0, vmax=2)
+                plt.show()
+            self.parent.parent.EXP.mean_slope = imtot
+            self.parent.parent.EXP.mean_slope_sig = imtotsig
 
-        ramp_fit = self.parent.parent.EXP.ramp_fit
-        group_time = ramp_fit[0].meta.exposure.group_time
-        ramp_fit[0].data = imtot/group_time
-        ramp_fit[0].err = imtotsig/group_time
-        #self.parent.parent.EXP.int_slopes = ramp_info[0] * group_time
-        #self.parent.parent.EXP.int_sigslopes = ramp_info[1] * group_time
+            ramp_fit = self.parent.parent.EXP.ramp_fit
+            group_time = ramp_fit[0].meta.exposure.group_time
+            ramp_fit[0].data = imtot/group_time
+            ramp_fit[0].err = imtotsig/group_time
+            #self.parent.parent.EXP.int_slopes = ramp_info[0] * group_time
+            #self.parent.parent.EXP.int_sigslopes = ramp_info[1] * group_time
+        elif algorithm == 'OLS':
+            ramp_fit = self.parent.parent.EXP.ramp_fit
+            group_time = ramp_fit[0].meta.exposure.group_time
+            ramp_fit.data = imtot / group_time
+            ramp_fit.err = imtotsig / group_time
 
-
-    def read_slopes(self,input_file = None):
+    def read_slopes(self,input_file = None,version='1.14'):
         group_time = self.parent.parent.EXP.data.meta.exposure.group_time
         algorithm = self.parent.parent.exp_pars.FitAlgorithm_mode.currentText()
         if self.flags['slope_fit_step'] == True and algorithm == 'OLS':
@@ -1309,15 +1338,22 @@ class EXPlistTable(pg.TableWidget):
             #sci_arr =hdulist['SCI'].data[:, :]
             #hdulist.close()
             #num_groups = ramp_fit[0].meta.exposure.ngroups
-            group_time = ramp_fit[0].meta.exposure.group_time
+            if version == '1.14':
+                group_time = ramp_fit.meta.exposure.group_time
+            else:
+                group_time = ramp_fit[0].meta.exposure.group_time
             print('Time per group:', group_time, ' in s')
             #group_times = np.arange(num_groups) * group_time
 
 
             self.parent.parent.EXP.itercepts = intercepts
             self.parent.parent.EXP.itercepts_err = intercepts_err
-            self.parent.parent.EXP.slopes = ramp_fit[0].data* group_time  #in DN/groups
-            self.parent.parent.EXP.slopes_err = ramp_fit[0].err* group_time #in DN/groups
+            if version == '1.14':
+                self.parent.parent.EXP.slopes = ramp_fit.data * group_time  # in DN/groups
+                self.parent.parent.EXP.slopes_err = ramp_fit.err * group_time  # in DN/groups
+            else:
+                self.parent.parent.EXP.slopes = ramp_fit[0].data* group_time  #in DN/groups
+                self.parent.parent.EXP.slopes_err = ramp_fit[0].err* group_time #in DN/groups
             self.parent.parent.EXP.local_slopes = local_slopes * group_time  # in DN/groups
             self.parent.parent.EXP.local_slopes_err = local_sig_slopes * group_time  # in DN/groups
             self.flags['read_fit_slopes'] = True
@@ -1636,65 +1672,54 @@ class EXPlistTable(pg.TableWidget):
         instrument = self.parent.parent.stage2.data.meta.instrument.detector
         return instrument
 
-    def stage2_compare_maps(self):
-        print('stage2: compare maps')
-        inimapname = self.parent.parent.stage2_commands.compare_init_map_choice.currentText()
-        secmapname = self.parent.parent.stage2_commands.compare_sec_map_choice.currentText()
-        if 1:
-            data = self.parent.parent.stage2.data
-            if 0:
-                def _get_references(self, data, exposure_type):
-                    """Retrieve required CRDS reference files
-
-                    Parameters
-                    ----------
-                    data : DataModel
-                        The data to base the CRDS lookups on.
-
-                    exposure_type : str
-                        The exposure type keyword value
-
-                    Returns
-                    -------
-                    reference_file_models : {str: DataModel{,...}}
-                        Dictionary matching reference file types to open models
-                    """
-
-                    # Get reference file paths
-                    reference_file_names = {}
-                    for reftype in self.reference_file_types:
-                        reffile = self.get_reference_file(data, reftype)
-                        reference_file_names[reftype] = reffile if reffile != 'N/A' else None
-
-                    # Define mapping between reftype and datamodel type
-                    model_type = dict(
-                        flat=datamodels.FlatModel,
-                        fflat=datamodels.NirspecFlatModel,
-                        sflat=datamodels.NirspecFlatModel,
-                        dflat=datamodels.NirspecFlatModel,
-                    )
-                    if exposure_type == "NRS_MSASPEC":
-                        model_type["fflat"] = datamodels.NirspecQuadFlatModel
-
-                    # Open the relevant reference files as datamodels
-                    reference_file_models = {}
-                    for reftype, reffile in reference_file_names.items():
-                        if reffile is not None:
-                            reference_file_models[reftype] = model_type[reftype](reffile)
-                            self.log.info('Using %s reference file: %s', reftype.upper(), reffile)
-                        else:
-                            self.log.info('No reference found for type %s', reftype.upper())
-                            reference_file_models[reftype] = None
-
-                    return reference_file_models
-                exposure_type = data.meta.exposure.type.upper()
-                reference_file_models = data._get_references(data, exposure_type)
-        self.parent.parent.stage2.compare_maps(first_map_name=inimapname,second_map_name=secmapname)
+    #def stage2_compare_maps(self):
+    #    print('stage2: compare maps')
+    #    inimapname = self.parent.parent.stage2_commands.compare_init_map_choice.currentText()
+    #    secmapname = self.parent.parent.stage2_commands.compare_sec_map_choice.currentText()
+    #    if 1:
+    #        data = self.parent.parent.stage2.data
+    #        if 0:
+    #            def _get_references(self, data, exposure_type):
+   #                # Get reference file paths
+   #                 reference_file_names = {}
+    #                for reftype in self.reference_file_types:
+    #                    reffile = self.get_reference_file(data, reftype)
+    #                    reference_file_names[reftype] = reffile if reffile != 'N/A' else None
+    #                # Define mapping between reftype and datamodel type
+    #                model_type = dict(
+    #                    flat=datamodels.FlatModel,
+    #                    fflat=datamodels.NirspecFlatModel,
+    #                    sflat=datamodels.NirspecFlatModel,
+    #                    dflat=datamodels.NirspecFlatModel,
+    #                )
+    #                if exposure_type == "NRS_MSASPEC":
+    #                    model_type["fflat"] = datamodels.NirspecQuadFlatModel
+    #
+    #                # Open the relevant reference files as datamodels
+    #                reference_file_models = {}
+    #                for reftype, reffile in reference_file_names.items():
+    #                    if reffile is not None:
+    #                        reference_file_models[reftype] = model_type[reftype](reffile)
+    #                        self.log.info('Using %s reference file: %s', reftype.upper(), reffile)
+    #                    else:
+    #                        self.log.info('No reference found for type %s', reftype.upper())
+    #                        reference_file_models[reftype] = None
+    #
+    #                return reference_file_models
+    #            exposure_type = data.meta.exposure.type.upper()
+    #            reference_file_models = data._get_references(data, exposure_type)
+    #    self.parent.parent.stage2.compare_maps(first_map_name=inimapname,second_map_name=secmapname)
 
     def stage2_read_steps(self):
         print('stage2: Read results')
         #step_name = self.parent.parent.stage2_commands.read_step_choice.currentText()
         self.parent.parent.stage2.read_step_results_version2(step_name='cal')
+
+    def stage2_read_step_res_fringe(self):
+        print('stage2: Read results')
+        #step_name = self.parent.parent.stage2_commands.read_step_choice.currentText()
+        self.parent.parent.stage2.read_step_results_version2(step_name='res_fringe')
+
 
     def stage2_fix_hot_pix(self):
         self.parent.parent.stage2.select_hot_pix(output_dir='./data/Hot_pixels/ID02441/')
@@ -1716,11 +1741,21 @@ class EXPlistTable(pg.TableWidget):
     def stage2_background_model(self):
         #print('Background Subtraction - Stage 2 - skipped')
         table = self.parent.parent.Exposures.table
-        shothing_rad = int(self.parent.parent.exp_pars.cr_shower_r_correction.text())
+        smothing_rad = int(self.parent.parent.exp_pars.cr_shower_r_correction.text())
         debug = bool(self.parent.parent.exp_pars.debug.currentIndex())
-        bkgr, bkgr_sig = self.parent.parent.stage2.create_background_model(filelist=table,shothing_rad=shothing_rad,debug=debug)
-        self.parent.parent.stage2.subtract_bkgr_model(bkgr_model=bkgr,bkgr_model_sig=bkgr_sig,debug=debug)
+        save_results = int(self.parent.parent.exp_pars.save_tmp_res.currentIndex())
+        bkgr, bkgr_sig = self.parent.parent.stage2.create_background_model(filelist=table,smothing_rad=smothing_rad,debug=debug)
+        self.parent.parent.stage2.subtract_bkgr_model(bkgr_model=bkgr,bkgr_model_sig=bkgr_sig,savepdf=save_results)
+
         #self.parent.parent.stage2.background_subtraction()
+
+
+
+    def stage2_compare_dithers_sample(self):
+        debug = bool(self.parent.parent.exp_pars.debug.currentIndex())
+        save_results = int(self.parent.parent.exp_pars.save_tmp_res.currentIndex())
+        self.parent.parent.stage2.compare_dither_images(debug=debug,save_pdf=save_results)
+
 
 
     def stage2_flat_field(self):
@@ -1745,7 +1780,15 @@ class EXPlistTable(pg.TableWidget):
 
     def stage2_residual_fringe_correction(self):
         debug = bool(self.parent.parent.exp_pars.debug.currentIndex())
-        self.parent.parent.stage2.res_fringe_step(debug=debug)
+        save_results = int(self.parent.parent.exp_pars.save_tmp_res.currentIndex())
+        self.parent.parent.stage2.res_fringe_step(debug=debug,save_results=bool(save_results))
+
+    def stage2_read_res_fringes(self):
+        return self.parent.parent.stage2.read_res_fringes()
+
+    def stage2_read_bkgr_subtracted(self):
+        return self.parent.parent.stage2.read_bkgr_subtracted()
+
 
     def stage2_flux_calibration(self):
         print('Source ID Step - Stage 2')
@@ -1755,6 +1798,9 @@ class EXPlistTable(pg.TableWidget):
 
     def stage2_show_trace(self,trace_order=0,trace_size=0):
         self.parent.parent.stage2.show_trace(trace_order=trace_order,trace_size=trace_size)
+
+    def stage2_show_Xtrace(self, trace_Xpos=100,delta=10):
+        self.parent.parent.stage2.show_Xtrace(trace_Xpos=100,delta=10)
 
 class chooseExpWidget(QWidget):
     """
@@ -1910,7 +1956,7 @@ class expParsWidget(QWidget):
         l = QHBoxLayout(self)
         l.addWidget(QLabel('Integration:'))
         self.nINT = QLineEdit()
-        self.nINT.setText(str(0))
+        self.nINT.setText(str(1))
         cb = self.nINT
         width = cb.minimumSizeHint().width()
         cb.setFixedWidth(width)
@@ -2048,7 +2094,7 @@ class expParsWidget(QWidget):
         cb.setFixedWidth(width)
         horizontal_layout.addWidget(self.FitAlgorithm_mode)
 
-        horizontal_layout.addWidget(QLabel('Rshow:'))
+        horizontal_layout.addWidget(QLabel('CRshoweR:'))
         self.cr_shower_r_correction = QLineEdit()
         self.cr_shower_r_correction.setText(str(10))
         cb = self.cr_shower_r_correction
@@ -2305,7 +2351,7 @@ class expRunWidget(QWidget):
     def GetMeanRate(self, debug=False):
         self.parent.Exposures.table.calc_mean_rate(debug=True)
 
-    def RunAllStage1(self,save_fit=True):
+    def RunAllStage1(self,save_fit=False):
         print('Run all stage 1:')
         print('Init_Stage2:')
         self.parent.Exposures.table.set_dq()
@@ -2337,12 +2383,12 @@ class expRunWidget(QWidget):
             self.parent.Exposures.table.slope_fit()
 
         nint = self.parent.EXP.nint
-        if nint>0:
+        if nint>0 and algorithm == 'CHI2':
             self.parent.Exposures.table.read_slopes()
             print('Calc mean rate for ', nint,' integrations')
             self.parent.Exposures.table.calc_mean_rate(debug=False)
         #self.parent.Exposures.table.read_slopes()
-        if save_fit:
+        if save_fit and 0:
             print('Save Fit')
             self.parent.Exposures.table.save_slope_fit(output_dir='final', save_other_data=False)
             print('Run all: done.')
@@ -2412,49 +2458,58 @@ class expPipeline2Widget(QWidget):
         self.init_rate.resize(200, 60)
         horizontal_layout.addWidget(self.init_rate)
 
-        self.show_comparison = QPushButton('Compare maps')
-        self.show_comparison.clicked[bool].connect(partial(self.Compare_maps))
-        self.show_comparison.resize(200, 60)
-        horizontal_layout.addWidget(self.show_comparison)
-        self.compare_init_map_choice = QComboBox()
-        flags = ['Initial','BkgrSub','Flatfield','Straylight','Fringe','Photom','ResFringe']
-        self.compare_init_map_choice.addItems(flags)
-        self.compare_init_map_choice.setCurrentIndex(0)
-        cb = self.compare_init_map_choice
-        width = cb.minimumSizeHint().width()
-        cb.setFixedWidth(width)
+        self.save_rate = QPushButton('Save')
+        self.save_rate.clicked[bool].connect(partial(self.Save_Rate_stage2))
+        self.save_rate.resize(200, 60)
+        horizontal_layout.addWidget(self.save_rate)
+
+        self.read_steps_stage2_redfringe = QPushButton('Read ResFringe')
+        self.read_steps_stage2_redfringe.clicked[bool].connect(partial(self.Read_steps_stage2_Resfringe))
+        self.read_steps_stage2_redfringe.resize(150, 60)
+        horizontal_layout.addWidget(self.read_steps_stage2_redfringe)
+
+        self.read_steps_stage2 = QPushButton('Read FluxCalib')
+        self.read_steps_stage2.clicked[bool].connect(partial(self.Read_steps_stage2))
+        self.read_steps_stage2.resize(150, 60)
+        horizontal_layout.addWidget(self.read_steps_stage2)
+
+        #self.show_comparison = QPushButton('Compare maps')
+        #self.show_comparison.clicked[bool].connect(partial(self.Compare_maps))
+        #self.show_comparison.resize(200, 60)
+        #horizontal_layout.addWidget(self.show_comparison)
+        #self.compare_init_map_choice = QComboBox()
+        #flags = ['Initial','BkgrSub','Flatfield','Straylight','Fringe','Photom','ResFringe']
+        #self.compare_init_map_choice.addItems(flags)
+        #self.compare_init_map_choice.setCurrentIndex(0)
+        #cb = self.compare_init_map_choice
+        #width = cb.minimumSizeHint().width()
+        #cb.setFixedWidth(width)
         #self.compare_init_map_choice.resize(150, 30)
-        horizontal_layout.addWidget(self.compare_init_map_choice)
-        self.compare_sec_map_choice = QComboBox()
-        flags = ['Initial', 'BkgrSub', 'Flatfield', 'Straylight', 'Fringe','Photom','ResFringe']
-        self.compare_sec_map_choice.addItems(flags)
-        self.compare_sec_map_choice.setCurrentIndex(0)
-        cb = self.compare_sec_map_choice
-        width = cb.minimumSizeHint().width()
-        cb.setFixedWidth(width)
+        #horizontal_layout.addWidget(self.compare_init_map_choice)
+        #self.compare_sec_map_choice = QComboBox()
+        #flags = ['Initial', 'BkgrSub', 'Flatfield', 'Straylight', 'Fringe','Photom','ResFringe']
+        #self.compare_sec_map_choice.addItems(flags)
+        #self.compare_sec_map_choice.setCurrentIndex(0)
+        #cb = self.compare_sec_map_choice
+        #width = cb.minimumSizeHint().width()
+        #cb.setFixedWidth(width)
         #self.compare_sec_map_choice.resize(140, 30)
-        horizontal_layout.addWidget(self.compare_sec_map_choice)
+        #horizontal_layout.addWidget(self.compare_sec_map_choice)
 
         horizontal_layout.addStretch(1)
         l.addLayout(horizontal_layout)
 
         horizontal_layout = QHBoxLayout(self)
 
-        self.select_jot_pix_step = QPushButton('0.FixHotPix')
-        self.select_jot_pix_step.clicked[bool].connect(partial(self.FixHotPix))
-        self.select_jot_pix_step.resize(200, 60)
-        horizontal_layout.addWidget(self.select_jot_pix_step)
-
         self.run_wcs_step = QPushButton('1.AssignWCS')
         self.run_wcs_step.clicked[bool].connect(partial(self.AssignWCS))
         self.run_wcs_step.resize(200, 60)
         horizontal_layout.addWidget(self.run_wcs_step)
 
-
-        self.run_bkgr_step = QPushButton('2.Bkgr Model')
-        self.run_bkgr_step.clicked[bool].connect(partial(self.Bkgr_Model))
-        self.run_bkgr_step.resize(200, 60)
-        horizontal_layout.addWidget(self.run_bkgr_step)
+        self.select_jot_pix_step = QPushButton('2.FixHotPix')
+        self.select_jot_pix_step.clicked[bool].connect(partial(self.FixHotPix))
+        self.select_jot_pix_step.resize(200, 60)
+        horizontal_layout.addWidget(self.select_jot_pix_step)
 
         self.run_flat_field = QPushButton('3.FlatField')
         self.run_flat_field.clicked[bool].connect(partial(self.Flat_Field ))
@@ -2466,32 +2521,58 @@ class expPipeline2Widget(QWidget):
         self.run_source_id.resize(150, 60)
         horizontal_layout.addWidget(self.run_source_id)
 
-        horizontal_layout.addStretch(1)
-        l.addLayout(horizontal_layout)
-
-        horizontal_layout = QHBoxLayout(self)
         self.run_stray_light = QPushButton('5.StrayLight')
         self.run_stray_light.clicked[bool].connect(partial(self.StrayLight))
         self.run_stray_light.resize(200, 60)
         horizontal_layout.addWidget(self.run_stray_light)
 
-        self.run_fringe_corr = QPushButton('6.Fringe Corr')
+        horizontal_layout.addStretch(1)
+        l.addLayout(horizontal_layout)
+
+        horizontal_layout = QHBoxLayout(self)
+
+
+        self.run_fringe_corr = QPushButton('6.Fringe')
         self.run_fringe_corr.clicked[bool].connect(partial(self.Fringe_correction))
         self.run_fringe_corr.resize(200, 60)
         horizontal_layout.addWidget(self.run_fringe_corr)
 
+        self.run_res_fringe_corr = QPushButton('7.ResFringe')
+        self.run_res_fringe_corr.clicked[bool].connect(partial(self.Residual_Fringe_correction))
+        self.run_res_fringe_corr.resize(200, 60)
+        horizontal_layout.addWidget(self.run_res_fringe_corr)
 
 
-        self.run_flux_calib = QPushButton('7.Flux calib')
+
+
+        #self.run_all_stage2 = QPushButton('Sample Dithers')
+        #self.run_all_stage2.clicked[bool].connect(partial(self.Prep_Dith))
+        #self.run_all_stage2.resize(150, 60)
+        #horizontal_layout.addWidget(self.run_all_stage2)
+
+
+
+        self.run_flux_calib = QPushButton('8.Flux calib')
         self.run_flux_calib.clicked[bool].connect(partial(self.Flux_calibration))
         self.run_flux_calib.resize(150, 60)
         horizontal_layout.addWidget(self.run_flux_calib)
 
+        self.run_bkgr_step = QPushButton('Bkgr Model')
+        self.run_bkgr_step.clicked[bool].connect(partial(self.Run_stage2_bkgr_subtraction_only))
+        #self.run_bkgr_step.clicked[bool].connect(partial(self.Run_stage2_bkgr_subtraction))
+        self.run_bkgr_step.resize(200, 60)
+        horizontal_layout.addWidget(self.run_bkgr_step)
 
-        self.run_res_fringe_corr = QPushButton('8.ResFringe')
-        self.run_res_fringe_corr.clicked[bool].connect(partial(self.Residual_Fringe_correction))
-        self.run_res_fringe_corr.resize(200, 60)
-        horizontal_layout.addWidget(self.run_res_fringe_corr)
+        self.run_image_comparison = QPushButton('Mask_QSO')
+        self.run_image_comparison.clicked[bool].connect(partial(self.Mask_QSO_traces))
+        self.run_image_comparison.resize(150, 60)
+        horizontal_layout.addWidget(self.run_image_comparison)
+
+
+        self.run_image_comparison = QPushButton('CompareDithers')
+        self.run_image_comparison.clicked[bool].connect(partial(self.Run_stage2_dither_comparison))
+        self.run_image_comparison.resize(150, 60)
+        horizontal_layout.addWidget(self.run_image_comparison)
 
 
         horizontal_layout.addStretch(1)
@@ -2499,39 +2580,29 @@ class expPipeline2Widget(QWidget):
 
         horizontal_layout = QHBoxLayout(self)
 
+
+
         self.run_all_stage2 = QPushButton('Run stage(2)')
-        self.run_all_stage2.clicked[bool].connect(partial(self.Run_all_stage2))
+        self.run_all_stage2.clicked[bool].connect(partial(self.Run2_allsteps))
         self.run_all_stage2.resize(150, 60)
         horizontal_layout.addWidget(self.run_all_stage2)
 
-        self.run_stage2_obj_in_table = QPushButton('Run2 all')
-        self.run_stage2_obj_in_table.clicked[bool].connect(partial(self.run_stage2_table))
+        self.run_stage2_obj_in_table = QPushButton('Run Table (1-7)')
+        self.run_stage2_obj_in_table.clicked[bool].connect(partial(self.run_stage2_table_1_to_7))
         self.run_stage2_obj_in_table.resize(150, 60)
         horizontal_layout.addWidget(self.run_stage2_obj_in_table)
 
-        self.read_steps_stage2 = QPushButton('Read step')
-        self.read_steps_stage2.clicked[bool].connect(partial(self.Read_steps_stage2))
-        self.read_steps_stage2.resize(150, 60)
-        horizontal_layout.addWidget(self.read_steps_stage2)
+        self.run_stage2_obj_in_table = QPushButton('Table:BkgrSubtr')
+        self.run_stage2_obj_in_table.clicked[bool].connect(partial(self.run_stage2_table_Bkgr_subtr))
+        self.run_stage2_obj_in_table.resize(150, 60)
+        horizontal_layout.addWidget(self.run_stage2_obj_in_table)
 
-        self.show_trace_stage2 = QPushButton('Trace')
-        self.show_trace_stage2.clicked[bool].connect(partial(self.Show_trace_stage2))
-        self.show_trace_stage2.resize(150, 60)
-        horizontal_layout.addWidget(self.show_trace_stage2)
-        self.num_trace = QLineEdit()
-        self.num_trace.setText(str(1))
-        cb = self.num_trace
-        width = cb.minimumSizeHint().width()
-        cb.setFixedWidth(width)
-        horizontal_layout.addWidget(self.num_trace)
-        self.trace_size_button = QPushButton('D:')
-        horizontal_layout.addWidget(self.trace_size_button)
-        self.size_trace = QLineEdit()
-        self.size_trace.setText(str(0))
-        cb = self.size_trace
-        width = cb.minimumSizeHint().width()
-        cb.setFixedWidth(width)
-        horizontal_layout.addWidget(self.size_trace)
+        self.run_cr_analyser = QPushButton('Table:CleanImage')
+        #self.run_cr_analyser.clicked[bool].connect(partial(self.Compare_Dith))
+        self.run_cr_analyser.clicked[bool].connect(partial(self.run_stage2_table_compare_Dith))
+        self.run_cr_analyser.resize(200, 60)
+        horizontal_layout.addWidget(self.run_cr_analyser)
+
         #self.read_step_choice = QComboBox()
         #flags = ['Initial', 'BkgrSub', 'Flatfield', 'Straylight', 'Fringe','FluxCalib','ResFringe']
         #self.read_step_choice.addItems(flags)
@@ -2543,6 +2614,80 @@ class expPipeline2Widget(QWidget):
         #horizontal_layout.addWidget(self.read_step_choice)
         horizontal_layout.addStretch(1)
         l.addLayout(horizontal_layout)
+
+        horizontal_layout = QHBoxLayout(self)
+        self.show_trace_stage2 = QPushButton('Trace')
+        self.show_trace_stage2.clicked[bool].connect(partial(self.Show_trace_stage2))
+        self.show_trace_stage2.resize(150, 60)
+        horizontal_layout.addWidget(self.show_trace_stage2)
+        self.num_trace = QLineEdit()
+        self.num_trace.setText(str(1))
+        cb = self.num_trace
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
+        horizontal_layout.addWidget(self.num_trace)
+        #self.trace_size_button = QPushButton('D:')
+        #horizontal_layout.addWidget(self.trace_size_button)
+        horizontal_layout.addWidget(QLabel('D:'))
+        self.size_trace = QLineEdit()
+        self.size_trace.setText(str(0))
+        cb = self.size_trace
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
+        horizontal_layout.addWidget(self.size_trace)
+
+        self.show_Xtrace_stage2 = QPushButton('XTrace')
+        self.show_Xtrace_stage2.clicked[bool].connect(partial(self.Show_Xtrace_stage2))
+        self.show_Xtrace_stage2.resize(150, 60)
+        horizontal_layout.addWidget(self.show_Xtrace_stage2)
+        self.Xtrace_coord = QLineEdit()
+        self.Xtrace_coord.setText(str(1))
+        cb = self.Xtrace_coord
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
+        horizontal_layout.addWidget(self.Xtrace_coord)
+        horizontal_layout.addStretch(1)
+        l.addLayout(horizontal_layout)
+
+        horizontal_layout = QHBoxLayout(self)
+        horizontal_layout.addWidget(QLabel('QSO_RA:'))
+        self.qso_ra_coord = QLineEdit()
+        #self.qso_ra_coord.setText(str(135.3445)) #J0901
+        #self.qso_ra_coord.setText(str(151.807004)) #J1007
+        self.qso_ra_coord.setText(str(39.662209)) #AO0235
+        #self.qso_ra_coord.setText(str(154.463132))  # J1017
+        cb = self.qso_ra_coord
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
+        #self.nINT.resize(90, 30)
+        horizontal_layout.addWidget(self.qso_ra_coord)
+        horizontal_layout.addWidget(QLabel('QSO_DEC:'))
+        self.qso_dec_coord = QLineEdit()
+        #self.qso_dec_coord.setText(str(20.746259)) #J0901
+        #self.qso_dec_coord.setText(str(28.896786)) #J1007
+        self.qso_dec_coord.setText(str(16.616465 	))  # AO0235
+        #self.qso_dec_coord.setText(str(47.827824))  # J1017
+        cb = self.qso_dec_coord
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
+        # self.nINT.resize(90, 30)
+        horizontal_layout.addWidget(self.qso_dec_coord)
+
+        horizontal_layout.addWidget(QLabel('Apert:'))
+        self.qso_aperture = QLineEdit()
+        #self.qso_dec_coord.setText(str(20.746259)) #J0901
+        self.qso_aperture.setText(str(1.8)) #J1007
+        cb = self.qso_aperture
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
+        # self.nINT.resize(90, 30)
+        horizontal_layout.addWidget(self.qso_aperture)
+
+
+        horizontal_layout.addStretch(1)
+        l.addLayout(horizontal_layout)
+
+
 
         layout.addLayout(l)
         layout.addStretch(1)
@@ -2561,8 +2706,12 @@ class expPipeline2Widget(QWidget):
         print('Show rate_Stage2:')
         self.parent.Exposures.table.show_image(mode='stage2')
 
-    def Compare_maps(self):
-        self.parent.Exposures.table.stage2_compare_maps()
+    def Save_Rate_stage2(self, mode='stage2'):
+        print('Show rate_Stage2:')
+        self.parent.Exposures.table.save_image(mode='stage2')
+
+    #def Compare_maps(self):
+    #    self.parent.Exposures.table.stage2_compare_maps()
 
     def FixHotPix(self, debug=False):
         print('SelectHotPixels:')
@@ -2572,13 +2721,47 @@ class expPipeline2Widget(QWidget):
         print('AssignWCS')
         self.parent.Exposures.table.stage2_call_wcs()
 
-    def Bkgr_Model(self, debug=False, group=None):
+    def Bkgr_Model(self):
         print('Bkgr_Model')
         if 0:
             # default pipeline bkgr sub - pix by pix
             self.parent.Exposures.table.stage2_background_subtraction()
         if 1:
             self.parent.Exposures.table.stage2_background_model()
+
+    def Mask_QSO_traces(self):
+        save_res_flag = int(self.parent.exp_pars.save_tmp_res.currentIndex())
+        qso_ra,qso_dec = float(self.parent.stage2_commands.qso_ra_coord.text()),float(self.parent.stage2_commands.qso_dec_coord.text())
+        qso_aperture = float(self.parent.stage2_commands.qso_aperture.text())
+        self.parent.stage2.mask_qso_traces(debug=True,q_ra= qso_ra,q_dec=qso_dec,q_delta=qso_aperture, save_pdf=save_res_flag)
+
+    def Prep_Dith(self):
+        table = self.parent.Exposures.table
+        for k, obj in enumerate(table.data):
+            print(obj['name'], ' - ', k, ' from', np.size(table.data))
+            filename = obj['name']
+            if 'BACK' not in obj[3]:
+                print('Name:', obj[3], filename)
+                self.parent.plot_image.add(filename, add=True)
+                print('Init_Stage2:')
+                self.parent.Exposures.table.init_stage2()
+                self.parent.Exposures.current_name = filename
+                print('AssignWCS')
+                self.parent.Exposures.table.stage2_call_wcs()
+                print('Fix hot Pix')
+                self.FixHotPix()
+                print('Bkgr_Subtraction')
+                self.Bkgr_Model()  # parent.Exposures.table.stage2_background_model()
+                print('Mask QSO traces')
+                self.Mask_QSO_traces()  # parent.Exposures.table.stage2_background_model()
+                print('Save file')
+                self.Save_Rate_stage2()  # parent.Exposures.table.stage2_background_model()
+                self.parent.plot_image.add(filename, add=False)
+
+    def Compare_Dith(self):
+        self.parent.Exposures.table.stage2_compare_dithers_sample()
+
+
     def Flat_Field(self):
         print('Flat_Field')
         self.parent.Exposures.table.stage2_flat_field()
@@ -2603,18 +2786,15 @@ class expPipeline2Widget(QWidget):
         print('Flux_calibration')
         self.parent.Exposures.table.stage2_flux_calibration()
 
-    def Run_all_stage2(self):
-        print('Run all')
+    def Run2_allsteps(self):
+        print('Run all steps')
         print('Init_Stage2:')
         detector = self.parent.Exposures.table.init_stage2()
-        #self.parent.Exposures.table.show_image(mode='stage2')
         if detector != 'MIRIMAGE':
             print('AssignWCS')
             self.parent.Exposures.table.stage2_call_wcs()
             print('Fix hot Pix')
             self.FixHotPix()
-            print('Bkgr_Subtraction')
-            self.Bkgr_Model() #parent.Exposures.table.stage2_background_model()
             print('Flat_Field')
             self.parent.Exposures.table.stage2_flat_field()
             print('Source_identification')
@@ -2625,33 +2805,166 @@ class expPipeline2Widget(QWidget):
             self.parent.Exposures.table.stage2_fringe_flat_correction()
             print('Residual flux correction')
             self.parent.Exposures.table.stage2_residual_fringe_correction()
+            #print('Bkgr_Subtraction')
+            #self.Bkgr_Model()  # parent.Exposures.table.stage2_background_model()
             print('Flux_calibration')
             self.parent.Exposures.table.stage2_flux_calibration()
             print('Run all: done.')
         else:
             print('Error: You try to run pipiline stage2 for IMAGE data')
 
+    def Run2_steps_1_to_7(self):
+        print('Run steps_1to_7')
+        print('Init_Stage2:')
+        detector = self.parent.Exposures.table.init_stage2()
+        if detector != 'MIRIMAGE':
+            print('AssignWCS')
+            self.parent.Exposures.table.stage2_call_wcs()
+            print('Fix hot Pix')
+            self.FixHotPix()
+            print('Flat_Field')
+            self.parent.Exposures.table.stage2_flat_field()
+            print('Source_identification')
+            self.parent.Exposures.table.stage2_source_identification()
+            print('StrayLight')
+            self.parent.Exposures.table.stage2_stray_light()
+            print('Fringe Flat correction')
+            self.parent.Exposures.table.stage2_fringe_flat_correction()
+            print('Residual flux correction')
+            self.parent.Exposures.table.stage2_residual_fringe_correction()
+        else:
+            print('Error: You try to run pipiline stage2 for IMAGE data')
+
+
+    def Run_stage2_bkgr_subtraction(self):
+        print('Run steps8')
+        detector = self.parent.Exposures.table.init_stage2()
+        print('Update data file')
+        s = self.parent.Exposures.table.stage2_read_res_fringes()
+        save_res_flag = int(self.parent.exp_pars.save_tmp_res.currentIndex())
+        if s:
+            self.Bkgr_Model()  # parent.Exposures.table.stage2_background_model()
+            self.parent.Exposures.table.save_image(mode='bkgr_sub',save=save_res_flag)
+            targ_name = self.parent.stage2.data.meta.target.proposer_name
+            if 'BACKGROUND' not in targ_name:
+                self.Mask_QSO_traces()
+                self.parent.Exposures.table.save_image(mode='masked_qso',save=save_res_flag)
+        else:
+            print('There is no the saved residual fringe file')
+
+    def Run_stage2_bkgr_subtraction_only(self):
+        print('Run steps8')
+        detector = self.parent.Exposures.table.init_stage2()
+        print('Update data file')
+        s = self.parent.Exposures.table.stage2_read_res_fringes()
+        save_res_flag = int(self.parent.exp_pars.save_tmp_res.currentIndex())
+        if s:
+            self.Bkgr_Model()  # parent.Exposures.table.stage2_background_model()
+        else:
+            print('There is no the saved residual fringe file')
+
+    #def Run_stage2_mask_source_orders(self):
+    #    s = self.parent.Exposures.table.stage2_read_res_fringes()
+    #    if s:
+    #        print('Bkgr_Subtraction')
+    #        self.Bkgr_Model()  # parent.Exposures.table.stage2_background_model()
+    #        self.parent.Exposures.table.save_image(mode='masked_qso')
+    #    else:
+    #        print('There is no the saved residual fringe file')
+
+    def Run_stage2_dither_comparison(self):
+        print('Run steps9-10')
+        print('Init_Stage2:')
+        detector = self.parent.Exposures.table.init_stage2()
+        print('Update data file')
+        s = self.parent.Exposures.table.stage2_read_bkgr_subtracted()
+        if s:
+            print('Compare dithered images')
+            self.Compare_Dith()  # parent.Exposures.table.stage2_background_model()
+            #self.parent.Exposures.table.save_image(mode='bkgr_sub')
+        else:
+            print('There is no the saved rate file')
+        print('Done.')
+
+    def Run_stage2_mask_qso(self):
+        print('Mask QSO')
+        print('Init_Stage2:')
+        detector = self.parent.Exposures.table.init_stage2()
+        s = self.parent.Exposures.table.stage2_read_bkgr_subtracted()
+        if s:
+            print('Compare dithered images')
+            self.Compare_Dith()  # parent.Exposures.table.stage2_background_mod
+        else:
+            print('There is no the saved rate file')
+        print('Done.')
+
+
+
+    def Run_stage2_dither_comparison_and_fluxcalibration(self):
+        print('Run steps9-10')
+        print('Init_Stage2:')
+        detector = self.parent.Exposures.table.init_stage2()
+        print('Update data file')
+        s = self.parent.Exposures.table.stage2_read_bkgr_subtracted()
+        if s:
+            print('Compare dithered images')
+            self.Compare_Dith()  # parent.Exposures.table.stage2_background_model()
+            #self.parent.Exposures.table.save_image(mode='bkgr_sub')
+        else:
+            print('There is no the saved rate file')
+        print('Flux_calibration')
+        self.parent.Exposures.table.stage2_flux_calibration()
+        print('Done.')
+
     def Read_steps_stage2(self):
         print('Read step')
         self.parent.Exposures.table.stage2_read_steps()
         self.parent.Exposures.table.show_image(mode='stage2')
 
+    def Read_steps_stage2_Resfringe(self):
+        print('Read step')
+        self.parent.Exposures.table.stage2_read_step_res_fringe()
+        self.parent.Exposures.table.show_image(mode='stage2')
+
     def Show_trace_stage2(self):
         self.parent.Exposures.table.stage2_show_trace(trace_order=int(self.num_trace.text()),trace_size=int(self.size_trace.text()))
 
+    def Show_Xtrace_stage2(self):
+        self.parent.Exposures.table.stage2_show_Xtrace(trace_Xpos=int(self.Xtrace_coord.text()))
+            #trace_order=int(self.num_trace.text()),trace_size=int(self.size_trace.text()))
 
 
 
-    def run_stage2_table(self):
+
+    def run_stage2_table_1_to_7(self):
         table = self.parent.Exposures.table
         for k, obj in enumerate(self.parent.Exposures.table.data):
             print(obj['name'], ' - ', k,' from',np.size(table.data))
             name = obj['name']
             self.parent.plot_image.add(name, add=True)
             self.parent.Exposures.current_name = name
-            self.Run_all_stage2()
+            self.Run2_steps_1_to_7()
             self.parent.plot_image.add(name, add=False)
 
+    def run_stage2_table_Bkgr_subtr(self):
+        table = self.parent.Exposures.table
+        for k, obj in enumerate(self.parent.Exposures.table.data):
+            print(obj['name'], ' - ', k,' from',np.size(table.data))
+            name = obj['name']
+            self.parent.plot_image.add(name, add=True)
+            self.parent.Exposures.current_name = name
+            self.Run_stage2_bkgr_subtraction()
+            self.parent.plot_image.add(name, add=False)
+
+    def run_stage2_table_compare_Dith(self):
+        table = self.parent.Exposures.table
+        for k, obj in enumerate(self.parent.Exposures.table.data):
+            print(obj['name'], ' - ', k,' from',np.size(table.data))
+            name = obj['name']
+            self.parent.plot_image.add(name, add=True)
+            self.parent.Exposures.current_name = name
+            self.Run_stage2_dither_comparison_and_fluxcalibration()
+            self.parent.plot_image.add(name, add=False)
 
 class JWSTviewer(QMainWindow):
 

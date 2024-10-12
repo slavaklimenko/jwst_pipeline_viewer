@@ -145,6 +145,19 @@ class detector2():
                 result.meta.cal_step.assign_wcs = 'SKIPPED'
                 self.data =  result
 
+    def update_data_file(self,input_file=None):
+        with datamodels.open(input_file) as input_model:
+            # If input type is not supported, log warning, set to 'skipped', exit
+            if not (isinstance(input_model, datamodels.ImageModel) or
+                    isinstance(input_model, datamodels.CubeModel) or
+                    isinstance(input_model, datamodels.IFUImageModel)):
+                print("Input dataset type is not supported.")
+                print("assign_wcs expects ImageModel, IFUImageModel or CubeModel as input.")
+                print("Skipping assign_wcs step.")
+            else:
+                result = input_model.copy()
+                self.data = result
+
     def compare_maps(self, first_map_name='Initial',second_map_name='Initial'):
         read_first_map,read_sec_map= False,False
         map2mapfilename = {}
@@ -244,9 +257,10 @@ class detector2():
                 self.calfiles = self.data
     def read_step_results_version2(self,step_name = 'cal'):
         map2mapfilename = {}
-        map2mapfilename['cal'] = '*cal.fits'
+        map2mapfilename['cal'] = '*bkgr_sub_cal.fits'
+        map2mapfilename['res_fringe'] = '*residual_fringe.fits'
 
-        sstring = self.output_dir + map2mapfilename[step_name]
+        sstring = self.output_dir+'residual_fringe/' + map2mapfilename[step_name]
         filenames = sorted(glob.glob(sstring))
         newmapfile = None
         for f in filenames:
@@ -664,7 +678,9 @@ class detector2():
             plt.imshow(self.data.data,vmin=vmin,vmax=vmax)
             plt.show()
 
-    def create_background_model(self, filelist='', debug=False, shothing_rad=10):
+
+
+    def create_background_model(self, filelist='', debug=False, smothing_rad=10,database='fringe_corr'):
         band = self.data.meta.instrument.band
         channel = self.data.meta.instrument.channel
         listnames_source = []
@@ -684,39 +700,27 @@ class detector2():
         bkgr_sigimages = []
         bkgr_dqs = []
         for el in listnames_backgr:
-            if 0:
-                bkgr_name = el[0].replace('uncal', 'rate.fits')
-                bkgr_file = os.path.join(self.path + '/' + bkgr_name)
-                bkgr_names.append(bkgr_file)
-                hdulist = fits.open(bkgr_file)
-                bkgr_slope = hdulist['SCI'].data
-                bkgr_sig_slope = hdulist['ERR'].data
-                bkgr_dq = hdulist['DQ'].data
-                hdulist.close()
-            else:
+            if database == 'rate':
                 bkgr_data = detector2(miri_uncal_file=el[0]+'.fits',path = self.path, output_dir=self.output_dir)
-                bkgr_data.select_hot_pix_version2(filelist=filelist,debug=debug)
-                bkgr_slope = bkgr_data.data.data
-                bkgr_sig_slope = bkgr_data.data.err
-                bkgr_dq = bkgr_data.data.dq
-                bkgr_names.append(el[0].replace('uncal', ''))
+                bkgr_data.select_hot_pix_version2(filelist=filelist,debug=False)
+            elif  database == 'fringe_corr':
+                bkgr_data = detector2(miri_uncal_file=el[0]+'.fits',path = self.path, output_dir=self.output_dir)
+                bkgr_data.read_res_fringes()
+            bkgr_slope = bkgr_data.data.data
+            bkgr_sig_slope = bkgr_data.data.err
+            bkgr_dq = bkgr_data.data.dq
+            bkgr_names.append(el[0].replace('uncal', ''))
 
 
             bkgr_images.append(bkgr_slope)
             bkgr_sigimages.append(bkgr_sig_slope)
             bkgr_dqs.append(bkgr_dq)
             del bkgr_dq,bkgr_slope,bkgr_sig_slope
-        if debug:
-            n_im = len(bkgr_images)
-            fig, ax = plt.subplots(1, n_im, sharex=True, sharey=True)
-            for i in range(n_im):
-                ax[i].imshow(bkgr_images[i], vmin=0, vmax=0.5)
-                ax[i].set_title(bkgr_names[i])
-            plt.show()
+
 
         # interpolation of flux in hot pixels
 
-        def calc_mean_rate(images,sig_images,dqs, debug=False, radius=shothing_rad, hot_pix_limit=4, skip_cr_events= True):
+        def calc_mean_rate(images, sig_images, dqs, debug=False, radius=10, hot_pix_limit=4, skip_cr_events=True):
             n_int = len(images)
             im = np.array([images[i] for i in range(n_int)])
             sigim = np.array([sig_images[i] for i in range(n_int)])
@@ -726,14 +730,16 @@ class detector2():
             if skip_cr_events:
                 mask_cr = np.zeros_like(im)
                 for i in range(n_int):
-                    mask_cr[i] = (np.bitwise_and(dqim[i],dqflags.pixel['JUMP_DET'])).astype(bool)
-                    mask_im[i][mask_cr[i] == 1]=0
-                mask_cr_tot = np.sum(mask_cr,axis=0)
+                    mask_cr[i] = (np.bitwise_and(dqim[i], dqflags.pixel['JUMP_DET'])).astype(bool)
+                    mask_im[i][mask_cr[i] == 1] = 0
+                mask_cr_tot = np.sum(mask_cr, axis=0)
                 for i in range(n_int):
-                    mask_im[i][mask_cr_tot==n_int] = 1
+                    mask_im[i][mask_cr_tot == n_int] = 1
+                    im[i][mask_im[i] == 0] = np.nan
 
-            mean_im = np.nansum(im*mask_im, axis=0)/np.sum(mask_im, axis=0)
-            mask_im = np.ones((n_int, im.shape[1], im.shape[2]))
+            #mean_im = np.nansum(im * mask_im, axis=0) / np.sum(mask_im, axis=0)
+            mean_im = np.nanmedian(im, axis=0)
+            #mask_im = np.ones((n_int, im.shape[1], im.shape[2]))
 
             # set kernel
             filter_kernel = np.zeros((2 * radius + 1, 2 * radius + 1))
@@ -744,6 +750,13 @@ class detector2():
 
             if debug:
                 fig, ax = plt.subplots(4, n_int + 1, sharex=True, sharey=True)
+                vmin, vmax = np.nanquantile(mean_im.flatten(), 0.05), np.nanquantile(mean_im.flatten(), 0.8)
+                for i in range(n_int):
+                    ax[0, i].imshow(im[i], vmin=vmin, vmax=vmax)
+                    ax[0, i].set_title('Image ' + str(i))
+                ax[0, n_int].imshow(mean_im, vmin=vmin, vmax=vmax)
+                ax[0, n_int].set_title('Median')
+
             for i in range(n_int):
                 x = np.array(im[i] / mean_im - 1)
                 x[np.isnan(x)] = 0
@@ -751,31 +764,30 @@ class detector2():
                 x[x < -hot_pix_limit] = 0
 
                 # smooth diff
-                npix = scipy.signal.convolve2d(np.ones_like(x), filter_kernel, mode='same', boundary='fill',
-                                               fillvalue=0)
+                npix = scipy.signal.convolve2d(np.ones_like(x), filter_kernel, mode='same', boundary='fill',   fillvalue=0)
                 x_smoothed = scipy.signal.convolve2d(x, filter_kernel, mode='same', boundary='fill', fillvalue=0) / npix
-
                 mask_im[i][x_smoothed > 0.1] = 0
 
                 if debug:
-                    vmin,vmax = 0,0.5
-                    ax[0, i].imshow(im[i], vmin=vmin, vmax=vmax)
-                    ax[1, i].imshow(x_smoothed, vmin=-0.3, vmax=0.3)
+                    vmin, vmax = -0.3,0.3
+                    ax[1, i].imshow(x_smoothed, vmin=vmin, vmax=vmax)
+                    ax[1, i].set_title('Smoothed model' + str(i))
                     xi, yi = np.arange(x_smoothed.shape[1]), np.arange(x_smoothed.shape[0])
                     zi = x_smoothed
                     ax[1, i].contour(xi, yi, zi, levels=[-0.1, 0.1], linewidths=0.5, colors='k')
-            if skip_cr_events and 1:
+
+            if skip_cr_events and 0:
                 mask_cr = np.zeros_like(im)
                 for i in range(n_int):
-                    mask_cr[i] = (np.bitwise_and(dqim[i],dqflags.pixel['JUMP_DET'])).astype(bool)
+                    mask_cr[i] = (np.bitwise_and(dqim[i], dqflags.pixel['JUMP_DET'])).astype(bool)
                 mask_cr_shower = 1 - mask_im
                 mask_cr_tot = mask_cr + mask_cr_shower
 
-                mask_cr_tot = np.sum(mask_cr_tot.astype(bool),axis=0)
+                mask_cr_tot = np.sum(mask_cr_tot.astype(bool), axis=0)
 
                 for i in range(n_int):
-                    mask_im[i][(mask_cr[i] == 1)*(mask_cr_tot!=n_int)] = 0
-            if 1:
+                    mask_im[i][(mask_cr[i] == 1) * (mask_cr_tot != n_int)] = 0
+            if 0:
                 for i in range(n_int):
                     x = np.array(im[i] / mean_im - 1)
                     x[np.isnan(x)] = 0
@@ -790,48 +802,379 @@ class detector2():
 
                     mask_im[i][x_smoothed < 0.1] = 1
             if debug:
-                ax[2, 0].imshow(mask_im[0])
-                ax[2, 1].imshow(mask_im[1])
-                ax[3, 0].imshow(mask_cr[0])
-                ax[3, 1].imshow(mask_cr[1])
+                for i in range(n_int):
+                    ax[2, i].imshow(mask_im[i])
+                    ax[2, i].set_title('Mask for showers ' + str(i))
+
+                    ax[3, i].imshow(mask_cr[i])
+                    ax[3, i].set_title('Mask for CR ' + str(i))
 
             imsig_inv = np.power(sigim, -2)
-            imtot = np.nansum(im * imsig_inv * mask_im, axis=0) / np.nansum(imsig_inv * mask_im, axis=0)
+            #imtot = np.nansum(im * imsig_inv * mask_im, axis=0) / np.nansum(imsig_inv * mask_im, axis=0)
+            for i in range(n_int):
+                im[i][mask_im[i] == 0] = np.nan
+            imtot = np.nanmedian(im, axis=0)
             imtotsig = np.power(np.nansum(imsig_inv * mask_im, axis=0), -0.5)
 
             if debug:
-                ax[0, n_int].imshow(mean_im, vmin=vmin, vmax=vmax)
+                vmin, vmax = np.nanquantile(mean_im.flatten(), 0.05), np.nanquantile(mean_im.flatten(), 0.8)
                 ax[1, n_int].imshow(imtot, vmin=vmin, vmax=vmax)
-                #ax[2, n_int].imshow(imtot, vmin=vmin, vmax=vmax)
+                ax[1, n_int].set_title('Final')
+                # ax[2, n_int].imshow(imtot, vmin=vmin, vmax=vmax)
                 plt.show()
 
+            return imtot, imtotsig
 
-            return  imtot,imtotsig
-        return calc_mean_rate(images=bkgr_images,sig_images=bkgr_sigimages,dqs=bkgr_dqs,debug=debug)
+        imtot, imtotsig = calc_mean_rate(images=bkgr_images,sig_images=bkgr_sigimages,dqs=bkgr_dqs,debug=debug,radius=smothing_rad)
 
-    def subtract_bkgr_model(self, bkgr_model,bkgr_model_sig,debug=False):
+        if debug:
+            n_im = len(bkgr_images)
+            fig, ax = plt.subplots(1, n_im+1, sharex=True, sharey=True)
+            vmin,vmax = np.nanquantile(imtot.flatten(), 0.05), np.nanquantile(imtot.flatten(), 0.8)
+            for i in range(n_im):
+                ax[i].imshow(bkgr_images[i], vmin=vmin, vmax=vmax)
+                ax[i].set_title(bkgr_names[i])
+            ax[n_im].imshow(imtot, vmin=vmin, vmax=vmax)
+            ax[n_im].set_title('MODEL')
+            plt.show()
+
+        return imtot, imtotsig
+
+    def subtract_bkgr_model(self, bkgr_model,bkgr_model_sig,savepdf=True):
         targ_name = self.data.meta.target.proposer_name
         if 'BACKGROUND' in targ_name:
             self.data.data = bkgr_model
             self.data.err = bkgr_model_sig
-            #self.data.meta.background.method = ''
             self.data.meta.background.subtracted = False
         else:
-            if debug:
-                vmin, vmax = np.nanquantile(self.data.data.flatten(), 0.01), np.nanquantile(self.data.data.flatten(),
-                                                                                            0.99)
-                fig,ax = plt.subplots(1,3,sharex=True,sharey=True)
-                ax[0].imshow(self.data.data,vmin=vmin,vmax =vmax)
-                ax[1].imshow(bkgr_model,vmin=vmin,vmax =vmax)
-                diff = self.data.data -bkgr_model
-                vmin, vmax = np.nanquantile(diff.flatten(), 0.01), np.nanquantile(diff.flatten(),
-                                                                                            0.99)
-                ax[2].imshow(diff,vmin=vmin,vmax =vmax)
-                plt.show()
-            self.data.data -= bkgr_model
-            self.data.err = np.sqrt(np.power(self.data.err,2) + np.power(bkgr_model_sig,2))
+            data_tmp = np.array(self.data.data)
+            nan_mask = ~np.isnan(bkgr_model)
+            self.data.data[nan_mask] -= bkgr_model[nan_mask]
+            self.data.err[nan_mask] = np.sqrt(np.power(self.data.err[nan_mask],2) + np.power(bkgr_model_sig[nan_mask],2))
             self.data.meta.background.method = 'STAGE2_PIX2PIX'
             self.data.meta.background.subtracted = True
+            if savepdf:
+                vmin, vmax = np.nanquantile(self.data.data.flatten(), 0.01), np.nanquantile(
+                    self.data.data.flatten(), 0.99)
+                fig, ax = plt.subplots(1, 3, sharex=True, sharey=True)
+                ax[0].imshow(data_tmp, vmin=vmin, vmax=vmax)
+                ax[0].set_title('Exposure')
+                ax[1].imshow(bkgr_model, vmin=vmin, vmax=vmax)
+                ax[1].set_title('Background Model')
+                ax[2].imshow(self.data.data, vmin=vmin, vmax=vmax)
+                ax[2].set_title('Bkgr subtracted')
+                plt.savefig('./output/detector2/bkgr_subtracted/' + self.name + '.pdf', bbox_inches='tight',
+                            dpi=2000)
+            del(data_tmp)
+
+
+    def mask_qso_traces(self, debug=False,q_ra= 135.3445,q_dec=20.746259,q_delta=3,save_pdf=True):
+        targ_name = self.data.meta.target.proposer_name
+        if 'BACKGROUND' not in targ_name:
+            from JWST_cube_analyser import miri_psf_arcsec
+            print('mask_qso_traces for', self.name)
+            data = self.data.data
+            wcs = self.data.meta.wcs
+            cal_detector_to_world2 = wcs.get_transform('detector', 'world')
+
+            #read photometry file
+            if 1:
+                band = self.data.meta.instrument.band
+                channel = self.data.meta.instrument.channel
+
+                photom_list = sorted(glob.glob(os.environ["CRDS_PATH"] + '/references/jwst/miri/*photom*'))
+                for f in photom_list:
+                    hdulist = fits.open(f)
+                    header = hdulist[0].header
+                    f_band, f_ch = header['BAND'], header['CHANNEl']
+                    if band == f_band and f_ch == channel:
+                        photom_file = f
+                        break
+
+                hdulist = fits.open(photom_file)
+                hdu = hdulist[1].data
+                hdulist.close()
+
+                mask_flux = hdu.copy()
+                mask_flux[np.isnan(mask_flux)] = 0
+                mask_flux[mask_flux > 0] = 1
+                del hdu
+
+            # create mask for traces
+            mask = np.zeros((data.shape[0], data.shape[1]))
+            # define reference points for trace fitting
+            tr_x = np.array([100, 250, 500, 750, 900])
+            l1 = np.nanmean([cal_detector_to_world2(l, 500)[2] for l in np.arange(100, 400, 10)])
+            miri_psf_fwhm1 = miri_psf_arcsec(l1)
+            l2 = np.nanmean([cal_detector_to_world2(l, 500)[2] for l in np.arange(500, 800, 10)])
+            miri_psf_fwhm2 = miri_psf_arcsec(l2)
+
+            ntraces,itrace = 0,0
+            for n,i in enumerate(tr_x):
+                print(i)
+                for j in np.arange(10, data.shape[0] - 10):
+                    if mask_flux[i, j] > 0:
+                        (x, y, l) = cal_detector_to_world2(j, i)
+                        if ~np.isnan(x) and ~np.isnan(y):
+                            if j < 500:
+                                if np.sqrt((x - q_ra) ** 2 + (y - q_dec) ** 2) * 3600 < q_delta * miri_psf_fwhm1:
+                                    mask[i, j] = 1
+                            else:
+                                if np.sqrt((x - q_ra) ** 2 + (y - q_dec) ** 2) * 3600 < q_delta * miri_psf_fwhm2:
+                                    mask[i, j] = 1
+                tmp = np.array([mask[i, e] - mask[i, e + 1] for e in np.arange(0, data.shape[1] - 1)])
+                if np.sum(tmp == -1)>ntraces:
+                    ntraces = np.sum(tmp == -1)
+                    itrace = n
+                print('detector traces:', ntraces, np.where(tmp == -1)[0])
+
+            left_border = np.zeros((ntraces, len(tr_x)))
+            right_border = np.zeros((ntraces, len(tr_x)))
+
+            for k, i in enumerate(tr_x):
+                tmp = np.array([mask[i, e] - mask[i, e + 1] for e in np.arange(0, data.shape[1] - 1)])
+                s = np.where(tmp == -1)[0]
+                print(s)
+                tmp_traces = np.where(tmp == -1)[0]
+                for ll,v in enumerate(tmp_traces):
+                    left_border[ll, k] = v
+                tmp_traces = np.where(tmp == 1)[0]
+                for ll,v in enumerate(tmp_traces):
+                    right_border[ll, k] = v
+
+                #left_border[:, k] = np.where(tmp == -1)[0]
+                #right_border[:, k] = np.where(tmp == 1)[0]
+
+            for k in range(ntraces):
+                mask_left = np.abs(left_border[k,:]-left_border[k,itrace])<20
+                zl = np.polyfit(tr_x[mask_left], left_border[k, :][mask_left], 2)
+                pl = np.poly1d(zl)
+
+                mask_right = np.abs(right_border[k,:]-right_border[k,itrace])<20
+                zr = np.polyfit(tr_x[mask_right], right_border[k, :][mask_right], 2)
+                pr = np.poly1d(zr)
+                for i in range(mask.shape[0]):
+                    l, r = int(np.rint(pl(i))), int(np.rint(pr(i)))
+                    mask[i, l:r] = 1
+
+            if debug:
+                data_copy = np.array(data)
+            self.data.data[mask.astype(bool)] = -999
+
+            if debug and save_pdf:
+                fig, ax = plt.subplots(1, 2, sharex=True, sharey=True)
+                ax[0].imshow(data_copy, vmin=-0.5, vmax=0.5)
+                ax[1].imshow(data, vmin=-0.5, vmax=0.5)
+                ax[0].set_title('Original')
+                ax[1].set_title('with masked QSO pixels')
+                plt.savefig('./output/detector2/masked_qso/'+self.name+'.pdf', bbox_inches='tight',dpi=1000)
+
+    def compare_dither_images(self, debug=True,save_pdf=True):
+        targ_name = self.data.meta.target.proposer_name
+        if 'BACKGROUND' not in targ_name:
+            band = self.data.meta.instrument.band
+            channel = self.data.meta.instrument.channel
+            dither_pos_number = self.data.meta.dither.position_number
+            #filelist = sorted(glob.glob('./output/tmp/*__rate.fits'))
+            filelist = sorted(glob.glob('./output/detector2/masked_qso/*.fits'))
+            short_list = []
+            for f in filelist:
+                hdulist = fits.open(f)
+                header = hdulist[0].header
+                f_band, f_ch,f_name  = header['BAND'], header['CHANNEl'],header['TARGPROP']
+                if band == f_band and f_ch == channel and 'BACK' not  in f_name and targ_name in f_name:
+                    if 'jw02155003001_05101_00001_mirifulong' not in f:
+                        short_list.append(f)
+                hdulist.close()
+
+            if len(short_list)>0:
+
+                images = []
+                names = []
+                sigimages = []
+                dqs = []
+                print('list of exposures with the same detector settings')
+                for k,el in enumerate(short_list):
+                    print(k,el)
+                    data_tmp = datamodels.open(el)
+                    print(data_tmp.meta.target.proposer_name,
+                          data_tmp.meta.instrument.channel,data_tmp.meta.instrument.band,data_tmp.meta.dither.position_number)
+                    #mask traces
+                    mask_traces = data_tmp.data == -999
+                    data_tmp.data[mask_traces] = np.nan
+                    data_tmp.err[mask_traces] = np.nan
+                    data_tmp.dq[mask_traces] = 1
+                    #add to the sample
+                    images.append(data_tmp.data)
+                    sigimages.append(data_tmp.err)
+                    dqs.append(data_tmp.dq)
+                    names.append(el.split('/')[-1])
+                    if dither_pos_number == data_tmp.meta.dither.position_number:
+                        dither_exposure_number = k
+                    del data_tmp
+
+                def calc_mean_rate(images, sig_images, dqs, debug=False, radius=10, hot_pix_limit=4, skip_cr_events=True):
+                    n_int = len(images)
+                    im = np.array([images[i] for i in range(n_int)])
+                    sigim = np.array([sig_images[i] for i in range(n_int)])
+                    dqim = np.array([dqs[i] for i in range(n_int)])
+                    mask_im = np.ones((n_int, im.shape[1], im.shape[2]))
+
+                    #mask pixels in traces
+                    for i in range(n_int):
+                        mask_im[i][np.isnan(im[i])] = 0
+
+                    if skip_cr_events:
+                        mask_cr = np.zeros_like(im)
+                        for i in range(n_int):
+                            mask_cr[i] = (np.bitwise_and(dqim[i], dqflags.pixel['JUMP_DET'])).astype(bool)
+                            mask_im[i][mask_cr[i] == 1] = 0
+                        for i in range(n_int):
+                            mask_im[i][np.sum(mask_cr, axis=0) == n_int] = 1
+                            im[i][mask_im[i]==0] = np.nan
+                    #mean_im = np.nansum(im * mask_im, axis=0) / np.sum(mask_im, axis=0)
+                    mean_im = np.nanmedian(im, axis=0)
+                    #mask_im = np.ones((n_int, im.shape[1], im.shape[2]))
+
+                    # set kernel
+                    filter_kernel = np.zeros((2 * radius + 1, 2 * radius + 1))
+                    for i in range(filter_kernel.shape[0]):
+                        for j in range(filter_kernel.shape[1]):
+                            if (i - radius) ** 2 + (j - radius) ** 2 <= radius ** 2:
+                                filter_kernel[i, j] = 1
+
+                    if debug:
+                        fig, ax = plt.subplots(4, n_int + 1, sharex=True, sharey=True)
+                    for i in range(n_int):
+                        x = np.array(im[i] / mean_im - 1)
+                        x[np.isnan(x)] = 0
+                        x[x > hot_pix_limit] = 0
+                        x[x < -hot_pix_limit] = 0
+
+                        # smooth diff
+                        npix = scipy.signal.convolve2d(np.ones_like(x), filter_kernel, mode='same', boundary='fill',   fillvalue=0)
+                        x_smoothed = scipy.signal.convolve2d(x, filter_kernel, mode='same', boundary='fill', fillvalue=0) / npix
+                        #mask_cr_showers = x_smoothed > 0.1
+                        #mask_im[i][np.sum(mask_im, axis=0) == 0] = 1
+                        mask_im[i][x_smoothed > 0.1] = 0
+                        if debug:
+                            vmin, vmax = np.nanquantile(mean_im.flatten(), 0.05), np.nanquantile(mean_im.flatten(), 0.8)
+                            ax[0, i].imshow(im[i], vmin=vmin, vmax=vmax)
+                            ax[0, i].set_title('Image '+str(i))
+                            ax[1, i].imshow(x_smoothed, vmin=-0.3, vmax=0.3)
+                            ax[1, i].set_title('Smoothed model' + str(i))
+                            xi, yi = np.arange(x_smoothed.shape[1]), np.arange(x_smoothed.shape[0])
+                            zi = x_smoothed
+                            ax[1, i].contour(xi, yi, zi, levels=[-0.1, 0.1], linewidths=0.5, colors='k')
+
+
+                    if skip_cr_events and 0:
+                        mask_cr = np.zeros_like(im)
+                        for i in range(n_int):
+                            mask_cr[i] = (np.bitwise_and(dqim[i], dqflags.pixel['JUMP_DET'])).astype(bool)
+                        mask_cr_shower = 1 - mask_im
+                        mask_cr_tot = mask_cr + mask_cr_shower
+
+                        mask_cr_tot = np.sum(mask_cr_tot.astype(bool), axis=0)
+
+                        for i in range(n_int):
+                            mask_im[i][(mask_cr[i] == 1) * (mask_cr_tot != n_int)] = 0
+                    if 0:
+                        for i in range(n_int):
+                            x = np.array(im[i] / mean_im - 1)
+                            x[np.isnan(x)] = 0
+                            x[x > hot_pix_limit] = 0
+                            x[x < -hot_pix_limit] = 0
+
+                            # smooth diff
+                            npix = scipy.signal.convolve2d(np.ones_like(x), filter_kernel, mode='same', boundary='fill',
+                                                           fillvalue=0)
+                            x_smoothed = scipy.signal.convolve2d(x, filter_kernel, mode='same', boundary='fill',
+                                                                 fillvalue=0) / npix
+
+                            #mask_im[i][x_smoothed < 0.1] *= 1
+                    if debug:
+                        for i in range(n_int):
+                            ax[2, i].imshow(mask_im[i])
+                            ax[2, i].set_title('Mask for images '+str(i))
+
+                            ax[3, i].imshow(mask_cr[i])
+                            ax[3, i].set_title('Mask for CR '+str(i))
+
+
+                    imsig_inv = np.power(sigim, -2)
+                    #imtot = np.nansum(im * imsig_inv * mask_im, axis=0) / np.nansum(imsig_inv * mask_im, axis=0)
+                    for i in range(n_int):
+                        im[i][mask_im[i]==0] = np.nan
+                    imtot = np.nanmedian(im, axis=0)
+                    imtotsig = np.power(np.nansum(imsig_inv * mask_im, axis=0), -0.5)
+
+                    if debug:
+                        ax[0, n_int].imshow(mean_im, vmin=vmin, vmax=vmax)
+                        ax[0, n_int].set_title('Median')
+                        ax[1, n_int].imshow(imtot, vmin=vmin, vmax=vmax)
+                        ax[1, n_int].set_title('Final')
+                        # ax[2, n_int].imshow(imtot, vmin=vmin, vmax=vmax)
+                        plt.show()
+
+                    return imtot, imtotsig
+
+                smothing_rad = 10
+                imtot, imtotsig = calc_mean_rate(images=images,sig_images=sigimages,dqs=dqs,debug=debug,radius=smothing_rad)
+
+                if debug:
+                    n_im = len(images)
+                    fig, ax = plt.subplots(1, n_im + 1, sharex=True, sharey=True)
+                    fig2, ax2 = plt.subplots(1, n_im + 1, sharex=True, sharey=True)
+                    vmin, vmax = np.nanquantile(imtot.flatten(), 0.05), np.nanquantile(imtot.flatten(), 0.8)
+                    for i in range(n_im):
+                        ax[i].imshow(images[i], vmin=vmin, vmax=vmax)
+                        ax2[i].plot(np.nanmean(images[i][:,10:(imtot.shape[1]-10)],axis=1))
+                        ax2[i].plot(np.nanmedian(images[i][:,10:(imtot.shape[1]-10)], axis=1))
+                        ax2[i].axhline(0, ls='--', color='red')
+                        ax[i].set_title(names[i])
+                    ax[n_im].imshow(imtot, vmin=vmin, vmax=vmax)
+                    ax[n_im].set_title('MODEL')
+                    ax2[n_im].plot(np.nanmean(imtot[:,10:(imtot.shape[1]-10)],axis=1))
+                    ax2[n_im].plot(np.nanmedian(imtot[:,10:(imtot.shape[1]-10)],axis=1))
+                    ax2[n_im].axhline(0,ls='--',color='red')
+                    #ax[n_im].plot(100,300,'o',color='red',markersize=20)
+                    fig,ax = plt.subplots()
+                    for i in range(imtot.shape[0]):
+                        s1 = np.nanmean(imtot[i,10:(imtot.shape[1]-10)])
+                        s2 = np.nanmedian(imtot[i,10:(imtot.shape[1]-10)])
+                        if np.abs(s1-s2)>0.05:
+                            ax.plot(imtot[i,:],label=str(i))
+                    ax.legend()
+                    plt.show()
+
+                for f in filelist:
+                    if self.name in f:
+                        break
+                print('open datamodel: ', self.name, f)
+                data_tmp = datamodels.open(f)
+                mask_traces = data_tmp.data == -999
+                mask_nan = np.isnan(imtot)
+                del data_tmp
+                data_tmp = np.array(self.data.data)
+
+                self.data.data[~mask_traces*~mask_nan] = imtot[~mask_traces*~mask_nan]
+                self.data.err[~mask_traces*~mask_nan] = imtotsig[~mask_traces*~mask_nan]
+
+                if save_pdf:
+                    fig,ax = plt.subplots(1,3,sharex=True,sharey=True)
+                    vmin, vmax = np.nanquantile(imtot.flatten(), 0.05), np.nanquantile(imtot.flatten(), 0.95)
+                    ax[0].imshow(mask_traces)
+                    ax[0].set_title('mask qso traces')
+                    ax[1].imshow(data_tmp,vmin=vmin,vmax=vmax)
+                    ax[1].set_title('orginal')
+                    ax[2].imshow(self.data.data,vmin=vmin,vmax=vmax)
+                    ax[2].set_title('CR cleaned')
+                    plt.savefig('./output/detector2/cleaned_img/'+self.name+'.pdf',dpi=2000,bbox_inches='tight')
+                    plt.close()
+
+
+
     def fix_hot_pix_step(self, debug=False):
         '''
         Mask hot pipxels as bad.
@@ -1139,7 +1482,7 @@ class detector2():
             ax[1].set_title('after')
             plt.show()
 
-    def res_fringe_step(self, input_file=None, debug=False, output_dir=None,save_results=False, rename=True):
+    def res_fringe_step(self, input_file=None, debug=False, output_dir=None,save_results=False, rename=False):
         '''
           For spatially unresolved (point) sources or extended sources with structure, applying the fringe flat will undoubtedly leave
           residual fringes since these produce different fringe patterns on the detector than accounted for by the fringe flat.
@@ -1156,7 +1499,7 @@ class detector2():
         res_fringe_flat_step.skip = False
         #res_fringe_flat_step.ignore_region_min = []
         #res_fringe_flat_step.ignore_region_max = []
-        res_fringe_flat_step.output_dir = output_dir
+        res_fringe_flat_step.output_dir = output_dir+'residual_fringe/'
         res_fringe_flat_step.save_results = save_results
 
         if debug:
@@ -1173,7 +1516,7 @@ class detector2():
             ax[0].imshow(data_orig, vmin=vmin, vmax=vmax)
             ax[0].set_title('before')
             ax[1].imshow(self.data.data, vmin=vmin, vmax=vmax)
-            ax[1].set_title('after')
+            ax[1].set_title('after (Res Fringe)')
             plt.show()
 
 
@@ -1193,6 +1536,42 @@ class detector2():
 
         if debug:
             print('RES FRINGE STEP: Done.')
+
+    def read_res_fringes(self):
+        updated = False
+        input_dir = self.output_dir + 'residual_fringe/*.fits'
+        obs_id = self.data.meta.observation.obs_id
+
+        filelist = sorted(glob.glob(input_dir))
+        for f in filelist:
+            hdulist = fits.open(f)
+            header = hdulist[0].header
+            f_obs_id = header['OBS_ID']
+            if obs_id == f_obs_id and self.name in f:
+                print('read from', f)
+                self.update_data_file(input_file=f)
+                updated = True
+                break
+        return updated
+
+    def read_bkgr_subtracted(self):
+        updated = False
+        input_dir = self.output_dir + 'bkgr_subtracted/*.fits'
+        obs_id = self.data.meta.observation.obs_id
+
+        filelist = sorted(glob.glob(input_dir))
+        for f in filelist:
+            hdulist = fits.open(f)
+            header = hdulist[0].header
+            f_obs_id = header['OBS_ID']
+            if obs_id == f_obs_id and self.name in f:
+                print('filename', f, 'self.name ', self.data.meta.filename)
+                self.update_data_file(input_file=f)
+                updated = True
+                break
+        return updated
+
+
     def flux_calibration_step(self, input_file=None, debug=False, output_dir=None,save_results=False,rename=True):
         '''
         Correction of science data values for detector non-linearity.
@@ -1295,6 +1674,21 @@ class detector2():
             a[:,2] = trace_err
             np.savetxt('./temp/trace.dat',a,fmt='%10.5e')
 
+        plt.show()
+
+
+    def show_Xtrace(self,trace_Xpos=100,delta=10):
+        data = self.data.data.copy()
+
+        yup,ylow = np.min([trace_Xpos+delta, data.shape[1]-10]),np.max([trace_Xpos-delta, 10])
+        flux = np.nanmean(data[ylow:yup,:],axis=0)
+
+
+        fig, ax = plt.subplots(1,2)
+        vmin,vmax = np.nanquantile(data.flatten(), 0.05), np.nanquantile(data.flatten(), 0.95)
+        ax[0].imshow(data[ylow:yup,:],vmin=vmin,vmax=vmax)
+        ax[0].set_title(self.name)
+        ax[1].plot(flux)
         plt.show()
 
 

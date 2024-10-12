@@ -5,14 +5,13 @@ Created on Thu Dec 22 13:36:40 2016
 """
 import sys, os
 sys.path.append(os.path.dirname(os.path.realpath(__file__))[:-16])
-os.environ["CRDS_PATH"] = "/home/slava/science/codes/python/jwst/data"
-os.environ["CRDS_SERVER_URL"] = "https://jwst-crds.stsci.edu"
+#os.environ["CRDS_PATH"] = "/home/slava/science/codes/python/jwst/data"
+#os.environ["CRDS_SERVER_URL"] = "https://jwst-crds.stsci.edu"
 #sys.path.append('C:/science/python')
 #sys.path.append('/media/serj/3078FE3678FDFB04/science/python')
 import JWSTviewer
 #import JWST_cube_viewer
 import JWST_cube_analyser
-
 from PyQt5.QtWidgets import (QApplication)
 
 if __name__ == '__main__':
