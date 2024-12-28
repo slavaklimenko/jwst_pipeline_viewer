@@ -9,9 +9,9 @@ from stdatamodels.jwst import datamodels
 
 path = '/home/slava/science/codes/python/jwst/output/detector2/residual_fringe/'
 file_list = sorted(glob.glob(path + '*_residual_fringe.fits'))
-band = 'SHORT'
-channel = '34'
-qname = 'J0900'
+band = 'LONG'
+channel = '12'
+qname = 'AO0235'
 filenames = []
 images = []
 for f in file_list:
