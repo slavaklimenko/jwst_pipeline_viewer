@@ -177,6 +177,7 @@ class detector3():
             self.data.wavelength = np.arange(self.data.data.shape[0])
     def conv_world_coord(self,t,x,y,mode='pipeline'):
         wcs1 = self.data.wcs
+        #print('wcs1: pix size',wcs1['CDELT1'],wcs1['CDELT2'])
         if mode == 'cubevis':
             x_world = wcs1['CRVAL1'] - (x - wcs1['CRPIX1']+1) * wcs1['CDELT1']*1.043
             y_world = wcs1['CRVAL2'] + (y - wcs1['CRPIX2']+1) * wcs1['CDELT2']*1.043

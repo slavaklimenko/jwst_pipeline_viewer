@@ -22,6 +22,9 @@ from scipy.interpolate import RBFInterpolator
 from scipy.optimize import bisect
 import sys
 import matplotlib.cm
+
+#from scripts.emcee_sampler import fontsize
+
 sys.path.append('/home/slava/science/codes/python')
 from stage3_pipeline import *
 from stage3_pipeline import detector3
@@ -726,6 +729,7 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
             if self.cube_name == 'A':
                 image = self.parent.CUBE_A.data.data
                 name = self.parent.CUBE_A.cubename
+
             elif self.cube_name == 'B':
                 image = self.parent.CUBE_B.data.data
                 name = self.parent.CUBE_B.cubename
@@ -758,10 +762,79 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
             x,y = np.arange(image_comb.shape[0]),np.arange(image_comb.shape[1])
             X, Y = np.meshgrid(y,x)
             plt.subplots()
-            plt.imshow(np.log10(np.abs(image_comb/image_max_flux)), origin='lower', cmap='coolwarm')
+            plt.imshow(np.log10(np.abs(image_comb/image_max_flux)), origin='lower', cmap='coolwarm', vmin=-3,vmax =0)
             plt.colorbar()
-            plt.contour(X, Y, image_comb/image_max_flux, levels=np.array([0.01,0.05,0.1,0.68]), colors='black')
-            plt.savefig('/home/slava/science/codes/python/jwst/output/detector3/images/'+name+'.png')
+            if self.cube_name == 'A':
+                xc,yc = 2,2
+                xa,ya = 10,2
+                xb,yb = 2,10
+                l, x_wc, y_wc = self.parent.CUBE_A.conv_world_coord(t=10, x=xc, y=yc)
+                l, x_wa, y_wa = self.parent.CUBE_A.conv_world_coord(t=10, x=xa, y=ya)
+                l, x_wb, y_wb = self.parent.CUBE_A.conv_world_coord(t=10, x=xb, y=yb)
+                print(x_wc, y_wc)
+                print(x_wa, y_wa)
+                print(x_wb, y_wb)
+                dy,dx = (y_wa-y_wc),-(x_wa-x_wc)
+                r = np.abs(dy/dx)
+                angle = np.arctan(dy/dx) + np.pi*(1-np.sign(dx))/2
+                scale = np.sqrt(dx**2+dy**2)*3600/8
+                print('angle',angle/3.14*180)
+                print('r:',r,'dx:',dx,'dy',dy)
+                print('scale',scale, 'size=',image_comb.shape[0]*scale,'x',image_comb.shape[1]*scale)
+                shape = image_comb.shape
+                xc,yc,rad = (0.25*shape[0],0.25*shape[1],0.11*shape[0])
+                norm = np.sqrt(1+r**2)
+                plt.plot([xc,xc+rad/norm],[yc,yc+rad*r/norm],ls='-',color='yellow',lw=4)
+                plt.text(xc + rad / norm,  yc + rad * r / norm, 'E', color='yellow')
+                print('r',r)
+                #print(xc, xc - (5*r)*np.sqrt(1-r**2))
+                #print(yc, yc +  5- 5*r*r)
+                plt.plot([xc, xc - (rad*r)/norm], [yc, yc +  rad/norm], ls='-', color='black',lw=4)
+                plt.text(xc - (rad*r)/norm,  yc +  rad/norm, 'N', color='black')
+
+            #plt.contour(X, Y, image_comb/image_max_flux, levels=np.array([0.01,0.05,0.1,0.68]), colors='black')
+            plt.savefig('/home/slava/science/codes/python/jwst/output/detector3/images/'+name+'log_.png')
+
+            fig, ax = plt.subplots(figsize=(4,4))
+            fontsize= 10
+            #cbar.set_label('$\\log(F)$',fontsize=fontsize)
+            if 1:
+                wcs1 = self.parent.CUBE_A.data.wcs
+                pix_solid_angle = wcs1['CDELT1'] * wcs1['CDELT2'] * (np.pi / 180) ** 2 * 1e6*1e3 #in Jy
+                print('flux', pix_solid_angle*image_max_flux)
+                sp = ax.imshow(np.log10(np.abs(image_comb*pix_solid_angle)), origin='lower', cmap='viridis', vmin=-3, vmax=0.5)
+                cbar = fig.colorbar(sp, fraction=0.046, pad=0.04)
+
+                x1,y1  = np.cos(angle), -np.sin(angle)
+                x2,y2  = np.sin(angle), np.cos(angle)
+                text_factor = 1.8
+                delta_x,delta_y = 0,0
+                if -x1*rad+x2*rad >0:
+                    delta_x = -(-x1*rad+x2*rad)
+                if -y1 * rad + y2 * rad > 0:
+                    delta_y = -(-y1 * rad + y2 * rad)
+
+                ax.arrow(xc+delta_x, yc+delta_y,  -x1*rad,  -y1*rad, ls='-', color='white', lw=2,head_width=0.5)
+                ax.text(xc -  x1*rad*text_factor+delta_x, yc - y1*rad*text_factor +delta_y, 'E', color='white',fontsize=fontsize)
+                ax.arrow(xc+delta_x, yc+delta_y,  x2*rad,  y2*rad , ls='-', color='white', lw=2,head_width=0.5)
+                ax.text(xc+delta_x + x2*rad*text_factor, yc+delta_y + y2*rad*text_factor , 'N', color='white',fontsize=fontsize)
+                # xc,yc,rad = (0.2*shape[0],0.2*shape[1],0.15*shape[0])
+                r = 1/scale
+                ax.plot([0.1*shape[0],0.1*shape[0]+r],[0.9*shape[0],0.9*shape[0]], color='white',lw=2)
+                ax.plot([0.1 * shape[0], 0.1 * shape[0] + r], [0.9 * shape[0], 0.9 * shape[0]], '|',color='white',markersize=10)
+                ax.text(0.1 * shape[0] + r*0.25, 0.82 * shape[0], '1"', fontsize=fontsize,color='white')
+            if 1:
+                ax.tick_params(which='both', width=1, direction='in',
+                                labelsize=fontsize,
+                                right='True',
+                                top='True')
+                ax.tick_params(which='major', length=5)
+                ax.tick_params(which='minor', length=3)
+                ax.set_xlabel('spaxel',fontsize=fontsize)
+                ax.set_ylabel('spaxel',fontsize=fontsize)
+                ax.set_title(name.split('_')[0])
+            fig.savefig('/home/slava/science/codes/python/jwst/output/detector3/images/'+name+'_log.pdf', bbox_inches='tight')
+
 
             if 1:
                 d = image_comb/image_max_flux
@@ -1346,7 +1419,6 @@ class plotSpec(pg.PlotWidget):
                 self.lr = pg.LinearRegionItem(values=[5,5])
                 self.lr.setZValue(-10)
                 self.vb.addItem(self.lr)
-
 
                 def update_lr():
                     (timeind, time) = self.parent.plot_3dcubeA.timeIndex(self.parent.plot_3dcubeA.timeLine)
@@ -2007,7 +2079,7 @@ class CUBElistTable(pg.TableWidget):
             data = self.parent.parent.CUBE_B.data
             wavel = self.parent.parent.CUBE_B.data.wavelength
             name = self.parent.parent.CUBE_B.cubename.split('/')[-1].split('.')[0]
-        roi_name = ['green'] #,'red']
+        roi_name = ['green','red']
         for ir in range(len(roi_name)):
             roi = cube.roi_list[ir]
             if np.sum(roi.roi_mask) > 0:
@@ -2124,6 +2196,7 @@ class CUBElistTable(pg.TableWidget):
                     roi_background2[i] = np.nanmean(data.data[i, :, :][mask_bkgr2 > 0])*n_roi_pixels
                     roi_background1_error[i] = np.nanstd(data.data[i, :, :][mask_bkgr1 > 0])*np.sqrt(n_roi_pixels)
                     #np.power(np.nansum(data.err[i, :, :][mask_bkgr1 > 0], axis=0), 0.5)
+
                 if backgr_method == 'manual':
                     mask = (roi.roi_mask) * (~np.isnan(image_comb))
                     n_roi_pixels = np.sum(mask)
@@ -2145,6 +2218,7 @@ class CUBElistTable(pg.TableWidget):
                     for x, f, e in zip(wavel, y, y_err):
                         fout.write('%.4e %.4e %.4e \n' %(x,f*pix_solid_angle,e*pix_solid_angle))
                 fout.close()
+
                 #save background
                 if save_background:
                     print('save background using ',backgr_method,' method')
@@ -3222,9 +3296,11 @@ class CUBElistTable(pg.TableWidget):
                 if 1:
                     (timeind, time) = self.parent.parent.plot_3dcubeA.timeIndex(
                         self.parent.parent.plot_3dcubeA.timeLine)
+                    wavelength = self.parent.parent.CUBE_A.data.wavelength
                     lambda_local = self.parent.parent.CUBE_A.data.wavelength[timeind]
                     miri_psf_fwhm = miri_psf_arcsec(lambda_local)
                     wcs1 = self.parent.parent.CUBE_A.data.wcs
+                    cube_name = self.parent.parent.CUBE_A.cubename
                     delta_x = wcs1['CDELT1']
                     miri_psf_fwhm *= 1 / 3600 / delta_x
                     psf_rad = miri_psf_fwhm / 2  # /2.355
@@ -3261,9 +3337,6 @@ class CUBElistTable(pg.TableWidget):
                             print('i', i)
                             result[l, :, i] = model
 
-                    if debug:
-                        fig2, ax2 = plt.subplots()
-                        ax2.plot(result[:, 10, 10])
 
                     # smoothing
                     for i in range(result.shape[1]):
@@ -3274,9 +3347,7 @@ class CUBElistTable(pg.TableWidget):
                             f_interp = interp1d(xx, yy, fill_value='extrapolate')
                             result[:, i, j] = f_interp(np.arange(result.shape[0]))
 
-                    if debug:
-                        ax2.plot(result[:, 10, 10], label='after')
-                        ax2.legend()
+
 
                 if 1:
                     surf_brightness = np.zeros(npix)
@@ -3294,19 +3365,93 @@ class CUBElistTable(pg.TableWidget):
                     mean_data = result
 
                 if debug:
-                    vmin, vmax = np.nanquantile(np.log10(np.abs(mean_image.flatten())), 0.05), np.nanquantile(
-                        np.log10(np.abs(mean_image.flatten())), 0.95)
+                    fig2, ax2 = plt.subplots(figsize=(12,2))
+                    fontsize = 10
+                    ax2.plot(wavelength,np.nanmean(result[:, 2:10, 10], axis=1), label='$y=[0:10]$',c='tab:blue')
+                    ax2.plot(wavelength,np.nanmean(result[:, 10:20, 10], axis=1), label='$y=[10:20]$',c='tab:red')
+                    ax2_twin = ax2.twiny()
+                    ax2.plot(wavelength,np.nanmean(result[:, 20:28, 10], axis=1), label='$y=[20:30]$',zorder=10,c='tab:green')
+                    ax2_twin.plot(np.nanmean(result[:, 20:28, 10], axis=1), zorder=-10,c='tab:green')
+                    for axs in [ax2]:
+                        #axs.tick_params(which='both', width=1, direction='in',
+                        #                labelsize=fontsize,
+                        #                right='True',
+                        #                top='False')
+                        axs.tick_params(which='major', length=5, labelsize=fontsize,direction='in')
+                        axs.tick_params(which='minor', length=3, labelsize=fontsize,direction='in')
+                        ax2_twin.xaxis.set_minor_locator(AutoMinorLocator(10))
+                        ax2_twin.xaxis.set_major_locator(MultipleLocator(200))
+                        axs.xaxis.set_minor_locator(AutoMinorLocator(4))
+                        axs.xaxis.set_major_locator(MultipleLocator(0.2))
+                        axs.yaxis.set_minor_locator(AutoMinorLocator(2))
+                        axs.yaxis.set_major_locator(MultipleLocator(10))
+                        axs.set_ylabel('SB (MJy/Sr)', fontsize=fontsize)
+                        axs.set_xlabel('Wavelength, $\\mu$m', fontsize=fontsize)
+                        ax2_twin.set_xlabel('Wavelength coordinate', fontsize=fontsize)
+                        ax2_twin.tick_params(which='major', length=5, labelsize=fontsize, direction='in')
+                        ax2_twin.tick_params(which='minor', length=3, labelsize=fontsize, direction='in')
+                    ax2.text(8.65,25,'SB profile at Y-pixel in the Background Model', fontsize=fontsize)
+                    ax2.set_ylim(-14,35)
+                    #ax2.tick_params(top='off', which='both')
+                    xl,xu = ax2.get_xlim()
+                    xl2, xu2 = ax2_twin.get_xlim()
+                    ax2.set_xlim(xl,xl+(xu-xl)*1.13)
+                    ax2_twin.set_xlim(xl2,xl2+(xu2-xl2)*1.13)
+                    ax2.legend(fontsize=fontsize,loc ='upper right')
+                    fig2.savefig('./output/detector3/images/bkgr_spectra_model.pdf',
+                            bbox_inches='tight')
+                if debug:
+                    vmin, vmax = -0.5,1.5 #np.nanquantile(np.log10(np.abs(mean_image.flatten())), 0.05), np.nanquantile(
+                        #np.log10(np.abs(mean_image.flatten())), 0.95)
                     result_mean = np.nanmean(result, axis=0)
-                    fig, ax = plt.subplots(1, 4, sharex=True, sharey=True)
+                    fig, ax = plt.subplots(1, 4, figsize=(12,3))
                     ax[0].imshow(np.log10(np.abs(mean_image)), vmin=vmin, vmax=vmax, origin='lower')
                     circle1 = plt.Circle((xc, yc), rad, color='red', lw=2, fill=False)
-                    ax[0].axvline(xc - rad)
+                    ax[0].axvline(xc - rad, lw=3)
+                    ax[0].axvline(xc + rad, lw=3)
                     ax[0].axvline(1)
                     ax[0].add_patch(circle1)
-                    ax[1].imshow(np.log10(np.abs(result_mean)), vmin=vmin, vmax=vmax, origin='lower')
-                    ax[2].imshow(np.log10(np.abs(mean_image - result_mean)), vmin=vmin, vmax=vmax, origin='lower')
-                    # ax[3].plot(surf_brightness, label='bkg_1dspec')
-                    ax[3].legend()
+                    ax[1].imshow(mask_regions, origin='lower')
+                    ax[1].axvline(xc - rad,lw=3)
+                    ax[1].axvline(xc + rad,lw=3)
+                    ax[2].imshow(np.log10(np.abs(result_mean)), vmin=vmin, vmax=vmax, origin='lower')
+                    im = ax[3].imshow(np.log10(np.abs(mean_image - result_mean)), vmin=vmin, vmax=vmax, origin='lower')
+                    circle2 = plt.Circle((xc, yc), rad, color='red', lw=2, fill=False)
+                    circle3 = plt.Circle((xc, yc), rad/5*2, color='blue', lw=2, fill=False,ls='--')
+                    ax[3].add_patch(circle2)
+                    ax[3].add_patch(circle3)
+                    if 1:
+                        fontsize = 10
+                        for axs in ax[:]:
+                            axs.tick_params(which='both', width=1, direction='in',
+                                            labelsize=fontsize,
+                                            right='True',
+                                            top='True')
+                            axs.tick_params(which='major', length=5)
+                            axs.tick_params(which='minor', length=3)
+                            axs.xaxis.set_minor_locator(AutoMinorLocator(5))
+                            axs.xaxis.set_major_locator(MultipleLocator(10))
+                            axs.yaxis.set_minor_locator(AutoMinorLocator(5))
+                            axs.yaxis.set_major_locator(MultipleLocator(10))
+                            axs.set_xlabel('spaxel', fontsize=fontsize)
+                        ax[0].set_ylabel('spaxel', fontsize=fontsize)
+                        if 1:
+                            obj = cube_name.split('detector3//')[1][:5]
+                            ch = cube_name.split('dith=')[1][2:4]
+                            dith = cube_name.split('dith=')[1][0]
+                        ax[0].set_title('IFU '+obj+' '+ch+' Dith'+dith)#('IFU J0901 3C Dith1')
+                        ax[1].set_title('Mask')
+                        ax[2].set_title('Background Model')
+                        ax[3].set_title('IFU corrected')
+
+                        cbar = fig.add_axes([0.91, 0.165, 0.01, 0.68])
+                        ax[3].text(40, 10, '$\\log SB$ (MJy/Sr)', rotation=90, fontsize=fontsize)
+                        fig.colorbar(im, cax=cbar)
+
+                        fig.savefig('./output/detector3/images/bkgr_model.pdf',
+                                bbox_inches='tight')
+                    #ax[4].plot(surf_brightness, label='bkg_1dspec')
+                    #ax[3].legend()
 
                     plt.show()
 

@@ -3,6 +3,12 @@ import glob
 import sys
 #Modify the path to a directory on your machine
 import os
+from matplotlib.ticker import AutoMinorLocator, MultipleLocator, FormatStrFormatter
+from IPython.core.pylabtools import figsize
+from matplotlib import rcParams
+from astropy.io import ascii, fits
+rcParams['font.family'] = 'serif'
+
 def read_settings(init_file='init.dat'):
     init_settings = {}
     with open(init_file) as f:
@@ -680,7 +686,7 @@ class detector2():
 
 
 
-    def create_background_model(self, filelist='', debug=False, smothing_rad=10,database='fringe_corr'):
+    def create_background_model(self, filelist='', debug=False, smothing_rad=50,database='fringe_corr'):
         band = self.data.meta.instrument.band
         channel = self.data.meta.instrument.channel
         listnames_source = []
@@ -720,7 +726,7 @@ class detector2():
 
         # interpolation of flux in hot pixels
 
-        def calc_mean_rate(images, sig_images, dqs, debug=False, radius=10, hot_pix_limit=4, skip_cr_events=True):
+        def calc_mean_rate(images, sig_images, dqs, debug=False, radius=10, hot_pix_limit=4, skip_cr_events=True, save_figure = True):
             n_int = len(images)
             im = np.array([images[i] for i in range(n_int)])
             sigim = np.array([sig_images[i] for i in range(n_int)])
@@ -750,13 +756,23 @@ class detector2():
 
             if debug:
                 fig, ax = plt.subplots(4, n_int + 1, sharex=True, sharey=True)
-                vmin, vmax = np.nanquantile(mean_im.flatten(), 0.05), np.nanquantile(mean_im.flatten(), 0.8)
+                vmin, vmax = np.nanquantile(mean_im.flatten(), 0.2), np.nanquantile(mean_im.flatten(), 0.8)
                 for i in range(n_int):
                     ax[0, i].imshow(im[i], vmin=vmin, vmax=vmax)
                     ax[0, i].set_title('Image ' + str(i))
                 ax[0, n_int].imshow(mean_im, vmin=vmin, vmax=vmax)
                 ax[0, n_int].set_title('Median')
-
+            if save_figure:
+                #vmin, vmax = np.nanquantile(mean_im.flatten(), 0.2), np.nanquantile(mean_im.flatten(), 0.8)
+                vmin, vmax = np.nanquantile(mean_im.flatten(), 0.16), np.nanquantile(mean_im.flatten(),1 - 0.16)
+                fig2, bx = plt.subplots(1, 5, figsize=(15,3))
+                cmap = plt.cm.viridis
+                cmap.set_bad('black')
+                fontsize = 10
+                if n_int>1:
+                    bx[0].imshow(images[0], vmin=vmin, vmax=vmax, cmap=cmap,origin='lower')
+                    bx[1].imshow(images[1], vmin=vmin, vmax=vmax, cmap=cmap,origin='lower')
+                    bx[2].imshow(mean_im, vmin=vmin, vmax=vmax, cmap=cmap,origin='lower')
             for i in range(n_int):
                 x = np.array(im[i] / mean_im - 1)
                 x[np.isnan(x)] = 0
@@ -769,13 +785,19 @@ class detector2():
                 mask_im[i][x_smoothed > 0.1] = 0
 
                 if debug:
-                    vmin, vmax = -0.3,0.3
-                    ax[1, i].imshow(x_smoothed, vmin=vmin, vmax=vmax)
+                    vmin_sm, vmax_sm = -0.3,0.3
+                    ax[1, i].imshow(x_smoothed, vmin=vmin_sm, vmax=vmax_sm)
                     ax[1, i].set_title('Smoothed model' + str(i))
                     xi, yi = np.arange(x_smoothed.shape[1]), np.arange(x_smoothed.shape[0])
                     zi = x_smoothed
                     ax[1, i].contour(xi, yi, zi, levels=[-0.1, 0.1], linewidths=0.5, colors='k')
-
+                if save_figure:
+                    if i == 0:
+                        bx[3].imshow(x_smoothed, vmin=vmin_sm, vmax=vmax_sm, cmap=cmap,origin='lower')
+                        bx[3].contour(xi, yi, zi, levels=[-0.1, 0.1], linewidths=0.5, colors='k')
+                        #bx[0].contour(xi, yi, zi, levels=[0.1], linewidths=0.5, colors='k')
+                    #elif i == 1:
+                        #bx[1].contour(xi, yi, zi, levels=[0.1], linewidths=0.5, colors='k')
             if skip_cr_events and 0:
                 mask_cr = np.zeros_like(im)
                 for i in range(n_int):
@@ -817,11 +839,47 @@ class detector2():
             imtotsig = np.power(np.nansum(imsig_inv * mask_im, axis=0), -0.5)
 
             if debug:
-                vmin, vmax = np.nanquantile(mean_im.flatten(), 0.05), np.nanquantile(mean_im.flatten(), 0.8)
+                #vmin, vmax = np.nanquantile(mean_im.flatten(), 0.05), np.nanquantile(mean_im.flatten(), 0.8)
                 ax[1, n_int].imshow(imtot, vmin=vmin, vmax=vmax)
                 ax[1, n_int].set_title('Final')
                 # ax[2, n_int].imshow(imtot, vmin=vmin, vmax=vmax)
+
+            if save_figure:
+                im_b = bx[4].imshow(imtot, vmin=vmin, vmax=vmax, cmap=cmap,origin='lower')
+                cbar_bx = fig2.add_axes([0.91, 0.165, 0.01, 0.68])
+                fig2.colorbar(im_b, cax=cbar_bx)
+                #cbar_bx.set_yticklabels(fontsize=fontsize)
+                #cbar_bx.set_label('Slope (DNs/Groups)')
+                bx[4].text(1450, 300, 'Rate (DN/s)', rotation=90, fontsize=fontsize)
+                for axs in bx[:]:
+                    axs.tick_params(which='both', width=1, direction='in',
+                                    labelsize=fontsize,
+                                    right='True',
+                                    top='True')
+                    axs.tick_params(which='major', length=5)
+                    axs.tick_params(which='minor', length=3)
+                    axs.xaxis.set_minor_locator(AutoMinorLocator(4))
+                    axs.xaxis.set_major_locator(MultipleLocator(200))
+                    axs.yaxis.set_minor_locator(AutoMinorLocator(4))
+                    axs.yaxis.set_major_locator(MultipleLocator(200))
+                    axs.set_xlabel('X coordinate',fontsize=fontsize)
+                bx[0].set_ylabel('Y coordinate',fontsize=fontsize)
+                bx[0].set_title('Backg.Image (Dither1)')
+                bx[1].set_title('Backg.Image (Dither2)')
+                bx[3].set_title('CR showers Mask')
+                bx[2].set_title('Mean Image')
+                bx[4].set_title('Mean CR corrected')
+
+                #fig2.savefig('./output/detector2/bkgr_subtracted/bckgr_model.pdf', bbox_inches='tight',
+                #            dpi=2000)
+                #fig2.savefig('./output/detector2/bkgr_subtracted/bckgr_model_200.pdf', bbox_inches='tight',
+                #             dpi=200)
+                fig2.savefig('./output/detector2/bkgr_subtracted/bckgr_model_300.pdf', bbox_inches='tight', dpi=300)
+                np.savetxt('./output/detector2/bkgr_subtracted/bckgr_model.dat',imtot)
+
+            if debug:
                 plt.show()
+
 
             return imtot, imtotsig
 
