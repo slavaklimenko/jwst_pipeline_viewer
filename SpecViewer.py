@@ -522,7 +522,7 @@ class Viewer(QWidget):
     def setObjName(self,click=1,secret='combined'):
         read_mode = self.combine_dithers_win_option.currentText()
         if read_mode == 'spec':
-            keyname = '_green.spec1d'
+            keyname = '_red.spec1d'
         if read_mode == 'bkgr':
             keyname = '_green_bkgr.spec1d'
         if read_mode == 'sbtr':

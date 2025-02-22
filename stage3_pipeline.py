@@ -28,12 +28,16 @@ def read_settings(init_file='init.dat'):
                     init_settings['CRDS_PATH'] = values[1]
                 if values[0] == 'CRDS_SERVER_URL:':
                     init_settings['CRDS_SERVER_URL'] = values[1]
+                if values[0] == 'WEBBPSF_PATH:':
+                    init_settings['WEBBPSF_PATH'] = values[1]
+                print(values[0])
     return init_settings
 settings =  read_settings()
 os.environ["CRDS_PATH"] = settings['CRDS_PATH']
 os.environ["CRDS_SERVER_URL"] = settings['CRDS_SERVER_URL']
 if 'CRDS_CONTEXT' in  settings.keys():
     os.environ["CRDS_CONTEXT"] = settings['CRDS_CONTEXT']
+os.environ["WEBBPSF_PATH"] = settings['WEBBPSF_PATH']
 #os.environ["CRDS_PATH"] = "/home/slava/science/codes/python/jwst/data"
 #os.environ["CRDS_SERVER_URL"] = "https://jwst-crds.stsci.edu"
 import time
@@ -137,6 +141,8 @@ class detector3():
             self.data.err = hdu1['ERR'].data
             self.data.dq = hdu1['DQ'].data
             self.data.wmap = hdu1['WMAP'].data
+            if 'CHANNEL' in hdu1[0].header:
+                self.data.channel =hdu1[0].header['CHANNEL']
             #self.data.hdrtab = hdu1['HDRTAB'].data
 
 
@@ -192,6 +198,12 @@ class detector3():
             x_world = sky[0].ra.deg
             y_world = sky[0].dec.deg
             lam_world = wcs1['CRVAL3'] + (t - wcs1['CRPIX3'] + 1) * wcs1['CDELT3']
+        elif mode == 'pipeline_world_to_pix':
+            wcs = self.meta.wcs
+            sky = wcs.world_to_pixel(x, y, t)
+            x_world = sky[0]
+            y_world = sky[1]
+            lam_world = t
 
         #print('world coord:', x_world, y_world, lam_world)
         #print(self.data.wcs((t,x,y)))
@@ -397,6 +409,7 @@ class detector3():
             sstring = input_dir + '/' + ('*_cal.fits')
             cal_files = sorted(glob.glob(sstring))
             for f in cal_files:
+                print('cal_file_name:', f)
                 hdulist = fits.open(f)
                 header = hdulist[0].header
                 f_targ_name = header['TARGPROP']
@@ -406,7 +419,7 @@ class detector3():
                 hdulist.close()
                 if dither == None:
                     f_dit_pos = None
-                if f_targ_name == source and channel in f_channel and f_band in band and f_dit_pos == dither:
+                if f_targ_name == source and channel in f_channel and f_band in band and f_dit_pos == dither: # and '5001_03' not in f:
                     exp_list.append(f.split('/')[-1])
             if subfilename == '':
                 asn_name = input_dir + '/'+ source + '_'+channel + bandname[band] + '.json'

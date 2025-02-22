@@ -1238,64 +1238,106 @@ class EXPlistTable(pg.TableWidget):
             plt.show()
 
     def calc_mean_rate(self,debug=False,radius=10,hot_pix_limit=4,algorithm='CHI2'):
+        debug = bool(self.parent.parent.exp_pars.debug.currentIndex())
         if algorithm == 'CHI2':
             im = self.parent.parent.EXP.int_slopes[:,0].copy()
             sigim = self.parent.parent.EXP.int_sigslopes[:,0].copy()
-            dqim = self.parent.parent.EXP.int_pixeldq[:,0].copy()
+            #dqim = self.parent.parent.EXP.int_pixeldq[:,0].copy()
+            dqim = self.parent.parent.EXP.int_pixeldq.copy()
             n_int = im.shape[0]
             mask_im = np.ones((n_int,im.shape[1],im.shape[2]))
             mean_im = np.mean(im,axis=0)
 
-            #set kernel
-            radius = radius
-            filter_kernel = np.zeros((2 * radius + 1, 2 * radius + 1))
-            for i in range(filter_kernel.shape[0]):
-                for j in range(filter_kernel.shape[1]):
-                    if (i - radius) ** 2 + (j - radius) ** 2 <= radius ** 2:
-                        filter_kernel[i, j] = 1
 
-            if debug:
-                fig,ax = plt.subplots(2, n_int+1, sharex=True, sharey=True)
-            for i in range(n_int):
-                x  = im[i]/mean_im - 1
-                x[np.isnan(x)] = 0
-                x[x > hot_pix_limit] = 0
-                x[x < -hot_pix_limit] = 0
+            if 0:
 
-                #smooth diff
-                npix = scipy.signal.convolve2d(np.ones_like(x), filter_kernel, mode='same', boundary='fill', fillvalue=0)
-                x_smoothed = scipy.signal.convolve2d(x, filter_kernel, mode='same', boundary='fill', fillvalue=0) / npix
+                #set kernel
+                radius = radius
+                filter_kernel = np.zeros((2 * radius + 1, 2 * radius + 1))
+                for i in range(filter_kernel.shape[0]):
+                    for j in range(filter_kernel.shape[1]):
+                        if (i - radius) ** 2 + (j - radius) ** 2 <= radius ** 2:
+                            filter_kernel[i, j] = 1
 
-                mask_im[i][x_smoothed>0.1] = 0
-
-            #ignore CR events
-            if 1:
-                mask_cr = np.zeros_like(im)
-                for i in range(n_int):
-                    mask_cr[i] = (np.bitwise_and(dqim[i],dqflags.pixel['JUMP_DET'])).astype(bool)
-                mask_cr_shower = 1 - mask_im
-                mask_cr_tot = mask_cr + mask_cr_shower
-
-                mask_cr_tot = np.sum(mask_cr_tot.astype(bool),axis=0)
-                for i in range(n_int):
-                    mask_im[i][(mask_cr[i] == 1) * (mask_cr_tot != n_int)] = 0
-
-            for i in range(n_int):
                 if debug:
-                    ax[0,i].imshow(im[i],vmin=0,vmax=2)
-                    ax[1,i].imshow(x_smoothed, vmin=-0.3, vmax=0.3)
-                    xi, yi = np.arange(x_smoothed.shape[1]), np.arange(x_smoothed.shape[0])
-                    zi = x_smoothed
-                    ax[1,i].contour(xi, yi, zi, levels=[-0.1, 0.1], linewidths=0.5, colors='k')
+                    fig,ax = plt.subplots(2, n_int+1, sharex=True, sharey=True)
+                for i in range(n_int):
+                    x  = im[i]/mean_im - 1
+                    x[np.isnan(x)] = 0
+                    x[x > hot_pix_limit] = 0
+                    x[x < -hot_pix_limit] = 0
+
+                    #smooth diff
+                    npix = scipy.signal.convolve2d(np.ones_like(x), filter_kernel, mode='same', boundary='fill', fillvalue=0)
+                    x_smoothed = scipy.signal.convolve2d(x, filter_kernel, mode='same', boundary='fill', fillvalue=0) / npix
+
+                    mask_im[i][x_smoothed>0.1] = 0
+
+                #ignore CR events
+                if 1:
+                    mask_cr = np.zeros_like(im)
+                    for i in range(n_int):
+                        mask_cr[i] = (np.bitwise_and(dqim[i],dqflags.pixel['JUMP_DET'])).astype(bool)
+                    mask_cr_shower = 1 - mask_im
+                    mask_cr_tot = mask_cr + mask_cr_shower
+
+                    mask_cr_tot = np.sum(mask_cr_tot.astype(bool),axis=0)
+                    for i in range(n_int):
+                        mask_im[i][(mask_cr[i] == 1) * (mask_cr_tot != n_int)] = 0
+
+                for i in range(n_int):
+                    if debug:
+                        ax[0,i].imshow(im[i],vmin=0,vmax=2)
+                        ax[1,i].imshow(x_smoothed, vmin=-0.3, vmax=0.3)
+                        xi, yi = np.arange(x_smoothed.shape[1]), np.arange(x_smoothed.shape[0])
+                        zi = x_smoothed
+                        ax[1,i].contour(xi, yi, zi, levels=[-0.1, 0.1], linewidths=0.5, colors='k')
 
 
-            imsig_inv = np.power(sigim,-2)
-            imtot = np.nansum(im*imsig_inv*mask_im,axis=0)/np.nansum(imsig_inv*mask_im,axis=0)
-            imtotsig = np.power(np.nansum(imsig_inv*mask_im,axis=0),-0.5)
+                imsig_inv = np.power(sigim,-2)
+                imtot = np.nansum(im*imsig_inv*mask_im,axis=0)/np.nansum(imsig_inv*mask_im,axis=0)
+                imtotsig = np.power(np.nansum(imsig_inv*mask_im,axis=0),-0.5)
 
-            if debug:
-                ax[0,n_int].imshow(imtot, vmin=0, vmax=2)
-                plt.show()
+                if debug:
+                    ax[0,n_int].imshow(imtot, vmin=0, vmax=2)
+                    plt.show()
+
+            if 1:
+
+                if 1:
+                    # find path to photom mask
+                    from scripts.flat_field import get_mask
+                    band = self.parent.parent.EXP.data.meta.instrument.band
+                    channel = self.parent.parent.EXP.data.meta.instrument.channel
+                    photom_list = sorted(glob.glob(os.environ["CRDS_PATH"] + '/references/jwst/miri/*photom*'))
+                    for f in photom_list:
+                        hdulist = fits.open(f)
+                        header = hdulist[0].header
+                        f_band, f_ch = header['BAND'], header['CHANNEl']
+                        if band == f_band and f_ch == channel:
+                            photom_file = f
+                            break
+                    photom_mask = get_mask(path=photom_file)
+
+                from scripts.CRshowers import calc_mean_rate
+
+                imtot, imtotsig = calc_mean_rate(images=im, sig_images=sigim, dqs=dqim,debug=debug,
+                                                 skip_cr_events=True, radius=radius,
+                                                 photom_mask=photom_mask,n_smooth_iters = 3)
+
+                if debug:
+                    n_im = len(im)
+                    fig, ax = plt.subplots(1, n_im + 1, sharex=True, sharey=True)
+                    vmin, vmax = np.nanquantile(imtot.flatten(), 0.05), np.nanquantile(imtot.flatten(), 0.8)
+                    for i in range(n_im):
+                        ax[i].imshow(im[i], vmin=vmin, vmax=vmax)
+                        ax[i].set_title(str(i))
+                    ax[n_im].imshow(imtot, vmin=vmin, vmax=vmax)
+                    ax[n_im].set_title('MODEL')
+                    plt.show()
+
+
+
             self.parent.parent.EXP.mean_slope = imtot
             self.parent.parent.EXP.mean_slope_sig = imtotsig
 
@@ -1488,7 +1530,7 @@ class EXPlistTable(pg.TableWidget):
                 input_file = self.parent.parent.EXP.input_file
             input_file_base = os.path.basename(input_file).replace('uncal.fits', '')
             output_dir = './output/results/' #self.parent.parent.EXP.output_dir
-
+            #output_dir = './output/detector1/'  # self.parent.parent.EXP.output_dir
 
             files = os.listdir(output_dir)
             if np.sum(input_file_base in f for f in files):
@@ -1555,25 +1597,9 @@ class EXPlistTable(pg.TableWidget):
                 flags_dict['SKIPPED'] = False
                 flags_dict['None'] = False
                 self.flags['saturation_step'] = flags_dict[self.parent.parent.EXP.data.meta.cal_step.saturation]
-                self.flags['CR_step'] = flags_dict[self.parent.parent.EXP.data.meta.cal_step.jump]
+                self.flags['CR_step'] = True #flags_dict[self.parent.parent.EXP.data.meta.cal_step.jump]
                 self.flags['slope_fit_step'] = flags_dict[self.parent.parent.EXP.data.meta.cal_step.ramp_fit]
 
-                #print('flags after reading',self.flags)
-                #def val2log(val='1'):
-                #    val = val.replace("\n", "")
-                #    if val == '2':
-                #        return None
-                #    else:
-                #        return val
-                #cal_steps_file = output_dir + input_file_base+'cal_steps.csw'
-                #with open(cal_steps_file, 'r') as f:
-                #    for k, line in enumerate(f):
-                #        values = [s for s in line.split(',')]
-                #self.parent.parent.EXP.data.meta.cal_step.linearity = val2log(values[0])
-                #self.parent.parent.EXP.data.meta.cal_step.rscd = val2log(values[1])
-                #self.parent.parent.EXP.data.meta.cal_step.dark_sub = val2log(values[2])
-                #self.parent.parent.EXP.data.meta.cal_step.refpix = val2log(values[3])
-                #print('self.parent.parent.EXP.data.meta.cal_step.refpix',self.parent.parent.EXP.data.meta.cal_step.refpix)
 
             else:
                 print('There is no saved files')
@@ -1669,6 +1695,7 @@ class EXPlistTable(pg.TableWidget):
                 self.flags['CR_step'] = True
             else:
                 self.flags['CR_step'] = flags_dict[cal_step['jump']]
+
         instrument = self.parent.parent.stage2.data.meta.instrument.detector
         return instrument
 
@@ -1729,9 +1756,8 @@ class EXPlistTable(pg.TableWidget):
     def stage2_fix_hot_pix_version2(self):
         table = self.parent.parent.Exposures.table
         debug = bool(self.parent.parent.exp_pars.debug.currentIndex())
-        self.parent.parent.stage2.select_hot_pix_version2(filelist=table,debug=debug,fast_mode=False)
-        #self.parent.parent.stage2.fix_hot_pix_step(debug=0)
-        #self.parent.parent.stage2.fix_cold_pix_step(debug=0)
+        #self.parent.parent.stage2.select_hot_pix_version2(filelist=table,debug=debug,fast_mode=False)
+        self.parent.parent.stage2.select_hot_pix_version3(filelist=table, debug=debug, fast_mode=False)
 
     def stage2_call_wcs(self):
         print('Call_WCS')
@@ -2080,7 +2106,7 @@ class expParsWidget(QWidget):
         horizontal_layout.addWidget(self.ExoTiC_mode)
         horizontal_layout.addWidget(QLabel('Drop#gr:'))
         self.n_group_dropped = QLineEdit()
-        self.n_group_dropped.setText(str(6))
+        self.n_group_dropped.setText(str(12))
         cb = self.n_group_dropped
         width = cb.minimumSizeHint().width()
         cb.setFixedWidth(width)
@@ -2592,7 +2618,7 @@ class expPipeline2Widget(QWidget):
         self.run_stage2_obj_in_table.resize(150, 60)
         horizontal_layout.addWidget(self.run_stage2_obj_in_table)
 
-        self.run_stage2_obj_in_table = QPushButton('Table:BkgrSubtr')
+        self.run_stage2_obj_in_table = QPushButton('Table:Bkgr+FluxCalib')
         self.run_stage2_obj_in_table.clicked[bool].connect(partial(self.run_stage2_table_Bkgr_subtr))
         self.run_stage2_obj_in_table.resize(150, 60)
         horizontal_layout.addWidget(self.run_stage2_obj_in_table)
@@ -2601,17 +2627,9 @@ class expPipeline2Widget(QWidget):
         #self.run_cr_analyser.clicked[bool].connect(partial(self.Compare_Dith))
         self.run_cr_analyser.clicked[bool].connect(partial(self.run_stage2_table_compare_Dith))
         self.run_cr_analyser.resize(200, 60)
-        horizontal_layout.addWidget(self.run_cr_analyser)
+        #horizontal_layout.addWidget(self.run_cr_analyser)
 
-        #self.read_step_choice = QComboBox()
-        #flags = ['Initial', 'BkgrSub', 'Flatfield', 'Straylight', 'Fringe','FluxCalib','ResFringe']
-        #self.read_step_choice.addItems(flags)
-        #self.read_step_choice.setCurrentIndex(6)
-        #cb = self.read_step_choice
-        #width = cb.minimumSizeHint().width()
-        #cb.setFixedWidth(width)
-        #self.read_step_choice.resize(140, 30)
-        #horizontal_layout.addWidget(self.read_step_choice)
+
         horizontal_layout.addStretch(1)
         l.addLayout(horizontal_layout)
 
@@ -2818,6 +2836,8 @@ class expPipeline2Widget(QWidget):
         print('Init_Stage2:')
         detector = self.parent.Exposures.table.init_stage2()
         if detector != 'MIRIMAGE':
+            #print('Init')
+            #self.parent.Exposures.table.init_stage2()
             print('AssignWCS')
             self.parent.Exposures.table.stage2_call_wcs()
             print('Fix hot Pix')
@@ -2837,18 +2857,16 @@ class expPipeline2Widget(QWidget):
 
 
     def Run_stage2_bkgr_subtraction(self):
-        print('Run steps8')
         detector = self.parent.Exposures.table.init_stage2()
-        print('Update data file')
+        print('read rate file')
+        target_name = self.parent.stage2.data.meta.target.proposer_name
         s = self.parent.Exposures.table.stage2_read_res_fringes()
-        save_res_flag = int(self.parent.exp_pars.save_tmp_res.currentIndex())
-        if s:
+        print('read fringe corrected file, s')
+        if s and 'BACKGROUND' not in target_name:
             self.Bkgr_Model()  # parent.Exposures.table.stage2_background_model()
-            self.parent.Exposures.table.save_image(mode='bkgr_sub',save=save_res_flag)
-            targ_name = self.parent.stage2.data.meta.target.proposer_name
-            if 'BACKGROUND' not in targ_name:
-                self.Mask_QSO_traces()
-                self.parent.Exposures.table.save_image(mode='masked_qso',save=save_res_flag)
+            print('make bkgr model and subtract')
+            self.parent.Exposures.table.stage2_flux_calibration()
+            print('make flux calibration')
         else:
             print('There is no the saved residual fringe file')
 
@@ -3054,3 +3072,4 @@ if __name__ == '__main__':
     app = QApplication(sys.argv)
     ex = JWSTviewer()
     sys.exit(app.exec_())
+

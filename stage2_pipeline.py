@@ -101,7 +101,7 @@ input_dir = settings['input2_dir'] #./input/detector1/'
 
 
 class detector2():
-    def __init__(self,miri_uncal_file=None,path=None, output_dir=None,spec2_cachedir=None):
+    def __init__(self,miri_uncal_file='',path=None, output_dir=None,spec2_cachedir=None):
         self.name = os.path.basename(miri_uncal_file).replace('uncal.fits', '')
         self.path = path
         self.output_dir=output_dir
@@ -110,7 +110,7 @@ class detector2():
         self.spec2_cachedir = spec2_cachedir
         self.read_ratefiles(det1_dir=self.path,input_file_base=self.name)
         if self.rate_file != None:
-            self.init_rate_files(self.rate_file)
+            self.init_rate_files(self.rate_file,mode='Init')
         #self.read_associated_bkg_ratefiles(det1_dir=self.path,input_file_base=self.name)
 
 
@@ -137,7 +137,7 @@ class detector2():
                         print('Read input file:', f)
 
 
-    def init_rate_files(self, input_file=None):
+    def init_rate_files(self, input_file=None,mode=None):
         with datamodels.open(input_file) as input_model:
             # If input type is not supported, log warning, set to 'skipped', exit
             if not (isinstance(input_model, datamodels.ImageModel) or
@@ -150,6 +150,10 @@ class detector2():
                 result = input_model.copy()
                 result.meta.cal_step.assign_wcs = 'SKIPPED'
                 self.data =  result
+            if mode=='Init':
+                mask_DNU = (np.bitwise_and(self.data.dq, dqflags.pixel['DO_NOT_USE'])).astype(bool)
+                self.data.data[mask_DNU] = np.nan
+                print('set DNU pixels as nan')
 
     def update_data_file(self,input_file=None):
         with datamodels.open(input_file) as input_model:
@@ -263,10 +267,14 @@ class detector2():
                 self.calfiles = self.data
     def read_step_results_version2(self,step_name = 'cal'):
         map2mapfilename = {}
-        map2mapfilename['cal'] = '*bkgr_sub_cal.fits'
+        map2mapfilename['cal'] = '*_cal.fits'
         map2mapfilename['res_fringe'] = '*residual_fringe.fits'
 
-        sstring = self.output_dir+'residual_fringe/' + map2mapfilename[step_name]
+        if step_name == 'res_fringe':
+            sstring = self.output_dir+'residual_fringe/' + map2mapfilename[step_name]
+        if step_name == 'cal':
+            sstring = self.output_dir +  map2mapfilename[step_name]
+
         filenames = sorted(glob.glob(sstring))
         newmapfile = None
         for f in filenames:
@@ -575,13 +583,14 @@ class detector2():
         print('number of hot pixels:',np.sum(mask_hot))
 
         if debug:
-            fig,ax = plt.subplots(1,3,sharex=True,sharey=True)
+            fig,ax = plt.subplots(1,4,sharex=True,sharey=True)
             vmin, vmax = np.nanquantile(self.data.data.flatten(), 0.01), np.nanquantile(self.data.data.flatten(), 0.99)
             ax[0].imshow(self.data.data,vmin=vmin,vmax=vmax)
             ax[0].set_title(self.name)
             ax[1].imshow(ref_slope,vmin=vmin,vmax=vmax)
             ax[1].set_title(ref_name)
             ax[2].imshow(mask_hot,vmin=vmin,vmax=vmax)
+            ax[3].imshow(m2, vmin=vmin, vmax=vmax)
             plt.show()
 
         #interpolation of flux in hot pixels
@@ -684,9 +693,199 @@ class detector2():
             plt.imshow(self.data.data,vmin=vmin,vmax=vmax)
             plt.show()
 
+    def select_hot_pix_version3(self,filelist='',debug=False,fast_mode=True):
+        band = self.data.meta.instrument.band
+        channel = self.data.meta.instrument.channel
+        listnames_source = []
+        listnames_backgr = []
+        data = filelist.data
+        for s in data:
+            s_band = s[4]
+            s_ch = s[5]
+            if s_band == band and s_ch == channel:
+                if 'BACK' in s[3] and s[0].split('uncal')[0] != self.name:
+                    listnames_backgr.append(s)
+                else:
+                    listnames_source.append(s)
+        ref_list = listnames_backgr
+
+        ref_name = ref_list[0][0].replace('uncal', 'rate.fits')
+        ref_file = os.path.join(self.path + '/' + ref_name)
+        hdulist = fits.open(ref_file)
+        ref_slope = hdulist['SCI'].data
+        hdulist.close()
+
+        # set mask of hot pixels
+        bkgr_name = listnames_backgr[0][0].replace('uncal', 'rate.fits')
+        bkgr_file = os.path.join(self.path + '/' + bkgr_name)
+        hdulist = fits.open(bkgr_file)
+        bkgr_slope = hdulist['SCI'].data
+        hdulist.close()
+
+        bkgr_mean = np.zeros_like(bkgr_slope)
+        bkgr_std = np.zeros_like(bkgr_slope)
+
+        bkgr_mean[500:,:500] = np.nanmean(bkgr_slope[500:,:500])
+        bkgr_mean[:500, :500] = np.nanmean(bkgr_slope[:500, :500])
+        print('bkgr_mean<500',np.nanmean(bkgr_slope[:500, :500]))
+
+        bkgr_mean[:500, 500:] = np.nanmean(bkgr_slope[:500,500:])
+        bkgr_mean[500:, 500:] = np.nanmean(bkgr_slope[500:, 500:])
+        print('bkgr_mean>500',np.nanmean(bkgr_slope[500:, 500:]))
+
+        bkgr_std[:500, :500] = np.nanstd(bkgr_slope[:500,:500])
+        bkgr_std[500:, :500] = np.nanstd(bkgr_slope[500:, :500])
+        print('bkgr_std<500', np.nanstd(bkgr_slope[500:, :500]))
+
+
+        bkgr_std[:500, 500:] = np.nanstd(bkgr_slope[:500,500:])
+        bkgr_std[500:, 500:] = np.nanstd(bkgr_slope[500:,500:])
+        print('bkgr_std>500', np.nanstd(bkgr_slope[500:,500:]))
+
+        mask_hot_pix_loc = np.abs(ref_slope - bkgr_mean)>1*bkgr_std
+        mask_hot_pix_ref = np.abs(self.data.data - bkgr_mean)>1*bkgr_std
+        mask_hot = mask_hot_pix_loc*mask_hot_pix_ref
+        print('number of pixels to check:', np.sum(mask_hot))
+        def check_nearby_pix(data,mask,sigma_limit=3):
+            xi, yi = np.arange(self.data.data.shape[0]), np.arange(self.data.data.shape[1])
+            Xi, Yi = np.meshgrid(yi, xi)
+            arg = np.argwhere(mask == True)
+            mask2 = mask.copy()
+            for i in range(arg.shape[0]):
+                x, y = arg[i, 0], arg[i, 1]
+                if x<data.shape[0]-10 and x>10 and y<data.shape[1]-10 and y>10:
+                    mask_loc = (Yi<x+5)*(Yi>x-5)*(Xi<y+5)*(Xi>y-5)
+                    mask_loc[(Yi<x+2)*(Yi>x-2)*(Xi<y+2)*(Xi>y-2)] = False
+                    data_loc = data[mask_loc].copy()
+                    mean, std = np.nanmean(data_loc),np.nanstd(data_loc)
+                    mask_loc = (Yi<x+5)*(Yi>x-5)*(Xi<y+5)*(Xi>y-5)
+                    arg2 = np.argwhere(mask_loc==True)
+                    for j in range(arg2.shape[0]):
+                        if np.abs(data[arg2[j, 0], arg2[j, 1]]- mean)>sigma_limit*std:
+                            mask2[arg2[j, 0], arg2[j, 1]] = True
+            mask= mask2
+            return mask
+
+        if not fast_mode:
+            m1 = check_nearby_pix(ref_slope,mask_hot)
+            m2 = check_nearby_pix(self.data.data,mask_hot)
+            mask_hot = m1*m2
+
+        print('number of hot pixels:',np.sum(mask_hot))
+
+        if debug:
+            fig,ax = plt.subplots(1,5,sharex=True,sharey=True)
+            vmin, vmax = np.nanquantile(self.data.data.flatten(), 0.01), np.nanquantile(self.data.data.flatten(), 0.99)
+            ax[0].imshow(self.data.data,vmin=vmin,vmax=vmax)
+            ax[0].set_title(self.name)
+            ax[1].imshow(ref_slope,vmin=vmin,vmax=vmax)
+            ax[1].set_title(ref_name)
+            ax[2].imshow(mask_hot,vmin=vmin,vmax=vmax)
+            ax[3].imshow(m2, vmin=vmin, vmax=vmax)
+
+
+        #interpolation of flux in hot pixels
+
+        def fix_hot_pix(data, mask, dq, err, debug=False):
+            from scipy.interpolate import interp1d
+
+            arg = np.argwhere(mask == True)
+            sat_flag = dqflags.pixel["SATURATED"]
+            dnu_flag = dqflags.pixel["DO_NOT_USE"]
+
+            for i in range(arg.shape[0]):
+                x, y = arg[i, 0], arg[i, 1]
+                if x<data.shape[0]-10 and x>10:
+                    y_loc = data[x - 10:x + 10, y].copy()
+                    yerr_loc = err[x - 10:x + 10, y].copy()
+                    dq_loc = dq[x - 10:x + 10, y].copy()
+                    mask_loc = ~mask[x - 10:x + 10, y].copy()
+                elif x<=10:
+                    y_loc = data[0:x + 10, y].copy()
+                    yerr_loc = err[0:x + 10, y].copy()
+                    dq_loc = dq[0:x + 10, y].copy()
+                    mask_loc = ~mask[0:x + 10, y].copy()
+                elif (x>= data.shape[0]-10):
+                    y_loc = data[x-10:, y].copy()
+                    yerr_loc = err[x - 10:, y].copy()
+                    dq_loc = dq[x - 10:, y].copy()
+                    mask_loc = ~mask[x - 10:, y].copy()
+                x_loc = np.arange(y_loc.shape[0])
+                x_c = np.where(y_loc == data[x, y])[0][0]
+
+                mask_loc *= (x_loc != x_c)  # *(x_loc!=4)*(x_loc!=6)
+                mask_loc *= ~np.bitwise_and(dq_loc,sat_flag).astype(bool)
+                mask_loc *= ~np.bitwise_and(dq_loc, dnu_flag).astype(bool)
+                mask_loc *= ~np.isnan(y_loc)
+
+
+                if np.sum(mask_loc)>2:
+                    #mask_loc_bad_pix = np.zeros_like(mask_loc)
+                    if 0:
+                        mean_loc,std_loc = np.nanmean(y_loc[mask_loc]),np.nanstd(y_loc[mask_loc])
+                        mask_loc_bad_pix = np.abs(y_loc - mean_loc)>5*std_loc
+                        mask_loc *= ~mask_loc_bad_pix
+
+                        if np.sum(mask_loc) > 2:
+                            f_interp = interp1d(x_loc[mask_loc], y_loc[mask_loc], kind='quadratic',fill_value='extrapolate')
+                            bad_pix_loc = np.where(mask_loc_bad_pix==True)[0]
+                            for x_el in bad_pix_loc:
+                                print(x+x_el-x_c, y, data[x+x_el-x_c, y], f_interp(x_el))
+                                data[x+x_el-x_c, y] = f_interp(x_el)
+
+                            print(x, y, y_loc)
+                            print(f_interp(x_c))
+                            if debug:
+                                if len(bad_pix_loc)>1 and 0:
+                                    xx = np.linspace(x_loc[mask_loc][0], x_loc[mask_loc][-1], 100)
+                                    plt.subplots()
+                                    plt.plot(x_loc, y_loc, 'o')
+                                    plt.axhline(mean_loc)
+                                    plt.axhline(mean_loc+5*std_loc, ls='--')
+                                    plt.axhline(mean_loc-5*std_loc, ls='--')
+                                    for x_el in bad_pix_loc:
+                                        plt.plot(x_el, f_interp(x_el), 'D',color='orange')
+                                    plt.plot(xx, f_interp(xx))
+                                    plt.title(str(x)+str(y))
+                                    plt.show()
+                    if 1:
+                        mean_loc, std_loc = np.nanmean(y_loc[mask_loc]), np.nanstd(y_loc[mask_loc])
+                        mask_loc_bad_pix = np.abs(y_loc - mean_loc) > 5 * std_loc
+                        mask_loc *= ~mask_loc_bad_pix
+
+                        if np.sum(mask_loc) > 2:
+                            f_interp = interp1d(x_loc[mask_loc], y_loc[mask_loc], kind='linear',
+                                                fill_value='extrapolate')
+                            bad_pix_loc = np.where(mask_loc_bad_pix == True)[0]
+                            data[x, y] = f_interp(x_c)
+                            if debug:
+                                if f_interp(x_c)>mean_loc+2*std_loc:
+                                    xx = np.linspace(x_loc[mask_loc][0], x_loc[mask_loc][-1], 100)
+                                    plt.subplots()
+                                    plt.plot(x_loc, y_loc, 'o')
+                                    plt.errorbar(x=x_loc,y=y_loc,yerr=yerr_loc)
+                                    plt.axhline(mean_loc)
+                                    plt.axhline(mean_loc + 5 * std_loc, ls='--')
+                                    plt.axhline(mean_loc - 5 * std_loc, ls='--')
+                                    #for x_el in bad_pix_loc:
+                                    #    plt.plot(x_el, f_interp(x_el), 'D', color='orange')
+                                    plt.plot(x_c, f_interp(x_c), 'D', color='orange')
+                                    plt.plot(xx, f_interp(xx))
+                                    plt.title(str(x) + str(y))
+                                    plt.show()
+
+            return data
+
+        self.data.data = fix_hot_pix(self.data.data, mask=mask_hot, dq=self.data.dq, err=self.data.err, debug=False)
+
+        if debug:
+            ax[4].imshow(self.data.data,vmin=vmin,vmax=vmax)
+            plt.show()
+
 
 
     def create_background_model(self, filelist='', debug=False, smothing_rad=50,database='fringe_corr'):
+        radius = 10
         band = self.data.meta.instrument.band
         channel = self.data.meta.instrument.channel
         listnames_source = []
@@ -723,177 +922,36 @@ class detector2():
             bkgr_dqs.append(bkgr_dq)
             del bkgr_dq,bkgr_slope,bkgr_sig_slope
 
+        # find path to photom mask
+        photom_list = sorted(glob.glob(os.environ["CRDS_PATH"] + '/references/jwst/miri/*photom*'))
+        for f in photom_list:
+            hdulist = fits.open(f)
+            header = hdulist[0].header
+            f_band, f_ch = header['BAND'], header['CHANNEl']
+            if band == f_band and f_ch == channel:
+                photom_file = f
+                break
+        from scripts.flat_field import get_mask
+        photom_mask = get_mask(path=photom_file)
 
-        # interpolation of flux in hot pixels
-
-        def calc_mean_rate(images, sig_images, dqs, debug=False, radius=10, hot_pix_limit=4, skip_cr_events=True, save_figure = True):
-            n_int = len(images)
-            im = np.array([images[i] for i in range(n_int)])
-            sigim = np.array([sig_images[i] for i in range(n_int)])
-            dqim = np.array([dqs[i] for i in range(n_int)])
-            mask_im = np.ones((n_int, im.shape[1], im.shape[2]))
-
-            if skip_cr_events:
-                mask_cr = np.zeros_like(im)
-                for i in range(n_int):
-                    mask_cr[i] = (np.bitwise_and(dqim[i], dqflags.pixel['JUMP_DET'])).astype(bool)
-                    mask_im[i][mask_cr[i] == 1] = 0
-                mask_cr_tot = np.sum(mask_cr, axis=0)
-                for i in range(n_int):
-                    mask_im[i][mask_cr_tot == n_int] = 1
-                    im[i][mask_im[i] == 0] = np.nan
-
-            #mean_im = np.nansum(im * mask_im, axis=0) / np.sum(mask_im, axis=0)
-            mean_im = np.nanmedian(im, axis=0)
-            #mask_im = np.ones((n_int, im.shape[1], im.shape[2]))
-
-            # set kernel
-            filter_kernel = np.zeros((2 * radius + 1, 2 * radius + 1))
-            for i in range(filter_kernel.shape[0]):
-                for j in range(filter_kernel.shape[1]):
-                    if (i - radius) ** 2 + (j - radius) ** 2 <= radius ** 2:
-                        filter_kernel[i, j] = 1
-
-            if debug:
-                fig, ax = plt.subplots(4, n_int + 1, sharex=True, sharey=True)
-                vmin, vmax = np.nanquantile(mean_im.flatten(), 0.2), np.nanquantile(mean_im.flatten(), 0.8)
-                for i in range(n_int):
-                    ax[0, i].imshow(im[i], vmin=vmin, vmax=vmax)
-                    ax[0, i].set_title('Image ' + str(i))
-                ax[0, n_int].imshow(mean_im, vmin=vmin, vmax=vmax)
-                ax[0, n_int].set_title('Median')
-            if save_figure:
-                #vmin, vmax = np.nanquantile(mean_im.flatten(), 0.2), np.nanquantile(mean_im.flatten(), 0.8)
-                vmin, vmax = np.nanquantile(mean_im.flatten(), 0.16), np.nanquantile(mean_im.flatten(),1 - 0.16)
-                fig2, bx = plt.subplots(1, 5, figsize=(15,3))
-                cmap = plt.cm.viridis
-                cmap.set_bad('black')
-                fontsize = 10
-                if n_int>1:
-                    bx[0].imshow(images[0], vmin=vmin, vmax=vmax, cmap=cmap,origin='lower')
-                    bx[1].imshow(images[1], vmin=vmin, vmax=vmax, cmap=cmap,origin='lower')
-                    bx[2].imshow(mean_im, vmin=vmin, vmax=vmax, cmap=cmap,origin='lower')
-            for i in range(n_int):
-                x = np.array(im[i] / mean_im - 1)
-                x[np.isnan(x)] = 0
-                x[x > hot_pix_limit] = 0
-                x[x < -hot_pix_limit] = 0
-
-                # smooth diff
-                npix = scipy.signal.convolve2d(np.ones_like(x), filter_kernel, mode='same', boundary='fill',   fillvalue=0)
-                x_smoothed = scipy.signal.convolve2d(x, filter_kernel, mode='same', boundary='fill', fillvalue=0) / npix
-                mask_im[i][x_smoothed > 0.1] = 0
-
-                if debug:
-                    vmin_sm, vmax_sm = -0.3,0.3
-                    ax[1, i].imshow(x_smoothed, vmin=vmin_sm, vmax=vmax_sm)
-                    ax[1, i].set_title('Smoothed model' + str(i))
-                    xi, yi = np.arange(x_smoothed.shape[1]), np.arange(x_smoothed.shape[0])
-                    zi = x_smoothed
-                    ax[1, i].contour(xi, yi, zi, levels=[-0.1, 0.1], linewidths=0.5, colors='k')
-                if save_figure:
-                    if i == 0:
-                        bx[3].imshow(x_smoothed, vmin=vmin_sm, vmax=vmax_sm, cmap=cmap,origin='lower')
-                        bx[3].contour(xi, yi, zi, levels=[-0.1, 0.1], linewidths=0.5, colors='k')
-                        #bx[0].contour(xi, yi, zi, levels=[0.1], linewidths=0.5, colors='k')
-                    #elif i == 1:
-                        #bx[1].contour(xi, yi, zi, levels=[0.1], linewidths=0.5, colors='k')
-            if skip_cr_events and 0:
-                mask_cr = np.zeros_like(im)
-                for i in range(n_int):
-                    mask_cr[i] = (np.bitwise_and(dqim[i], dqflags.pixel['JUMP_DET'])).astype(bool)
-                mask_cr_shower = 1 - mask_im
-                mask_cr_tot = mask_cr + mask_cr_shower
-
-                mask_cr_tot = np.sum(mask_cr_tot.astype(bool), axis=0)
-
-                for i in range(n_int):
-                    mask_im[i][(mask_cr[i] == 1) * (mask_cr_tot != n_int)] = 0
-            if 0:
-                for i in range(n_int):
-                    x = np.array(im[i] / mean_im - 1)
-                    x[np.isnan(x)] = 0
-                    x[x > hot_pix_limit] = 0
-                    x[x < -hot_pix_limit] = 0
-
-                    # smooth diff
-                    npix = scipy.signal.convolve2d(np.ones_like(x), filter_kernel, mode='same', boundary='fill',
-                                                   fillvalue=0)
-                    x_smoothed = scipy.signal.convolve2d(x, filter_kernel, mode='same', boundary='fill',
-                                                         fillvalue=0) / npix
-
-                    mask_im[i][x_smoothed < 0.1] = 1
-            if debug:
-                for i in range(n_int):
-                    ax[2, i].imshow(mask_im[i])
-                    ax[2, i].set_title('Mask for showers ' + str(i))
-
-                    ax[3, i].imshow(mask_cr[i])
-                    ax[3, i].set_title('Mask for CR ' + str(i))
-
-            imsig_inv = np.power(sigim, -2)
-            #imtot = np.nansum(im * imsig_inv * mask_im, axis=0) / np.nansum(imsig_inv * mask_im, axis=0)
-            for i in range(n_int):
-                im[i][mask_im[i] == 0] = np.nan
-            imtot = np.nanmedian(im, axis=0)
-            imtotsig = np.power(np.nansum(imsig_inv * mask_im, axis=0), -0.5)
-
-            if debug:
-                #vmin, vmax = np.nanquantile(mean_im.flatten(), 0.05), np.nanquantile(mean_im.flatten(), 0.8)
-                ax[1, n_int].imshow(imtot, vmin=vmin, vmax=vmax)
-                ax[1, n_int].set_title('Final')
-                # ax[2, n_int].imshow(imtot, vmin=vmin, vmax=vmax)
-
-            if save_figure:
-                im_b = bx[4].imshow(imtot, vmin=vmin, vmax=vmax, cmap=cmap,origin='lower')
-                cbar_bx = fig2.add_axes([0.91, 0.165, 0.01, 0.68])
-                fig2.colorbar(im_b, cax=cbar_bx)
-                #cbar_bx.set_yticklabels(fontsize=fontsize)
-                #cbar_bx.set_label('Slope (DNs/Groups)')
-                bx[4].text(1450, 300, 'Rate (DN/s)', rotation=90, fontsize=fontsize)
-                for axs in bx[:]:
-                    axs.tick_params(which='both', width=1, direction='in',
-                                    labelsize=fontsize,
-                                    right='True',
-                                    top='True')
-                    axs.tick_params(which='major', length=5)
-                    axs.tick_params(which='minor', length=3)
-                    axs.xaxis.set_minor_locator(AutoMinorLocator(4))
-                    axs.xaxis.set_major_locator(MultipleLocator(200))
-                    axs.yaxis.set_minor_locator(AutoMinorLocator(4))
-                    axs.yaxis.set_major_locator(MultipleLocator(200))
-                    axs.set_xlabel('X coordinate',fontsize=fontsize)
-                bx[0].set_ylabel('Y coordinate',fontsize=fontsize)
-                bx[0].set_title('Backg.Image (Dither1)')
-                bx[1].set_title('Backg.Image (Dither2)')
-                bx[3].set_title('CR showers Mask')
-                bx[2].set_title('Mean Image')
-                bx[4].set_title('Mean CR corrected')
-
-                #fig2.savefig('./output/detector2/bkgr_subtracted/bckgr_model.pdf', bbox_inches='tight',
-                #            dpi=2000)
-                #fig2.savefig('./output/detector2/bkgr_subtracted/bckgr_model_200.pdf', bbox_inches='tight',
-                #             dpi=200)
-                fig2.savefig('./output/detector2/bkgr_subtracted/bckgr_model_300.pdf', bbox_inches='tight', dpi=300)
-                np.savetxt('./output/detector2/bkgr_subtracted/bckgr_model.dat',imtot)
-
-            if debug:
-                plt.show()
-
-
-            return imtot, imtotsig
-
-        imtot, imtotsig = calc_mean_rate(images=bkgr_images,sig_images=bkgr_sigimages,dqs=bkgr_dqs,debug=debug,radius=smothing_rad)
+        from scripts.CRshowers import calc_mean_rate
+        imtot, imtotsig = calc_mean_rate(images=bkgr_images, sig_images=bkgr_sigimages, dqs=bkgr_dqs, debug=debug,
+                                         skip_cr_events=False, radius=radius,
+                                         photom_mask=photom_mask, n_smooth_iters=2)
 
         if debug:
             n_im = len(bkgr_images)
             fig, ax = plt.subplots(1, n_im+1, sharex=True, sharey=True)
+            cmap = plt.cm.viridis
+            cmap.set_bad('red')
             vmin,vmax = np.nanquantile(imtot.flatten(), 0.05), np.nanquantile(imtot.flatten(), 0.8)
             for i in range(n_im):
-                ax[i].imshow(bkgr_images[i], vmin=vmin, vmax=vmax)
+                ax[i].imshow(bkgr_images[i], vmin=vmin, vmax=vmax,origin='lower',cmap=cmap)
                 ax[i].set_title(bkgr_names[i])
-            ax[n_im].imshow(imtot, vmin=vmin, vmax=vmax)
+            ax[n_im].imshow(imtot, vmin=vmin, vmax=vmax,origin='lower',cmap=cmap)
             ax[n_im].set_title('MODEL')
+            ax[n_im].imshow(imtot, vmin=vmin, vmax=vmax, origin='lower', cmap=cmap)
+
             plt.show()
 
         return imtot, imtotsig
@@ -1451,11 +1509,13 @@ class detector2():
         if debug:
             vmin,vmax = np.nanquantile(data_orig.flatten(),0.01),np.nanquantile(data_orig.flatten(),0.99)
             fig,ax = plt.subplots(1,3,sharey=True,sharex=True)
-            ax[0].imshow(data_orig,vmin=vmin,vmax=vmax)
-            ax[1].imshow(self.data.data,vmin=vmin,vmax=vmax)
+            cmap = plt.cm.viridis
+            cmap.set_bad('black')
+            ax[0].imshow(data_orig,vmin=vmin,vmax=vmax,cmap=cmap,origin='lower')
+            ax[1].imshow(self.data.data,vmin=vmin,vmax=vmax,cmap=cmap,origin='lower')
             flatfile = self.data.meta.ref_file.flat.name.split('//')[-1]
             hdu = fits.open(os.environ["CRDS_PATH"] +'/references/jwst/miri/' + flatfile)
-            ax[2].imshow(hdu['SCI'].data, vmin=0.8, vmax=1.2)
+            ax[2].imshow(hdu['SCI'].data, vmin=0.95, vmax=1.05,cmap=cmap,origin='lower')
             hdu.close()
             plt.show()
     def source_type_identification(self, input_file=None, debug=True, output_dir=None,save_results=False):
