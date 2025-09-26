@@ -221,6 +221,8 @@ class detector1():
         self.ngroup = shape[1]
         self.nrows = shape[2]
         self.ncols = shape[3]
+        #change to old version: ALL_MRS to ALL
+        self.data.meta.dither.primary_channel = 'ALL'
 
         if debug:
             # Print some basic information on the number of flagged pixels

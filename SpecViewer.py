@@ -519,10 +519,10 @@ class Viewer(QWidget):
         self.w11.value_label.setText("%.2f" % (self.w11.x))
         self.w12.value_label.setText("%.2f" % (self.w12.x))
 
-    def setObjName(self,click=1,secret='combined'):
+    def setObjName(self,click=1,secret='FR_s3d_(A)_red'):
         read_mode = self.combine_dithers_win_option.currentText()
         if read_mode == 'spec':
-            keyname = '_red.spec1d'
+            keyname = '.spec1d'
         if read_mode == 'bkgr':
             keyname = '_green_bkgr.spec1d'
         if read_mode == 'sbtr':

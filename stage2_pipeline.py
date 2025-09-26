@@ -937,13 +937,13 @@ class detector2():
         from scripts.CRshowers import calc_mean_rate
         imtot, imtotsig = calc_mean_rate(images=bkgr_images, sig_images=bkgr_sigimages, dqs=bkgr_dqs, debug=debug,
                                          skip_cr_events=False, radius=radius,
-                                         photom_mask=photom_mask, n_smooth_iters=2)
+                                         photom_mask=photom_mask, n_smooth_iters=3) #set to 1
 
         if debug:
             n_im = len(bkgr_images)
             fig, ax = plt.subplots(1, n_im+1, sharex=True, sharey=True)
             cmap = plt.cm.viridis
-            cmap.set_bad('red')
+            cmap.set_bad('black')
             vmin,vmax = np.nanquantile(imtot.flatten(), 0.05), np.nanquantile(imtot.flatten(), 0.8)
             for i in range(n_im):
                 ax[i].imshow(bkgr_images[i], vmin=vmin, vmax=vmax,origin='lower',cmap=cmap)

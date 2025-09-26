@@ -394,13 +394,10 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
                                         mask_2m1 = roi2.roi_mask ^ (roi2.roi_mask*roi1.roi_mask)
                                         if 1: #np.sum(mask_2m1)>0 and np.sum(mask_2m1)!=np.sum(roi2.roi_mask):
                                             roi_diff_flux,roi_diff_flux_err = np.zeros(self.data.shape[0]),np.zeros(self.data.shape[0])
+                                            fluxa,fluxb =  np.zeros(self.data.shape[0]),np.zeros(self.data.shape[0])
+                                            ferra, ferrb = np.zeros(self.data.shape[0]), np.zeros(self.data.shape[0])
                                             for i in range(self.data.shape[0]):
                                                 d_new =  self.data[i,:,:]
-                                                #d = d[mask_2m1]
-                                                #d = d[~np.isnan(d)]
-                                                #derr = (self.data_tot.err[i, :, :])[mask_2m1]
-                                                #derr = derr[~np.isnan(derr)]
-                                                #w = np.power(derr, 2)
                                                 d1 = d_new[roi1.roi_mask].copy()
                                                 d1 = d1[~np.isnan(d1)]
                                                 d1err = (self.data_tot.err[i, :, :])[roi1.roi_mask]
@@ -411,12 +408,22 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
                                                 d2err = (self.data_tot.err[i, :, :])[roi2.roi_mask]
                                                 mask2 = (~np.isnan(d2))
                                                 d2_npix = np.sum(mask2)
+                                                fluxa[i] =  np.nansum(d1)
+                                                fluxb[i] =  np.nansum(d2)
+                                                ferra[i] = np.sum(np.power(d1err, 2))
+                                                ferrb[i] = np.sum(np.power(d2err, 2))
 
-                                                roi_diff_flux[i] = np.nansum(d1) -  np.nansum(d2)/d2_npix*d1_npix
-                                                roi_diff_flux_err[i] = np.power(np.sum(np.power(d1err,2))+np.sum(np.power(d2err,2)), 0.5)
-                                            print('d1/d2')
+                                            if normalize:
+                                                roi_diff_flux = fluxa/np.mean(fluxa[10:40]) - fluxb/np.mean(fluxb[10:40])
+                                                roi_diff_flux_err = np.power( (ferra/np.mean(fluxa[10:40]))**2+
+                                                                              (ferrb / np.mean(fluxb[10:40])) ** 2,0.5)
+                                                del fluxa,fluxb,ferra,ferrb
+                                            else:
+                                                roi_diff_flux = fluxa - fluxb
+                                                roi_diff_flux_err = np.power(ferra ** 2 + ferrb  ** 2, 0.5)
+                                                del fluxa, fluxb, ferra, ferrb
                                             self.parent.plot_spectrum.plot_specA2m1(data=roi_diff_flux, add=False, show_err_bar=True)
-                                            self.parent.plot_spectrum.plot_specA2m1(data=roi_diff_flux,err=roi_diff_flux_err,normalize=normalize,show_err_bar=True)
+                                            self.parent.plot_spectrum.plot_specA2m1(data=roi_diff_flux,err=roi_diff_flux_err,show_err_bar=True)
 
 
                                 if self.cube_name == 'B':
@@ -795,7 +802,7 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
             angle = np.arctan(dy/dx) + np.pi*(1-np.sign(dx))/2
             scale = np.sqrt(dx**2+dy**2)*3600/8
             shape = image_comb.shape
-            xc,yc,rad = (0.25*shape[0],0.25*shape[1],0.11*shape[0])
+            xc,yc,rad = (0.25*shape[0],0.15*shape[1],0.11*shape[0])
             norm = np.sqrt(1+r**2)
             plt.plot([xc,xc-rad/norm],[yc,yc-rad*r/norm],ls='-',color='black',lw=4)
             plt.text(xc - rad / norm,  yc - rad * r / norm, 'E', color='black')
@@ -814,28 +821,79 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
                                                    mode='pipeline_world_to_pix')
                 qC_pos_pix = cube.conv_world_coord(t=l, x=raq-0.5*asec, y=deq-0.459*asec,
                                                    mode='pipeline_world_to_pix')
-                sS1_pos_pix = cube.conv_world_coord(t=l, x=raq +0.088 * asec, y=deq + 0.535 * asec,
+                S1_pos_pix = cube.conv_world_coord(t=l, x=raq +0.088 * asec, y=deq + 0.535 * asec,
+                                               mode='pipeline_world_to_pix') #star S1(M) from Castle
+                P_pos_pix = cube.conv_world_coord(t=l, x=raq -0.327 * asec, y=deq - 0.491 * asec,
+                                               mode='pipeline_world_to_pix') #star P from Castle
+                G_pos_pix = cube.conv_world_coord(t=l, x=raq -0.52 * asec, y=deq - 0.52 * asec,
+                                               mode='pipeline_world_to_pix') #Lens G from Courbin 2002
+                SP_pos_pix = cube.conv_world_coord(t=l, x=raq -0.285 * asec, y=deq - 0.72 * asec,
+                                               mode='pipeline_world_to_pix') #Lens SP from Courbin 2002
+                G2_pos_pix = cube.conv_world_coord(t=l, x=raq + 0.245 * asec, y=deq - 2.49 * asec,
+                                                   mode='pipeline_world_to_pix')  # Low-z G from Courbin 2002
+                #other stars (?) from Courbin 2002
+                sadd1 =cube.conv_world_coord(t=l, x=raq +1.51 * asec, y=deq - 2.04 * asec,
                                                mode='pipeline_world_to_pix')
-                sP_pos_pix = cube.conv_world_coord(t=l, x=raq -0.327 * asec, y=deq - 0.491 * asec,
+                sadd2 =cube.conv_world_coord(t=l, x=raq +0.52 * asec, y=deq - 1.75 * asec,
                                                mode='pipeline_world_to_pix')
-                G_pos_pix = cube.conv_world_coord(t=l, x=raq -0.5 * asec, y=deq - 0.445 * asec,
-                                               mode='pipeline_world_to_pix')
+                sadd3 = cube.conv_world_coord(t=l, x=raq - 1.12 * asec, y=deq - 1.22 * asec,
+                                              mode='pipeline_world_to_pix')
+                sadd4 = cube.conv_world_coord(t=l, x=raq - 1.41 * asec, y=deq - 1.67 * asec,
+                                              mode='pipeline_world_to_pix')
+                sadd5 = cube.conv_world_coord(t=l, x=raq - 1.74 * asec, y=deq - 1.30 * asec,
+                                              mode='pipeline_world_to_pix')
+                sadd6 = cube.conv_world_coord(t=l, x=raq - 0.78 * asec, y=deq +0.55 * asec,
+                                              mode='pipeline_world_to_pix')
+                sadd7 = cube.conv_world_coord(t=l, x=raq - 0.89 * asec, y=deq +0.96 * asec,
+                                              mode='pipeline_world_to_pix')
+                star_add = [sadd1,sadd2,sadd3,sadd4,sadd5,sadd6,sadd7]
+
                 tcolor= 'black'
                 plt.text(qA_pos_pix[1],qA_pos_pix[2],'A',color=tcolor,fontsize=10)
                 plt.text(qB_pos_pix[1], qB_pos_pix[2], 'B', color=tcolor, fontsize=10)
-                plt.text(sS1_pos_pix[1], sS1_pos_pix[2], 'S1', color=tcolor, fontsize=10)
-                plt.text(sP_pos_pix[1], sP_pos_pix[2], 'sP', color=tcolor, fontsize=10)
-                plt.text(G_pos_pix[1], G_pos_pix[2], 'G', color=tcolor, fontsize=10)
-                plt.text(qC_pos_pix[1], qC_pos_pix[2], 'C', color=tcolor, fontsize=10)
+                plt.text(S1_pos_pix[1], S1_pos_pix[2], 'M', color=tcolor, fontsize=10)
+                plt.text(P_pos_pix[1], P_pos_pix[2], 'P', color=tcolor, fontsize=10)
+                plt.text(G_pos_pix[1], G_pos_pix[2], 'G1', color=tcolor, fontsize=10)
+                plt.text(G2_pos_pix[1], G2_pos_pix[2], 'G2', color=tcolor, fontsize=10)
+                plt.text(SP_pos_pix[1], SP_pos_pix[2], 'Sp', color=tcolor, fontsize=10)
+                for s in star_add:
+                    plt.plot(s[1],s[2],marker='*',markersize=10,color='yellow')
 
+                #plt.text(qC_pos_pix[1], qC_pos_pix[2], 'C', color=tcolor, fontsize=10)
+
+            if 1 and 'TXS0218' in name.split('_')[0]:
+                # show the position of sources
+                l, raq, deq = np.nanmean(wave), 35.272754, 35.937156
+                asec = 1 / 3600.
+                qA_pos_pix = cube.conv_world_coord(t=l, x=raq, y=deq,
+                                                   mode='pipeline_world_to_pix')
+                qB_pos_pix = cube.conv_world_coord(t=l, x=raq + 0.307 * asec, y=deq + 0.126 * asec,
+                                                   mode='pipeline_world_to_pix')
+                tcolor = 'black'
+                plt.text(qA_pos_pix[1], qA_pos_pix[2], 'A', color=tcolor, fontsize=10)
+                plt.text(qB_pos_pix[1], qB_pos_pix[2], 'B', color=tcolor, fontsize=10)
+
+                # plt.text(qC_pos_pix[1], qC_pos_pix[2], 'C', color=tcolor, fontsize=10)
 
             fig, ax = plt.subplots(figsize=(4,4))
             fontsize= 10
             if 1:
-                vmin,vmax = (np.nanquantile(np.log10(np.abs(image_comb*pix_solid_angle*1e6)).flatten(), 0.1),
-                                          np.nanquantile(np.log10(np.abs(image_comb*pix_solid_angle*1e6)).flatten(), 0.9))
-                sp = ax.imshow(np.log10(np.abs(image_comb*pix_solid_angle*1e6)), origin='lower', cmap='viridis', vmin=vmin, vmax=vmax)
-                fig.colorbar(sp, fraction=0.046, pad=0.04,label='log F(Jy)')
+                from matplotlib.colors import LinearSegmentedColormap
+
+                # Define custom colormap: black → green → red → white
+                colors = [
+                    (0.0, "black"),  # 0% of data -> black
+                    (0.2, "tab:blue"),
+                    (0.5, "tab:green"),  # 30% -> green
+                    (0.9, "red"),  # 70% -> red
+                    (1.0, "white")  # 100% -> white
+                ]
+                black_green_red_white = LinearSegmentedColormap.from_list("BGRW", colors)
+
+                vmin,vmax = (np.nanquantile(np.log10(np.abs(image_comb*pix_solid_angle*1e6*1e3)).flatten(), 0.1),
+                                          np.nanquantile(np.log10(np.abs(image_comb*pix_solid_angle*1e6*1e3)).flatten(), 1))
+                sp = ax.imshow(np.log10(np.abs(image_comb*pix_solid_angle*1e6*1e3)), origin='lower', cmap=black_green_red_white, vmin=vmin, vmax=vmax)
+                fig.colorbar(sp, fraction=0.046, pad=0.04,label='F(mJy)')
 
                 x1,y1  = np.cos(angle), -np.sin(angle)
                 x2,y2  = np.sin(angle), np.cos(angle)
@@ -846,15 +904,34 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
                 if -y1 * rad + y2 * rad > 0:
                     delta_y = -(-y1 * rad + y2 * rad)
 
-                ax.arrow(xc+delta_x, yc+delta_y,  -x1*rad,  -y1*rad, ls='-', color='white', lw=2,head_width=0.5)
-                ax.text(xc -  x1*rad*text_factor+delta_x, yc - y1*rad*text_factor +delta_y, 'E', color='white',fontsize=fontsize)
-                ax.arrow(xc+delta_x, yc+delta_y,  x2*rad,  y2*rad , ls='-', color='white', lw=2,head_width=0.5)
-                ax.text(xc+delta_x + x2*rad*text_factor, yc+delta_y + y2*rad*text_factor , 'N', color='white',fontsize=fontsize)
+
+                color = 'black'
+                ax.arrow(xc+delta_x, yc+delta_y,  -x1*rad,  -y1*rad, ls='-', color=color, lw=2,head_width=0.5)
+                ax.text(xc -  x1*rad*text_factor+delta_x, yc - y1*rad*text_factor +delta_y, 'E', color=color,fontsize=fontsize)
+                ax.arrow(xc+delta_x, yc+delta_y,  x2*rad,  y2*rad , ls='-', color=color, lw=2,head_width=0.5)
+                ax.text(xc+delta_x + x2*rad*text_factor, yc+delta_y + y2*rad*text_factor , 'N', color=color,fontsize=fontsize)
                 # xc,yc,rad = (0.2*shape[0],0.2*shape[1],0.15*shape[0])
-                r = 1/scale
-                ax.plot([0.1*shape[0],0.1*shape[0]+r],[0.9*shape[0],0.9*shape[0]], color='white',lw=2)
-                ax.plot([0.1 * shape[0], 0.1 * shape[0] + r], [0.9 * shape[0], 0.9 * shape[0]], '|',color='white',markersize=10)
-                ax.text(0.1 * shape[0] + r*0.25, 0.82 * shape[0], '1"', fontsize=fontsize,color='white')
+                #plot 1" bar
+                if 0:
+                    r = 1/scale
+                    ax.plot([0.1*shape[0],0.1*shape[0]+r],[0.9*shape[0],0.9*shape[0]], color='white',lw=2)
+                    ax.plot([0.1 * shape[0], 0.1 * shape[0] + r], [0.9 * shape[0], 0.9 * shape[0]], '|',color='white',markersize=10)
+                    ax.text(0.1 * shape[0] + r*0.25, 0.82 * shape[0], '1"', fontsize=fontsize,color='white')
+                if 0:
+                    from scipy.stats import norm
+                    self.data_contours = []
+                    for l in norm.pdf([0.5, 1, 1.5, 2, 2.5, 3], loc=0, scale=1):
+                        ax.countor()
+            if 0:
+
+                ax_histx = ax.inset_axes([0, 1.0, 1, 0.25], sharex=ax)
+                ax_histy = ax.inset_axes([1.0, 0, 0.25, 1], sharey=ax)
+                f = np.array(image_comb*pix_solid_angle*1e6)
+                x,y = np.log10(np.abs(np.nanmean(f,axis=0))),np.log10(np.abs(np.nanmean(f,axis=1)))
+                ax_histx.plot(np.arange(len(x)),x)
+                ax_histy.plot(y,np.arange(len(y)))
+                ax_histx.set_xticks([])
+                ax_histy.set_yticks([])
             if 1:
                 ax.tick_params(which='both', width=1, direction='in',
                                 labelsize=fontsize,
@@ -887,7 +964,7 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
                 ax[0].hist(image_comb.flatten()[~np.isnan(image_comb.flatten())])
                 ax[1].plot(im_hist[1],np.cumsum(im_flux_dist))
 
-            d = image_comb/image_max_flux
+            d = np.abs(image_comb/image_max_flux)
 
 
             d[np.isnan(d)]=0
@@ -895,9 +972,16 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
                 self.data_contours = [pg.IsocurveItem(data=d, level=level, pen=pg.mkPen('black', width=2), axisOrder='row-major')]
             elif level==-1:
                 self.data_contours = []
-                for l in np.linspace(-2,0,15):
+                for l in np.linspace(-2,0,10):
                     el= pg.IsocurveItem(data=d, level=10**l, pen=pg.mkPen('black', width=2),
                                                      axisOrder='row-major')
+                    self.data_contours.append(el)
+            elif level == -2:
+                from scipy.stats import norm
+                self.data_contours = []
+                for l in norm.pdf([0.5,1,1.5,2,2.5,3], loc=0, scale=1):
+                    el = pg.IsocurveItem(data=d, level=l, pen=pg.mkPen('black', width=2),
+                                         axisOrder='row-major')
                     self.data_contours.append(el)
             for el in self.data_contours:
                 self.vb.addItem(el)
@@ -1415,11 +1499,11 @@ class plotSpec(pg.PlotWidget):
                     pix_solid_angle = wcs1['CDELT1'] * wcs1['CDELT2'] * (np.pi / 180) ** 2 * 1e6
                     data*=pix_solid_angle
                     err*=pix_solid_angle
-                if snr>5:
+                if snr>1:
                     self.plot_lineA1 = pg.PlotCurveItem(wavel, data,pen='lightgreen')
                     self.plot_errbarA1 = pg.ErrorBarItem(x=wavel,y=data,height=2*err,pen=pen, beam=1/6000)
                 else:
-                    factor = 10
+                    factor = 2
                     self.plot_lineA1 = pg.PlotCurveItem(rebin_arr(wavel, factor), rebin_arr(data,factor), pen='lightgreen')
                     self.plot_errbarA1 = pg.ErrorBarItem(x=rebin_arr(wavel, factor), y=rebin_arr(data,factor), height=2 * rebin_arr(err,factor), pen=pen, beam=1 / 6000)
                 self.vb.addItem(self.plot_lineA1)
@@ -1516,11 +1600,11 @@ class plotSpec(pg.PlotWidget):
                     pix_solid_angle = wcs1['CDELT1'] * wcs1['CDELT2'] * (np.pi / 180) ** 2* 1e6
                     data*=pix_solid_angle
                     err*=pix_solid_angle
-                if snr > 5:
+                if snr > 1:
                     self.plot_lineA2 = pg.PlotCurveItem(wavel, data, pen=pen)
                     self.plot_errbarA2 = pg.ErrorBarItem(x=wavel, y=data, height=2*err, pen=pen)
                 else:
-                    factor = 10
+                    factor = 2
                     self.plot_lineA2 = pg.PlotCurveItem(rebin_arr(wavel, factor), rebin_arr(data, factor),
                                                         pen=pen)
                     self.plot_errbarA2 = pg.ErrorBarItem(x=rebin_arr(wavel, factor), y=rebin_arr(data, factor),
@@ -2021,116 +2105,42 @@ class CUBElistTable(pg.TableWidget):
                                                          master_resample_spec_flag=master_resample_spec_flag,
                                                          master_extract1d_flag=master_extract1d_flag)
 
-    def extract_roi(self, cube_name = '(A)',debug=False,backgr_method = 'annual',save_background=False):
+    def extract_roi(self, cube_name = '(A)',debug=True):
         if cube_name == '(A)':
             cube = self.parent.parent.plot_3dcubeA
             data = self.parent.parent.CUBE_A.data
             wavel = self.parent.parent.CUBE_A.data.wavelength
             name = self.parent.parent.CUBE_A.cubename.split('/')[-1].split('.')[0]
-            backgr_method = 'manual'
+
         elif cube_name == '(B)':
             cube = self.parent.parent.plot_3dcubeB
             data = self.parent.parent.CUBE_B.data
             wavel = self.parent.parent.CUBE_B.data.wavelength
             name = self.parent.parent.CUBE_B.cubename.split('/')[-1].split('.')[0]
+
+        if 1:
+            miri_psf_fwhm = miri_psf_arcsec(wavel[0])
+            if cube_name == '(A)':
+                wcs1 = self.parent.parent.CUBE_A.data.wcs
+            if cube_name == '(B)':
+                wcs1 = self.parent.parent.CUBE_B.data.wcs
+            delta_x = wcs1['CDELT1']
+            miri_psf_fwhm *= 1 / 3600 / delta_x
+            miri_psf_sigma = miri_psf_fwhm / 2.355
+
+            # convert MJy/Sr to MJy
+            pix_solid_angle = wcs1['CDELT1'] * wcs1['CDELT2'] * (np.pi / 180) ** 2
+            # convert MJy to Jy
+            if flux_units == 'Jy':
+                pix_solid_angle *= 1e6
+
         roi_name = ['green','red']
         for ir in range(len(roi_name)):
             roi = cube.roi_list[ir]
             if np.sum(roi.roi_mask) > 0:
-                roi_mean_w_flux = np.zeros(cube.data.shape[0])
-                roi_mean_w_f_error = np.zeros(cube.data.shape[0])
-                roi_mean =  np.zeros(cube.data.shape[0])
-                roi_background1 = np.zeros(cube.data.shape[0]) #within annual aperture 5 - 8 miri psf sigma
-                roi_background2 = np.zeros(cube.data.shape[0]) #within all pixels > 5 sigma
-                roi_background1_error = np.zeros_like(roi_background1)
                 y = np.zeros(cube.data.shape[0])
                 y_err = np.zeros(cube.data.shape[0])
-                # set background mask
-                if 1:
-                    image_comb = np.nansum(data.data, axis=0) / cube.data.shape[0]
-                    # set spatial mask
-                    if 1:
-                        spatial_mask = image_comb != 0
-                        spatial_mask[:, 0] = 0
-                        spatial_mask[:, -1] = 0
-                        spatial_mask[0, :] = 0
-                        spatial_mask[-1, :] = 0
-                        for k in range(3):
-                            pos = np.where(spatial_mask > 0)
-                            spatial_mask2 = np.array(spatial_mask)
-                            for i, j in zip(pos[0], pos[1]):
-                                if spatial_mask[i - 1, j] == 0 or spatial_mask[i + 1, j] == 0 or spatial_mask[
-                                    i, j - 1] == 0 or spatial_mask[i, j + 1] == 0:
-                                    spatial_mask2[i, j] = 0
-                            spatial_mask = np.array(spatial_mask2)
-                        del (spatial_mask2)
-
-                    d = image_comb / np.nanmax(image_comb[spatial_mask])
-                    pos_max = np.argwhere(d==1)[0]
-                    print('pos_max',pos_max)
-                    profile = np.nanmean(d[:,(pos_max[1])-1:(pos_max[1])+1],axis=1)
-
-                    miri_psf_fwhm = miri_psf_arcsec(wavel[0])
-                    if cube_name == '(A)':
-                        wcs1 = self.parent.parent.CUBE_A.data.wcs
-                    if cube_name == '(B)':
-                        wcs1 = self.parent.parent.CUBE_B.data.wcs
-                    delta_x = wcs1['CDELT1']
-                    miri_psf_fwhm *= 1 / 3600 / delta_x
-                    miri_psf_sigma = miri_psf_fwhm / 2.355
-
-                    #convert MJy/Sr to MJy
-                    pix_solid_angle = wcs1['CDELT1']*wcs1['CDELT2']*(np.pi/180)**2
-                    # convert MJy to Jy
-                    if flux_units == 'Jy':
-                        pix_solid_angle*=1e6
-
-
-                    def radial_dist(pos_max=pos_max,pos=[0,1]):
-                        return np.sqrt((pos_max[1]-pos[0])**2+(pos_max[0]-pos[1])**2)
-
-                    XX,YY = np.meshgrid(np.arange(image_comb.shape[1]),np.arange(image_comb.shape[0]))
-                    mask_radial = radial_dist(pos=[XX,YY])
-                    mask_radial[~spatial_mask] = 0
-                    mask_annual = (mask_radial>5* miri_psf_sigma)* (mask_radial<8* miri_psf_sigma)
-                    mask_bkgr1,mask_bkgr2 = np.array(mask_radial),np.array(mask_radial)
-                    mask_bkgr1[~mask_annual] = 0
-                    mask_bkgr2[mask_radial<5* miri_psf_sigma] = 0
-
-                    if debug:
-
-                        plt.subplots()
-                        plt.title('Source profile')
-                        plt.plot(profile)
-                        plt.axvline(pos_max[0])
-                        plt.axvline(pos_max[0] + 2 * miri_psf_sigma, ls='--', color='red')
-                        plt.axvline(pos_max[0] + 3 * miri_psf_sigma, ls=':', color='green')
-                        plt.axvline(pos_max[0] + 4 * miri_psf_sigma, ls=':', color='blue')
-                        plt.show()
-
-                        flux_bkgr1 = np.zeros(cube.data.shape[0])
-                        flux_bkgr2 = np.zeros(cube.data.shape[0])
-                        flux_s= np.zeros(cube.data.shape[0])
-                        for i in range(cube.data.shape[0]):
-                            flux_bkgr1[i] = np.nanmean(data.data[i,:,:][mask_bkgr1>0])
-                            flux_bkgr2[i] = np.nanmean(data.data[i, :, :][mask_bkgr2>0])
-                            d1 = data.data[i, :, :]
-                            mask = (roi.roi_mask) * (~np.isnan(d1))
-                            d1 = d1[mask]
-                            flux_s[i] = np.nansum(d1, axis=0)
-
-                        plt.subplots()
-                        plt.plot(flux_bkgr1*np.sum(mask),label='bkgr1')
-                        plt.plot(flux_bkgr2*np.sum(mask),label='bkgr2')
-                        plt.plot(flux_s, label='bkgr2')
-                        plt.legend()
-                        plt.subplots()
-                        plt.imshow(mask_bkgr1/miri_psf_sigma)
-                        plt.colorbar()
-                        plt.subplots()
-                        plt.imshow(np.log10(np.abs(d)))
-                        plt.colorbar()
-                        plt.show()
+                roi_normalized_sum = np.zeros(cube.data.shape[0])
 
                 for i in range(cube.data.shape[0]):
                     d = data.data[i, :, :]
@@ -2141,68 +2151,30 @@ class CUBElistTable(pg.TableWidget):
                     w = np.power(derr,2)
                     y[i] = np.nansum(d, axis=0)
                     y_err[i] =  np.power(np.nansum(w, axis=0), 0.5)
-                    roi_mean_w_flux[i] = np.nansum(d/derr**2) / np.nansum(1/derr**2)
-                    roi_mean_w_f_error[i] = 1/np.nansum(1/derr**2)
-                    roi_mean[i] = np.nansum(d) / np.size(d)
-                    #calculate background
-                    n_roi_pixels = np.sum(mask)
-                    roi_background1[i] = np.nanmean(data.data[i, :, :][mask_bkgr1 > 0])*n_roi_pixels
-                    roi_background2[i] = np.nanmean(data.data[i, :, :][mask_bkgr2 > 0])*n_roi_pixels
-                    roi_background1_error[i] = np.nanstd(data.data[i, :, :][mask_bkgr1 > 0])*np.sqrt(n_roi_pixels)
-                    #np.power(np.nansum(data.err[i, :, :][mask_bkgr1 > 0], axis=0), 0.5)
 
-                if backgr_method == 'manual':
-                    mask = (roi.roi_mask) * (~np.isnan(image_comb))
-                    n_roi_pixels = np.sum(mask)
-                    roi_background3 = np.loadtxt('./output/detector3/cash/median_cube.1dspec')
-                    roi_background3[:, 1] *= n_roi_pixels
-                    roi_background3[:, 2] *= np.sqrt(n_roi_pixels)
+                roi_norm_array = np.nansum(data.data[10:40,:,:],axis= 0)
+                for i in range(cube.data.shape[0]):
+                    d = data.data[i, :, :]
+                    mask = (roi.roi_mask) * (~np.isnan(d))
+                    d = d[mask]/roi_norm_array[mask]
+                    roi_normalized_sum[i] = np.nansum(d, axis=0)
+                roi_normalized_sum*= np.nansum(y[10:40])/np.nansum(roi_normalized_sum[10:40])
+
+
+
                 if debug:
                     fig,ax = plt.subplots()
                     ax.errorbar(x=np.arange(np.size(y)),y=y,yerr=y_err,label='w_weighted',lw =2)
-                    ax.errorbar(x=np.arange(np.size(y)),y=roi_mean_w_flux,yerr=roi_mean_w_f_error, label='mean weighted',ls = '--')
-                    ax.plot(roi_mean, label = 'mean')
+                    ax.plot(roi_normalized_sum, label = 'sum_norm')
                     ax.legend()
                     plt.show()
 
                 #save spectrum
                 filename = './output/detector3/roi_spectra/'+name+'_'+cube_name+'_'+roi_name[ir]+'.spec1d'
                 with open(filename, 'w') as fout:
-                    #for x,y,e in zip(wavel,roi_mean_w_flux,roi_mean_w_f_error):
                     for x, f, e in zip(wavel, y, y_err):
                         fout.write('%.4e %.4e %.4e \n' %(x,f*pix_solid_angle,e*pix_solid_angle))
                 fout.close()
-
-                #save background
-                if save_background:
-                    print('save background using ',backgr_method,' method')
-                    filename = './output/detector3/roi_spectra/' + name + '_' + cube_name + '_' + roi_name[ir] + '_bkgr.spec1d'
-                    with open(filename, 'w') as fout:
-                        if backgr_method == 'manual':
-                            for x, f, e in zip(wavel, roi_background3[:,1], roi_background3[:,2]):
-                                fout.write('%.4e %.4e %.4e \n' % (x, f*pix_solid_angle, e*pix_solid_angle))
-                        elif backgr_method == 'annual':
-                            for x, f, e in zip(wavel, roi_background1, roi_background1_error):
-                                fout.write('%.4e %.4e %.4e \n' % (x, f * pix_solid_angle, e * pix_solid_angle))
-                    fout.close()
-
-                    filename = './output/detector3/roi_spectra/' + name + '_' + cube_name + '_' + roi_name[
-                        ir] + '_bkgr_subtracted.spec1d'
-
-                    if backgr_method == 'manual':
-                        y -=roi_background3[:,1]
-                        y_err = np.sqrt(y_err**2+roi_background3[:,2]**2)
-                    elif backgr_method == 'annual':
-                        y -= roi_background1
-                        y_err = np.sqrt(y_err ** 2 + roi_background1_error ** 2)
-                    with open(filename, 'w') as fout:
-                        # for x,y,e in zip(wavel,roi_mean_w_flux,roi_mean_w_f_error):
-                        for x, f, e in zip(wavel, y, y_err):
-                            fout.write('%.4e %.4e %.4e \n' % (x, f * pix_solid_angle, e * pix_solid_angle))
-                    fout.close()
-
-
-
 
 
     def show_roi(self,mode='A1'):
@@ -2346,8 +2318,6 @@ class CUBElistTable(pg.TableWidget):
                     self.parent.parent.plot_2dimage3.selectPixels(add=False, type='cr_multi')
                     self.parent.parent.plot_2dimage4.selectPixels(add=False, type='cr_multi')
 
-
-
     def show_detector_roi(self,add=True,mode = 'A'):
         print('show_ROI pixels:')
         #plt = pg.plot()
@@ -2402,11 +2372,81 @@ class CUBElistTable(pg.TableWidget):
         elif cube_name == 'B':
             self.parent.parent.plot_3dcubeB.add_contours(add=add,level=level,lmin=lmin,lmax=lmax)
 
+    def model_image_command(self, add=True, lmin=-1,lmax=-1,cube_name='A',save_cube=True):
+        #if add:
+        #    self.parent.parent.roi_slit.show()
+        if cube_name == 'A':
+            cube = self.parent.parent.CUBE_A
+            wave = np.array(self.parent.parent.CUBE_A.data.wavelength)
+            #self.parent.parent.plot_3dcubeA.add_contours(add=add,level=level,lmin=lmin,lmax=lmax)
+        elif cube_name == 'B':
+            cube = self.parent.parent.CUBE_B
+            np.array(self.parent.parent.CUBE_B.data.wavelength)
+            #self.parent.parent.plot_3dcubeB.add_contours(add=add,level=level,lmin=lmin,lmax=lmax)
 
-    def calc_median_cube(self,add=True,radius = 3,mode='mean-weighted',save_cube=True,debug =True, method = '3Dsmothing'):
+
+        if 1:
+            data = cube.data.data.copy()
+            err = cube.data.err.copy()
+            model = np.array(data)
+            (npix, nrow, ncol) = data.shape
+
+            if lmin>0 and lmax>0:
+                mask_line_pixels = (wave>=lmin)*(wave<=lmax)
+                for i in range(nrow):
+                    for j in range(ncol):
+                        w_local  = (wave[~mask_line_pixels]  ).copy()
+                        s_local  = (data[:,i,j][~mask_line_pixels]).copy()
+
+                        w_rebin = rebin_arr(w_local, factor=10)
+                        s_rebin =  rebin_arr(s_local, factor=10)
+                        s_interp = interp1d(w_rebin,s_rebin,fill_value='extrapolate')
+                        del w_rebin,s_rebin
+                        model[:,i,j]= s_interp(wave)
+
+            if save_cube:
+                filename = './output/detector3/interpolate_line_s3d.fits'
+                hdu1 = fits.open(cube.cubename)
+                hdu1['SCI'].data = model
+                hdu1['ERR'].data = err
+                hdu1.writeto(filename, overwrite=True)
+                hdu1.close()
+                specname = filename.split('_s3d.fits')[0] + '_x1d.fits'
+                hdu1 = fits.open(cube.cubename.split('_s3d.fits')[0] + '_x1d.fits')
+                hdu1.writeto(specname, overwrite=True)
+                hdu1.close()
+
+
+
+            else:
+                print('warning: incorrect wavelength range settings')
+
+    def subtr_model_image_command(self, add=True,cube_name='A'):
+        if cube_name == 'A':
+            cube = self.parent.parent.CUBE_A
+            # self.parent.parent.plot_3dcubeA.add_contours(add=add,level=level,lmin=lmin,lmax=lmax)
+        elif cube_name == 'B':
+            cube = self.parent.parent.CUBE_B
+            np.array(self.parent.parent.CUBE_B.data.wavelength)
+            # self.parent.parent.plot_3dcubeB.add_contours(add=add,level=level,lmin=lmin,lmax=lmax)
+        if 1:
+            self.parent.parent.plot_3dcube_median.add_from_file(self,
+                                                                filename='./output/detector3/interpolate_line_s3d.fits',
+                                                                add=True)
+            median_cube = self.parent.parent.plot_3dcube_median.cube
+
+            data = cube.data.data.copy()
+            if data.shape == median_cube.data.data.shape:
+                cube.data.data[~np.isnan(cube.data.data)] -= median_cube.data.data[
+                    ~np.isnan(cube.data.data)]
+                del median_cube
+
+
+
+
+    def calc_median_cube(self,add=True,mode='mean-weighted',save_cube=True,debug =True, method = '3Dsmothing'):
         '''
         :param add:
-        :param radius:
         :param mode:
         :param save_cube:
         :param debug:
@@ -2415,6 +2455,7 @@ class CUBElistTable(pg.TableWidget):
         '''
         if add:
             if method in ['3Dsmothing','2Dsmothing']:
+                radius = int(self.parent.parent.exp_commands.mean_kernel_rad.text())
                 print('Method of construction of the Background model', method)
                 print('kernel radius = ',radius)
                 cube = self.parent.parent.CUBE_B
@@ -2884,7 +2925,7 @@ class CUBElistTable(pg.TableWidget):
                     plt.show()
                     fig.savefig('./output/detector3/cash/' + cube.cubename.split('/')[-1] +'.png', bbox_inches='tight')
 
-            elif method == 'Interpolate-left':
+            elif method == 'Aver-left':
                 print('Background model', method)
                 cube = self.parent.parent.CUBE_A
 
@@ -3028,7 +3069,7 @@ class CUBElistTable(pg.TableWidget):
 
                     plt.show()
 
-            elif method == 'Interpolate-right':
+            elif method == 'Aver-right':
                 print('Background model', method)
                 cube = self.parent.parent.CUBE_A
 
@@ -3164,7 +3205,7 @@ class CUBElistTable(pg.TableWidget):
 
                     plt.show()
 
-            elif method == 'Interpolate-both':
+            elif method == 'Aver-both':
                 print('Background model', method)
                 cube = self.parent.parent.CUBE_A
 
@@ -3224,18 +3265,18 @@ class CUBElistTable(pg.TableWidget):
                     rad2 = float(self.parent.parent.exp_commands.mean_kernelB_rad.text())
 
                     result = data.copy()
-                    xc, yc, rad = cen_y, cen_x, rad1 * miri_psf_fwhm/2
-                    x_left,x_right = rad1 * miri_psf_fwhm/2,rad2 * miri_psf_fwhm/2
+                    xc, yc, rad1,rad2 = cen_y, cen_x, rad1 * miri_psf_fwhm/2.355,rad2 * miri_psf_fwhm/2.355
+                    x_left,x_right = rad1,rad2
 
                     x = np.arange(data.data.shape[1])
                     y = np.arange(data.data.shape[2])
                     X, Y = np.meshgrid(y, x)
-                    mask_qso = (X<3) + (X > (xc - x_left))*(X < (xc + x_right)) + (X > np.nanmax(X) - 3)
+                    mask_qso = (X<2) + (X > (xc - x_left))*(X < (xc + x_right)) + (X > np.nanmax(X) - 2)
                     mask_regions = mask_qso + np.isnan(mean_image)
                     if debug:
                         fig, ax = plt.subplots(1, 2, sharey=True, sharex=True)
                         ax[0].imshow(mean_image, origin='lower')
-                        circle1 = plt.Circle((xc, yc), rad, color='yellow', lw=2, fill=False)
+                        circle1 = plt.Circle((xc, yc), rad1, color='yellow', lw=2, fill=False)
                         ax[0].add_patch(circle1)
                         ax[0].axvline(xc - x_left)
                         ax[0].axvline(xc + x_right)
@@ -3287,11 +3328,11 @@ class CUBElistTable(pg.TableWidget):
                 if debug:
                     fig2, ax2 = plt.subplots(figsize=(12,2))
                     fontsize = 10
-                    ax2.plot(wavelength,np.nanmean(result[:, 2:10, 10], axis=1), label='$y=[0:10]$',c='tab:blue')
-                    ax2.plot(wavelength,np.nanmean(result[:, 10:20, 10], axis=1), label='$y=[10:20]$',c='tab:red')
+                    ax2.plot(wavelength,np.nanmean(result[:, 8:11, 10], axis=1), label='$y=[8:10]$',c='tab:blue')
+                    ax2.plot(wavelength,np.nanmean(result[:, 15:18, 10], axis=1), label='$y=[15:18]$',c='tab:red')
                     ax2_twin = ax2.twiny()
-                    ax2.plot(wavelength,np.nanmean(result[:, 20:28, 10], axis=1), label='$y=[20:30]$',zorder=10,c='tab:green')
-                    ax2_twin.plot(np.nanmean(result[:, 20:28, 10], axis=1), zorder=-10,c='tab:green')
+                    ax2.plot(wavelength,np.nanmean(result[:, 22:25, 10], axis=1), label='$y=[22:25]$',zorder=10,c='tab:green')
+                    ax2_twin.plot(np.nanmean(result[:, 22:25, 10], axis=1), zorder=-10,c='tab:green')
                     for axs in [ax2]:
                         #axs.tick_params(which='both', width=1, direction='in',
                         #                labelsize=fontsize,
@@ -3310,7 +3351,7 @@ class CUBElistTable(pg.TableWidget):
                         ax2_twin.set_xlabel('Wavelength coordinate', fontsize=fontsize)
                         ax2_twin.tick_params(which='major', length=5, labelsize=fontsize, direction='in')
                         ax2_twin.tick_params(which='minor', length=3, labelsize=fontsize, direction='in')
-                    ax2.text(8.65,25,'SB profile at Y-pixel in the Background Model', fontsize=fontsize)
+                    ax2.text(8.65,25,'SB profile at $y$-pixel in the Background Model', fontsize=fontsize)
                     ax2.set_ylim(-14,35)
                     #ax2.tick_params(top='off', which='both')
                     xl,xu = ax2.get_xlim()
@@ -3326,18 +3367,18 @@ class CUBElistTable(pg.TableWidget):
                     result_mean = np.nanmean(result, axis=0)
                     fig, ax = plt.subplots(1, 4, figsize=(12,3))
                     ax[0].imshow(np.log10(np.abs(mean_image)), vmin=vmin, vmax=vmax, origin='lower')
-                    circle1 = plt.Circle((xc, yc), rad, color='red', lw=2, fill=False)
-                    ax[0].axvline(xc - rad, lw=3)
-                    ax[0].axvline(xc + rad, lw=3)
-                    ax[0].axvline(1)
+                    circle1 = plt.Circle((xc, yc), rad1, color='red', lw=2, fill=False)
+                    ax[0].axvline(xc - rad1, lw=3)
+                    ax[0].axvline(xc + rad2, lw=3)
+                    #ax[0].axvline(1)
                     ax[0].add_patch(circle1)
                     ax[1].imshow(mask_regions, origin='lower')
-                    ax[1].axvline(xc - rad,lw=3)
-                    ax[1].axvline(xc + rad,lw=3)
+                    ax[1].axvline(xc - rad1,lw=3)
+                    ax[1].axvline(xc + rad2,lw=3)
                     ax[2].imshow(np.log10(np.abs(result_mean)), vmin=vmin, vmax=vmax, origin='lower')
                     im = ax[3].imshow(np.log10(np.abs(mean_image - result_mean)), vmin=vmin, vmax=vmax, origin='lower')
-                    circle2 = plt.Circle((xc, yc), rad, color='red', lw=2, fill=False)
-                    circle3 = plt.Circle((xc, yc), rad/5*2, color='blue', lw=2, fill=False,ls='--')
+                    circle2 = plt.Circle((xc, yc), rad1, color='red', lw=2, fill=False)
+                    circle3 = plt.Circle((xc, yc), 2*miri_psf_fwhm/2.355, color='blue', lw=2, fill=False,ls='--')
                     ax[3].add_patch(circle2)
                     ax[3].add_patch(circle3)
                     if 1:
@@ -3353,8 +3394,8 @@ class CUBElistTable(pg.TableWidget):
                             axs.xaxis.set_major_locator(MultipleLocator(10))
                             axs.yaxis.set_minor_locator(AutoMinorLocator(5))
                             axs.yaxis.set_major_locator(MultipleLocator(10))
-                            axs.set_xlabel('spaxel', fontsize=fontsize)
-                        ax[0].set_ylabel('spaxel', fontsize=fontsize)
+                            axs.set_xlabel('$x$ spaxel', fontsize=fontsize)
+                        ax[0].set_ylabel('$y$ spaxel', fontsize=fontsize)
                         if 1:
                             obj = cube_name.split('detector3//')[1][:5]
                             ch,dith = '',''
@@ -3377,160 +3418,160 @@ class CUBElistTable(pg.TableWidget):
 
                     plt.show()
 
+            ###############################
 
-            elif method == 'Interpolate2':
+            elif method == 'Diff':
                 print('Background model', method)
                 cube = self.parent.parent.CUBE_A
 
-                data = cube.data.data
-                err = cube.data.err
-                npix = data.shape[0]
+                data = cube.data.data.copy()
+                err = cube.data.err.copy()
+                (npix,nraw,ncol) = data.shape
+
+                data_diff_row = np.zeros_like(data)
+                for ind in np.linspace(nraw-2,0,nraw-1):
+                    i = int(ind)
+                    data_diff_row[:, i, :] = data[:, i, :]-data[:, i+1, :]
+                #data_diff_row[:,1:,:] = np.diff(data, axis=1)
+                data_diff_col = np.zeros_like(data)
+                data_diff_col[:,:,1:] = np.diff(data,axis=2)
+
+                data_corr_row= np.array(data_diff_row)
+                for ind in np.linspace(nraw-2,0,nraw-1):
+                    i = int(ind)
+                    f1 = data_corr_row[:,i,:]
+                    f2 = data_corr_row[:,i+1,:]
+                    #f3 = data_corr_row[:,i+2,:]
+                    fs = np.nansum([f1,f2],axis=0)
+                    data_corr_row[:,i,:]=fs
+
+
+                mean_image = np.nanmedian(data,axis=0)
+                mean_diff_row = np.nanmedian(data_diff_row,axis=0)
+                mean_corr_row = np.nanmedian(data_corr_row, axis=0)
+                mean_diff_col  = np.nanmedian(data_diff_col, axis=0)
+                if debug:
+                    fig, ax = plt.subplots(1, 3,sharex=True,sharey=True)
+                    vmin, vmax = np.nanquantile(np.log10(np.abs(mean_image)).flatten(), 0.05), np.nanquantile(
+                        np.log10(np.abs(mean_image)).flatten(), 0.95)
+                    ax[0].imshow(np.log10(np.abs(mean_image)), origin='lower', vmin=vmin, vmax=vmax)
+                    ax[1].imshow(np.log10(np.abs(mean_diff_row)), origin='lower', vmin=vmin, vmax=vmax)
+                    ax[2].imshow(np.log10(np.abs(mean_corr_row)), origin='lower', vmin=vmin, vmax=vmax)
+                    #ax[2].imshow(mean_diff_row, origin='lower',vmin=-2,vmax=2)
+
+                    plt.show()
+
+                mean_data = data - data_corr_row.copy()
+                mean_err = err.copy()
+                surf_brightness = np.zeros(npix)
+                surf_brightness_err = np.zeros(npix)
+            ###############################
+
+            elif method == 'Aver-up':
+                print('Background model', method)
+                cube = self.parent.parent.CUBE_A
+
+                data = cube.data.data.copy()
+                err = cube.data.err.copy()
+                (npix, nrow, ncol) = data.shape
+
+
+
+                nlow = int(self.parent.parent.exp_commands.mean_kernel_rad.text())
+                lst = np.zeros((npix, ncol))
+                for i in range(ncol):
+                    if i<=2:
+                        d = np.nanmedian(data[:, nlow:nrow - 2, 3:3+3], axis=1)
+                    elif i<=ncol-2:
+                        d = np.nanmedian(data[:, nlow:nrow - 2, i-2:i+1], axis=1)
+                    else:
+                        d = np.nanmedian(data[:, nlow:nrow - 2, ncol-5:ncol-2], axis=1)
+                    lst[:, i] = np.nanmedian(d, axis=1)
+
+                bkg_image = np.zeros_like(data)
+                for i in range(ncol):
+                    for j in range(nrow):
+                        bkg_image[:,j,i] = lst[:, i]
+                mean_image = np.nanmedian(data, axis=0)
+                mean_bkg = np.nanmedian(bkg_image, axis=0)
+                mean_diff = np.nanmedian(data-bkg_image, axis=0)
+                if debug:
+                    fig, ax = plt.subplots(1, 3, sharex=True, sharey=True)
+                    vmin, vmax = np.nanquantile(np.log10(np.abs(mean_image)).flatten(), 0.05), np.nanquantile(
+                        np.log10(np.abs(mean_image)).flatten(), 0.95)
+                    ax[0].imshow(np.log10(np.abs(mean_image)), origin='lower', vmin=vmin, vmax=vmax)
+                    ax[1].imshow(np.log10(np.abs(mean_bkg)), origin='lower', vmin=vmin, vmax=vmax)
+                    ax[2].imshow(np.log10(np.abs(mean_diff)), origin='lower', vmin=vmin, vmax=vmax)
+                    # ax[2].imshow(mean_diff_row, origin='lower',vmin=-2,vmax=2)
+
+                    plt.show()
+
+                mean_data = bkg_image
+                mean_err = err.copy()
+                surf_brightness = np.zeros(npix)
+                surf_brightness_err = np.zeros(npix)
+            ###############################
+
+            elif method == 'Test':
+                print('Background model', method)
+                cube = self.parent.parent.CUBE_A
+
+                data = cube.data.data.copy()
+                err = cube.data.err.copy()
+                (npix, nrow, ncol) = data.shape
+
+
+
+                #disp-integral image
+                data_comb =  np.nanmedian(data, axis=0)
+                data_comb /= np.nanmax(data_comb)
+
+                #mask pixels with integrated flux above 3sigma
+                from scipy.stats import norm
+                flux_lim = float(self.parent.parent.exp_commands.mean_kernel_rad.text())
+                mask_source_pixels = data_comb>norm.pdf(flux_lim, loc=0, scale=1)
+                #mask edge pixels
+                mask_source_pixels[nrow-2:,:] = np.nan
+                mask_source_pixels[ :2, :] = np.nan
+                mask_source_pixels[:, :2] = np.nan
+                mask_source_pixels[ :, ncol - 2:] = np.nan
+
+                #make data copy
+                bkg_image = np.array(data)
+                for i in range(npix):
+                    bkg_image[i][mask_source_pixels] = np.nan
+
+                lst = np.nanmedian(bkg_image,axis=(1,2))
+
+                bkg_image = np.zeros_like(data)
+                for i in range(ncol):
+                    for j in range(nrow):
+                        bkg_image[:, j, i] = lst[:]
 
                 mean_image = np.nanmean(data, axis=0)
-                #find the center
-                if 1:
-                    spatial_mask = mean_image != 0
-                    spatial_mask[:, 0] = 0
-                    spatial_mask[:, -1] = 0
-                    spatial_mask[0, :] = 0
-                    spatial_mask[-1, :] = 0
-                    for k in range(3):
-                        pos = np.where(spatial_mask > 0)
-                        spatial_mask2 = np.array(spatial_mask)
-                        for i, j in zip(pos[0], pos[1]):
-                            if spatial_mask[i - 1, j] == 0 or spatial_mask[i + 1, j] == 0 or spatial_mask[
-                                i, j - 1] == 0 or \
-                                    spatial_mask[i, j + 1] == 0:
-                                spatial_mask2[i, j] = 0
-                        spatial_mask = np.array(spatial_mask2)
-                    del (spatial_mask2)
-                    pos =np.argwhere((mean_image*spatial_mask == np.nanmax(mean_image*spatial_mask)) )[0]
-                    cen_x, cen_y = pos[0],pos[1]
-                    print('center:',cen_x, cen_y)
-
-                # read FWHM of the PSF
-                if 1:
-                    (timeind, time) = self.parent.parent.plot_3dcubeA.timeIndex(self.parent.parent.plot_3dcubeA.timeLine)
-                    lambda_local = self.parent.parent.CUBE_A.data.wavelength[timeind]
-                    miri_psf_fwhm = miri_psf_arcsec(lambda_local)
-                    wcs1 = self.parent.parent.CUBE_A.data.wcs
-                    delta_x = wcs1['CDELT1']
-                    miri_psf_fwhm *= 1 / 3600 / delta_x
-                    psf_rad = miri_psf_fwhm/2.355
-
-                if 1:
-                    result = data.copy()
-                    xc, yc, rad =cen_y, cen_x, 6*psf_rad
-                    circle_x = float(self.parent.parent.exp_commands.bkgr_circle_x.text())
-                    circle_y = float(self.parent.parent.exp_commands.bkgr_circle_y.text())
-                    circle_R = float(self.parent.parent.exp_commands.mean_kernel_rad.text())
-
-                    xc2, yc2, rad2 = circle_x, circle_y, circle_R*psf_rad
-
-                    x = np.arange(data.data.shape[1])
-                    y = np.arange(data.data.shape[2])
-                    X, Y = np.meshgrid(y, x)
-                    mask_qso = np.sqrt(np.power(X - xc, 2) + 0*np.power(Y - yc, 2)) < rad
-                    mask_gal = np.sqrt(np.power(X - xc2, 2) + np.power(Y - yc2, 2)) < rad2
-                    mask_regions = mask_qso+mask_gal
-                    mask_regions += np.isnan(mean_image)
-                    if 1:
-                        fig, ax = plt.subplots(1, 2,sharey=True, sharex=True)
-                        ax[0].imshow(mean_image,origin='lower')
-                        circle1 = plt.Circle((xc, yc), rad, color='yellow', lw=2, fill=False)
-                        circle2 = plt.Circle((xc2, yc2), rad2, color='red', lw=2, fill=False)
-                        ax[0].add_patch(circle1)
-                        ax[0].add_patch(circle2)
-                        ax[1].imshow(mask_regions,origin='lower')
-                        plt.show()
-
-                    # smoothind bkgr
-                    radius = 2
-                    filter_kernel = np.zeros((2 * radius + 1, 2 * radius + 1))
-                    for i in range(filter_kernel.shape[0]):
-                        for j in range(filter_kernel.shape[1]):
-                            if (i - radius) ** 2 + (j - radius) ** 2 <= radius ** 2:
-                                filter_kernel[i, j] = 1
-
-                    for l in range(npix):
-                        print('l: ', l,' out of ', npix)
-                        data_orig = data[l].copy()
-                        data_tmp = data_orig.copy()
-
-                        # smooth diff
-                        npix2 = scipy.signal.convolve2d(np.ones_like(data_tmp), filter_kernel, mode='same',
-                                                       boundary='fill', fillvalue=0)
-                        data_smoothed = scipy.signal.convolve2d(data_tmp, filter_kernel, mode='same', boundary='fill',
-                                                                fillvalue=0) / npix2
-                        data_smoothed[mask_regions] = np.nan
-                        #data_tmp = data_smoothed
-
-                        #
-                        from scipy.interpolate import RBFInterpolator
-                        mask_nan = ~np.isnan(data_smoothed.flatten())
-                        xobs = np.c_[X.flatten()[mask_nan], Y.flatten()[mask_nan]]
-                        yobs = data_smoothed.flatten()[mask_nan]
-                        #m = RBFInterpolator(xobs, yobs, kernel='multiquadric', epsilon=2, degree=2)
-                        m = RBFInterpolator(xobs, yobs, kernel='linear')
-                        #
-                        model = np.zeros_like(data_smoothed)
-                        for i, xi in enumerate(x):
-                            for k, yi in enumerate(y):
-                                model[i, k] = m([[yi, xi]])
-                        model[np.isnan(mean_image)] = np.nan
-                        #
-                        result[l, :, :] = model
-
-                if 1:
-                    surf_brightness = np.zeros(npix)
-                    surf_brightness_err = np.zeros(npix)
-
-                    for i in range(npix):
-                        surf_brightness[i] = np.nanmedian(((result[i, :, :])[mask_qso]).flatten())
-                        surf_brightness_err[i] = np.nanstd(((result[i, :, :])[mask_qso]).flatten())
-
-
-                if 1:
-                    # save background data cube
-                    mean_data = data.copy()
-                    mean_err = err.copy()
-                    mask_isnot_nan = ~np.isnan(mean_image)
-                    mean_data = result
-
-
-
-
+                mean_bkg = np.nanmean(bkg_image, axis=0)
+                mean_diff = np.nanmean(data - bkg_image, axis=0)
                 if debug:
-                    vmin,vmax = np.nanquantile(np.log10(np.abs(mean_image.flatten())), 0.05), np.nanquantile(np.log10(np.abs(mean_image.flatten())), 0.95)
-                    result_mean = np.nanmean(result, axis=0)
-                    fig, ax = plt.subplots(1, 4)
-                    ax[0].imshow(np.log10(np.abs(mean_image)), vmin=vmin, vmax=vmax,origin='lower')
-                    circle1 = plt.Circle((xc, yc), rad, color='yellow', lw=2, fill=False)
-                    circle2 = plt.Circle((xc2, yc2), rad2, color='red', lw=2, fill=False)
-                    ax[0].add_patch(circle1)
-                    ax[0].add_patch(circle2)
-                    ax[1].imshow(np.log10(np.abs(result_mean)), vmin=vmin, vmax=vmax,origin='lower')
-                    ax[2].imshow(np.log10(np.abs(mean_image-result_mean)), vmin=vmin, vmax=vmax,origin='lower')
-                    ax[3].plot(surf_brightness, label='bkg_1dspec')
-                    ax[3].legend()
+                    fig, ax = plt.subplots(1, 3, sharex=True, sharey=True)
+                    vmin, vmax = np.nanquantile(np.log10(np.abs(mean_image)).flatten(), 0.05), np.nanquantile(
+                        np.log10(np.abs(mean_image)).flatten(), 0.95)
+                    ax[0].imshow(np.log10(np.abs(mean_image)), origin='lower', vmin=vmin, vmax=vmax)
+                    im = np.log10(np.abs(mean_image))
+                    im[mask_source_pixels] = np.nan
+                    ax[1].imshow(im, origin='lower', vmin=vmin, vmax=vmax)
+                    ax[2].imshow(np.log10(np.abs(mean_diff)), origin='lower', vmin=vmin, vmax=vmax)
+                    # ax[2].imshow(mean_diff_row, origin='lower',vmin=-2,vmax=2)
 
-                    if 1:
-                        l = 45
-                        vmin, vmax = np.nanquantile(mean_image.flatten(), 0.05), np.nanquantile(mean_image.flatten(),
-                                                                                                0.95)
-                        fig, ax = plt.subplots(1, 3, sharex=True, sharey=True)
-                        ax[0].imshow(data[l, :, :], vmin=vmin, vmax=vmax,origin='lower')
-                        circle1 = plt.Circle((xc, yc), rad, color='yellow', lw=2, fill=False)
-                        circle2 = plt.Circle((xc2, yc2), rad2, color='red', lw=2, fill=False)
-                        ax[0].add_patch(circle1)
-                        ax[0].add_patch(circle2)
-                        ax[1].imshow(result[l, :, :], vmin=vmin, vmax=vmax,origin='lower')
-                        circle1 = plt.Circle((xc, yc), rad, color='yellow', lw=2, fill=False)
-                        circle2 = plt.Circle((xc2, yc2), rad2, color='red', lw=2, fill=False)
-                        ax[1].add_patch(circle1)
-                        ax[1].add_patch(circle2)
-                        ax[2].imshow(data[l, :, :] - result[l, :, :], vmin=vmin, vmax=vmax,origin='lower')
+                    fig2, ax2 = plt.subplots()
+                    ax2.plot(np.array(self.parent.parent.CUBE_A.data.wavelength),lst,label='Bkg model')
+                    ax2.legend()
                     plt.show()
+
+                mean_data = bkg_image
+                mean_err = err.copy()
+                surf_brightness = np.zeros(npix)
+                surf_brightness_err = np.zeros(npix)
+            ###############################
 
             if save_cube:
                 filename = './output/detector3/cash/median_cube.fits'
@@ -3675,7 +3716,8 @@ class chooseExpWidget(QWidget):
                                 lst.append(dirpath+ '/'+f)
                                 params.append(self.readfile(pathotofile=dirpath,filename=f))
                                 self.tablefiles[f] = f
-            codenames = ['TARGPROP','BAND','CHANNEL','ASNFILE','MRSMAT','OUTLIR','BKGSUB']
+            #codenames = ['TARGPROP','BAND','CHANNEL','ASNFILE','MRSMAT','OUTLIR','BKGSUB']
+            codenames = ['TARGPROP', 'BAND', 'CHANNEL', 'ASNFILE'] #, 'MRSMAT', 'OUTLIR', 'BKGSUB']
             print('updated lst:',lst)
         return lst,params,codenames
 
@@ -3705,7 +3747,8 @@ class chooseExpWidget(QWidget):
         if 'BKGR_SUB_BY_AUTHOR' in header.keys():
             s_bkgsub = str(header['BKGR_SUB_BY_AUTHOR'])
 
-        return [targ_name,miri_band,miri_channel,asn_file,s_mrsmat,s_outlir,s_bkgsub]
+        #return [targ_name,miri_band,miri_channel,asn_file,s_mrsmat,s_outlir,s_bkgsub]
+        return [targ_name, miri_band, miri_channel,asn_file]
 
     def update_list_of_files(self):
         #table = self.table.data.copy()
@@ -4136,7 +4179,7 @@ class expRunWidget(QWidget):
         self.calc_median_flux.resize(200, 60)
         horizontal_layout.addWidget(self.calc_median_flux)
         self.calc_median_mode = QComboBox()
-        self.calc_median_mode.addItems(['3Dsmothing', '2Dsmothing','Average','Pix2pix','Circle','Annual','2Regions','Interpolate-left','Interpolate-right','Interpolate-both'])
+        self.calc_median_mode.addItems(['3Dsmothing', '2Dsmothing','Average','Pix2pix','Circle','Annual','2Regions','Aver-left','Aver-right','Aver-both','Aver-up','Test'])
         self.calc_median_mode.setCurrentIndex(4)
         #self.calc_median_mode.setFixedSize(90, 30)
         #self.calc_median_mode.resize(90, 30)
@@ -4232,9 +4275,9 @@ class expRunWidget(QWidget):
         layout.addLayout(l)
 
         l = QVBoxLayout(self)
-        l.addWidget(QLabel('ROI panel:'))
+        #l.addWidget(QLabel('ROI panel:'))
         horizontal_layout = QHBoxLayout(self)
-        l.addLayout(horizontal_layout)
+        horizontal_layout.addWidget(QLabel('ROI panel:'))
         self.select_roi = QPushButton('Select ROI')
         #self.okButton = QPushButton("Close")
         #self.okButton.setFixedSize(110, 30)
@@ -4357,9 +4400,9 @@ class expRunWidget(QWidget):
         layout.addLayout(l)
 
         l = QVBoxLayout(self)
-        l.addWidget(QLabel('Contours:'))
+        #l.addWidget(QLabel('Contours:'))
         horizontal_layout = QHBoxLayout(self)
-        l.addLayout(horizontal_layout)
+        horizontal_layout.addWidget(QLabel('Contours:'))
         self.show_gradient = QPushButton('Image', self, checkable=True)
         self.show_gradient.setChecked(False)
         self.show_gradient.clicked[bool].connect(partial(self.ShowImage))
@@ -4367,7 +4410,7 @@ class expRunWidget(QWidget):
         self.show_gradient.resize(200, 60)
         horizontal_layout.addWidget(self.show_gradient)
         self.level_value = QLineEdit()
-        self.level_value.setText(str(0.9))
+        self.level_value.setText(str(-1))
         # self.level_value.resize(60, 30)
         cb = self.level_value
         width = cb.minimumSizeHint().width()
@@ -4390,16 +4433,42 @@ class expRunWidget(QWidget):
         width = cb.minimumSizeHint().width()
         cb.setFixedWidth(width)
         horizontal_layout.addWidget(self.plot_image_lmax)
+
+        self.model_image = QPushButton('Model', self, checkable=True)
+        self.model_image.setChecked(False)
+        self.model_image.clicked[bool].connect(partial(self.ModelImage))
+        # self.show_gradient.setFixedSize(200, 60)
+        self.model_image.resize(200, 60)
+        horizontal_layout.addWidget(self.model_image)
+
+        self.subtract_image = QPushButton('Subtract', self, checkable=True)
+        self.subtract_image.setChecked(False)
+        self.subtract_image.clicked[bool].connect(partial(self.SbtrImage))
+        # self.show_gradient.setFixedSize(200, 60)
+        self.subtract_image.resize(200, 60)
+        horizontal_layout.addWidget(self.subtract_image)
+
         horizontal_layout.addStretch(1)
         l.addLayout(horizontal_layout)
         layout.addLayout(l)
 
         l = QVBoxLayout(self)
-        l.addWidget(QLabel('Fringes:'))
+        #l.addWidget(QLabel('Fringes:'))
         horizontal_layout = QHBoxLayout(self)
+        horizontal_layout.addWidget(QLabel('Fringes:'))
 
-
-        self.fringe_correction = QPushButton('FringeCorr', self, checkable=False)
+        self.fringe_Model = QPushButton('Model', self, checkable=False)
+        # self.set_roi_radius.setChecked(False)
+        self.fringe_Model.clicked[bool].connect(self.make_fringe_model)
+        # self.set_roi_radius.setFixedSize(200, 60)
+        # self.prepare_extraction.resize(200, 60)
+        cb = self.fringe_Model
+        width = cb.minimumSizeHint().width()
+        cb.setFixedWidth(width)
+        # self.select_roi.clicked[bool].connect(self.ShowROI)
+        # self.select_roi.setFixedSize(200, 60)
+        horizontal_layout.addWidget(self.fringe_Model)
+        self.fringe_correction = QPushButton('Correct', self, checkable=False)
         # self.set_roi_radius.setChecked(False)
         self.fringe_correction.clicked[bool].connect(self.make_fringe_correction)
         # self.set_roi_radius.setFixedSize(200, 60)
@@ -4421,16 +4490,16 @@ class expRunWidget(QWidget):
         cb.setFixedWidth(width)
         horizontal_layout.addWidget(self.fringe_correction_mode)
 
-        self.fringe_correction_for_list = QPushButton('Fringe2List', self, checkable=False)
-        self.fringe_correction_for_list.clicked[bool].connect(self.make_fringe_correction_for_list)
+        #%self.fringe_correction_for_list = QPushButton('Fringe2List', self, checkable=False)
+        #self.fringe_correction_for_list.clicked[bool].connect(self.make_fringe_correction_for_list)
         # self.set_roi_radius.setFixedSize(200, 60)
         # self.prepare_extraction.resize(200, 60)
-        cb = self.fringe_correction_for_list
-        width = cb.minimumSizeHint().width()
-        cb.setFixedWidth(width)
+        #cb = self.fringe_correction_for_list
+        #width = cb.minimumSizeHint().width()
+        #cb.setFixedWidth(width)
         # self.select_roi.clicked[bool].connect(self.ShowROI)
         # self.select_roi.setFixedSize(200, 60)
-        horizontal_layout.addWidget(self.fringe_correction_for_list)
+        #horizontal_layout.addWidget(self.fringe_correction_for_list)
 
         horizontal_layout.addStretch(1)
         l.addLayout(horizontal_layout)
@@ -4484,13 +4553,7 @@ class expRunWidget(QWidget):
     def ShowSlit(self):
         self.parent.Cubes_A.table.show_roi_slit_command(add=self.parent.exp_commands.show_roi_slit.isChecked())
 
-        if 0:
-            def CalcMedCube(self):
-                self.parent.Cubes_A.table.calc_median_cube(add=self.parent.exp_commands.calc_median_flux.isChecked(),
-                                                           radius=int(self.parent.exp_commands.mean_kernel_rad.text()))
 
-                filename = './output/detector3/cash/median_cube.fits'
-                self.parent.plot_3dcube_median.show()
 
     def ShowImage(self,add=None):
         level = float(self.level_value.text())
@@ -4505,6 +4568,24 @@ class expRunWidget(QWidget):
            self.parent.Cubes_A.table.show_gradient_command(add=add,level=level,lmin=lmin,lmax=lmax,cube_name=active_cube_name)
         elif active_cube_name == 'B':
             self.parent.Cubes_B.table.show_gradient_command(add=add, level=level, lmin=lmin, lmax=lmax,cube_name=active_cube_name)
+
+    def ModelImage(self,add=None):
+        lmin = float(self.parent.exp_commands.plot_image_lmin.text())
+        lmax = float(self.parent.exp_commands.plot_image_lmax.text())
+        active_cube_name =  self.parent.exp_commands.active_cube_name.currentText()
+        if active_cube_name == 'A':
+           self.parent.Cubes_A.table.model_image_command(add=add,lmin=lmin,lmax=lmax,cube_name=active_cube_name)
+        elif active_cube_name == 'B':
+            self.parent.Cubes_B.table.model_image_command(add=add,lmin=lmin, lmax=lmax,cube_name=active_cube_name)
+
+    def SbtrImage(self,add=None):
+        active_cube_name = self.parent.exp_commands.active_cube_name.currentText()
+        if active_cube_name == 'A':
+            self.parent.Cubes_A.table.subtr_model_image_command(add=add,  cube_name=active_cube_name)
+        elif active_cube_name == 'B':
+            self.parent.Cubes_B.table.subtr_model_image_command(add=add, cube_name=active_cube_name)
+
+
     def SetRoi_radius(self,add=True, roi_type=None,roi_size=None):
         print('')
         if roi_type == None:
@@ -4588,65 +4669,66 @@ class expRunWidget(QWidget):
             spec1d[:,2] = spec/50
             np.savetxt('./output/detector3/background/'+name+'_median.dat',spec1d)
 
-    def make_fringe_correction(self,s=None,flag_update_data=True,debug=False,show_results=True,brightness_level = 0.95):
-        mode = 'Custom_multi' #self.parent.exp_commands.fringe_correction_mode.text()
-        if mode == 'Custom_multi':
+    def make_fringe_model(self,s=None,flag_update_data=True,debug=False,show_results=False,snr_lolimit = 20):
+        from scripts.fringe_correction import spectrum as sp
+        from scripts.fringe_correction import fringe_custom_pix_diff_model
 
-            radius_warm_pixles_window = 3
-            integrated_spectrum_mode = 'synthetic'
-            test_procedure = False
-            first_source = True
-            second_source = True
+        #select pixel within 90% of the highest flux
+        cube_name = self.extract_1d_roi_cube.currentText()
+        if cube_name == '(A)':
+            cube = self.parent.CUBE_A
+            image = self.parent.CUBE_A.data
+            wavel = self.parent.CUBE_A.data.wavelength
+            wcs = self.parent.CUBE_A.data.wcs
+        elif cube_name == '(B)':
+            cube = self.parent.CUBE_B
+            image = self.parent.CUBE_B.data
+            wavel = self.parent.CUBE_B.data.wavelength
+            wcs = self.parent.CUBE_B.data.wcs
+        #read image
+        image_comb = np.nanmedian(image.data, axis=0)                #median image
+        image_ind = np.indices((image_comb.shape[0],image_comb.shape[1]))  # array with pix coordinates
+        # define miri psf size
+        miri_psf_fwhm = miri_psf_arcsec(np.nanmean(wavel)) * (1 / 3600 / wcs['CDELT1'])
+        miri_psf_sigma = miri_psf_fwhm / 2.355
 
-            from scripts.fringe_correction import spectrum as sp
-            from scripts.fringe_correction import fringe_custom_multipix_model,fringe_custom_correction_second_pixel,fringe_custom_correction_1d
+        #mask pixels near the edge (spatial_mask)
+        if 1:
+            edge_spatial_mask = image_comb != 0
+            edge_spatial_mask[:,0] = 0
+            edge_spatial_mask[:, -1] = 0
+            edge_spatial_mask[0,:] = 0
+            edge_spatial_mask[-1, :] = 0
+            for k in range(3):
+                pos = np.where(edge_spatial_mask > 0)
+                spatial_mask2 = np.array(edge_spatial_mask)
+                for i,j in zip(pos[0],pos[1]):
+                    if edge_spatial_mask[i-1,j] == 0 or edge_spatial_mask[i+1,j]==0 or edge_spatial_mask[i,j-1] == 0 or edge_spatial_mask[i,j+1]==0:
+                        spatial_mask2[i , j] = 0
+                edge_spatial_mask = np.array(spatial_mask2)
+            del(spatial_mask2)
 
-            #select pixel within 90% of the highest flux
-            cube_name = self.extract_1d_roi_cube.currentText()
-            if cube_name == '(A)':
-                image = self.parent.CUBE_A.data
-                wavel = self.parent.CUBE_A.data.wavelength
-                channel = self.parent.CUBE_A.data.channel
-                wcs = self.parent.CUBE_A.data.wcs
-            elif cube_name == '(B)':
-                image = self.parent.CUBE_B.data
-                wavel = self.parent.CUBE_B.data.wavelength
-                channel = self.parent.CUBE_B.data.channel
-                wcs = self.parent.CUBE_B.data.wcs
-            #read image
-            image_comb = np.nanmedian(image.data, axis=0)                #median image
-            image_ind = np.indices((image_comb.shape[0],image_comb.shape[1]))  # array with pix coordinates
-            # define miri psf size
-            miri_psf_fwhm = miri_psf_arcsec(np.nanmean(wavel)) * (1 / 3600 / wcs['CDELT1'])
-            miri_psf_sigma = miri_psf_fwhm / 2.355
+        #search for the brightest pixel
+        d_max = np.nanmax(image_comb[edge_spatial_mask])
+        image_comb[np.isnan(image_comb)] = 0
+        pos_brightest = np.argwhere(image_comb==d_max)[0]
+        print('position of the brightest pixel:', pos_brightest)
 
-            #mask pixels near the edge (spatial_mask)
-            if 1:
-                edge_spatial_mask = image_comb != 0
-                edge_spatial_mask[:,0] = 0
-                edge_spatial_mask[:, -1] = 0
-                edge_spatial_mask[0,:] = 0
-                edge_spatial_mask[-1, :] = 0
-                for k in range(3):
-                    pos = np.where(edge_spatial_mask > 0)
-                    spatial_mask2 = np.array(edge_spatial_mask)
-                    for i,j in zip(pos[0],pos[1]):
-                        if edge_spatial_mask[i-1,j] == 0 or edge_spatial_mask[i+1,j]==0 or edge_spatial_mask[i,j-1] == 0 or edge_spatial_mask[i,j+1]==0:
-                            spatial_mask2[i , j] = 0
-                    edge_spatial_mask = np.array(spatial_mask2)
-                del(spatial_mask2)
-
-            #search for the brightest pixel
-            d_max = np.nanmax(image_comb[edge_spatial_mask])
-            image_comb[np.isnan(image_comb)] = 0
-            pos_brightest = np.argwhere(image_comb==d_max)[0]
-            print('position of the brightest pixel:', pos_brightest)
-
+        #derive fringes in spectra relative to the model
+        if 1:
             #select pixels near the brightest pixel (cross-structure)
             pixels_to_fit = []
-            pos_tmp = [[pos_brightest[0],pos_brightest[1]],
-                 [pos_brightest[0],pos_brightest[1]-1],[pos_brightest[0],pos_brightest[1]+1],
-                 [pos_brightest[0]-1,pos_brightest[1]],[pos_brightest[0]+1,pos_brightest[1]]]
+            pos_tmp = [[pos_brightest[0]-1,pos_brightest[1]-1],[pos_brightest[0],pos_brightest[1]-1],
+                       [pos_brightest[0]+1,pos_brightest[1]-1]]
+            #[pos_brightest[0]-1,pos_brightest[1]],[pos_brightest[0]+1,pos_brightest[1]]]
+            #pos_tmp.append([pos_brightest[0],pos_brightest[1]]) # add central spaxel
+            if 1:
+                plt.subplots()
+                plt.imshow(image_comb,origin='lower')
+                plt.plot(pos_brightest[1]-1,pos_brightest[0]-1,'o')
+                plt.plot(pos_brightest[1]-1,pos_brightest[0], 'o')
+                plt.plot(pos_brightest[1] - 1, pos_brightest[0]+1, 'o')
+                plt.show()
             for p in pos_tmp:
                 pixels_to_fit.append(sp(x=wavel, y=np.array(image.data[:,p[0],p[1]]), err=np.array(image.err[:,p[0],p[1]])))
             del pos_tmp
@@ -4659,10 +4741,11 @@ class expRunWidget(QWidget):
                 np.savetxt('/home/slava/science/codes/python/jwst/output/tmp/fringe/spaxel_'+str(k)+'.spec1d',s_tmp)
 
             # calc the integrated_flux
-            if integrated_spectrum_mode == 'median':
+            mode = 'synthetic'
+            if mode == 'median':
                 # define mask for the integrated spectrum: within "brightness_level" %  of the maximal brightness
                 d = image_comb / d_max
-                mask_warm_pixels = (d > 1 - brightness_level) * edge_spatial_mask
+                mask_warm_pixels = (d > 0.2) * edge_spatial_mask
                 print('fringe correction: number of warm pixels', np.sum(mask_warm_pixels))
                 mask_radial_constraint = np.sqrt((image_ind[0] - pos_brightest[0]) ** 2 + (
                             image_ind[1] - pos_brightest[1]) ** 2) < radius_warm_pixles_window
@@ -4672,9 +4755,10 @@ class expRunWidget(QWidget):
                 flux = np.nansum([image.data[:, posx, posy] for posx, posy in zip(pos[0], pos[1])], axis=0)
                 ferr = np.power(np.nansum([np.power(image.err[:, posx, posy], 2) for posx, posy in zip(pos[0], pos[1])], axis=0), 0.5)
                 sp_integrated = sp(x=wavel, y=np.array(flux), err=np.array(ferr))
-            elif integrated_spectrum_mode == 'synthetic':
+            elif mode == 'synthetic':
                 #read continuum from the file
-                f = np.loadtxt('/home/slava/science/research/kulkarni/JWST-DLAs/ID2441/Continuum/fit_cont.dat')
+                #f = np.loadtxt('/home/slava/science/research/kulkarni/JWST-DLAs/ID2441/Continuum/fit_contA.dat')
+                f = np.loadtxt('/home/slava/science/research/kulkarni/JWST-DLAs/ID2441/Continuum/sightlineA.txt')
                 f_interp = interp1d(f[:,0], f[:,1], fill_value='extrapolate')
                 sp_integrated = sp(x=wavel, y=f_interp(wavel), err=f_interp(wavel)*0.01)
                 if 1:
@@ -4698,24 +4782,133 @@ class expRunWidget(QWidget):
                     plt.show()
 
             #calcualte the fringe model for the brightest pixel
-            fringe_fq_model = fringe_custom_multipix_model(s_pix_array=pixels_to_fit, s_mean=sp_integrated.copy(), debug=False,
+            fringe_fq_model = fringe_custom_multipix_model(s_pix_array=pixels_to_fit, s_mean=sp_integrated.copy(), debug=True,
                                            show_fit_chunks=False)
+        #derive fringes in spectra using the difference between spaxels
+        if 0:
+            # select pixels near the brightest pixel (cross-structure)
+            pixels_to_left,pixels_to_right = [],[]
+            pos_left = [[pos_brightest[0] - 1, pos_brightest[1] - 1],
+                 [pos_brightest[0], pos_brightest[1] - 1],
+                       [pos_brightest[0] + 1, pos_brightest[1] - 1]]
+            pos_right = [[pos_brightest[0] - 1, pos_brightest[1] + 1],
+                 [pos_brightest[0], pos_brightest[1] + 1],
+                        [pos_brightest[0] + 1, pos_brightest[1] + 1]]
 
-            if test_procedure:
-                fringe_custom_correction_1d(sp(x=wavel, y=np.array(image.data[:, pos_brightest[0],pos_brightest[1]]),
-                                           err=np.array(image.err[:, pos_brightest[0],pos_brightest[1]])),
-                                           sp_integrated.copy(), debug=True, show_fit_chunks=False,
-                                        fringe_fq_model=fringe_fq_model, title='brightest (test)',channel=int(channel))
+            if 1:
+                plt.subplots()
+                plt.imshow(image_comb, origin='lower')
+                for p in pos_left:
+                    plt.plot(p[1],p[0], 'o',color='red')
+                for p in pos_right:
+                    plt.plot(p[1],p[0], 'o',color='blue')
+                plt.show()
+            for p in pos_left:
+                pixels_to_left.append(sp(x=wavel, y=np.array(image.data[:, p[0], p[1]]), err=np.array(image.err[:, p[0], p[1]])))
+            for p in pos_right:
+                pixels_to_right.append(sp(x=wavel, y=np.array(image.data[:, p[0], p[1]]), err=np.array(image.err[:, p[0], p[1]])))
+
+            del pos_left,pos_right
+            # save spectra in tmp folder
+            for k, p in enumerate(pixels_to_left):
+                s_tmp = np.zeros(shape=(p.x.shape[0], 3))
+                s_tmp[:, 0] = p.x
+                s_tmp[:, 1] = p.y
+                s_tmp[:, 2] = p.err
+                np.savetxt('/home/slava/science/codes/python/jwst/output/tmp/fringe/spaxel_left_' + str(k) + '.spec1d',
+                           s_tmp)
+            for k, p in enumerate(pixels_to_right):
+                s_tmp = np.zeros(shape=(p.x.shape[0], 3))
+                s_tmp[:, 0] = p.x
+                s_tmp[:, 1] = p.y
+                s_tmp[:, 2] = p.err
+                np.savetxt('/home/slava/science/codes/python/jwst/output/tmp/fringe/spaxel_right_' + str(k) + '.spec1d',
+                           s_tmp)
+
+            # calculalte the fringe model for the brightest pixel
+            fringe_fq_model = fringe_custom_pix_diff_model(s_pix_array=pixels_to_left, s_ref_array=pixels_to_right,
+                                                           debug=True,
+                                                           show_fit_chunks=False)
+            cube.fringe_fq_model = fringe_fq_model
+            plt.show()
+
+
+    def make_fringe_correction(self,s=None,flag_update_data=True,debug=False,snr_lolimit=20):
+
+        from scripts.fringe_correction import spectrum as sp
+        mode = self.parent.exp_commands.fringe_correction_mode.currentText()
+
+        # select pixel within 90% of the highest flux
+        cube_name = self.extract_1d_roi_cube.currentText()
+        if cube_name == '(A)':
+            cube = self.parent.CUBE_A
+            image = self.parent.CUBE_A.data
+            wavel = self.parent.CUBE_A.data.wavelength
+            channel = self.parent.CUBE_A.data.channel
+            wcs = self.parent.CUBE_A.data.wcs
+            band = self.parent.CUBE_A.data.band
+        elif cube_name == '(B)':
+            cube = self.parent.CUBE_B
+            image = self.parent.CUBE_B.data
+            wavel = self.parent.CUBE_B.data.wavelength
+            channel = self.parent.CUBE_B.data.channel
+            wcs = self.parent.CUBE_B.data.wcs
+            band = self.parent.CUBE_B.data.band
+        # read image
+        image_comb = np.nanmedian(image.data, axis=0)
+        image_snr = np.nanmedian(np.abs(image.data/image.err), axis=0)# median image
+        image_ind = np.indices((image_comb.shape[0], image_comb.shape[1]))  # array with pix coordinates
+        # define miri psf size
+        miri_psf_fwhm = miri_psf_arcsec(np.nanmean(wavel)) * (1 / 3600 / wcs['CDELT1'])
+        miri_psf_sigma = miri_psf_fwhm / 2.355
+
+        # mask pixels near the edge (spatial_mask)
+        edge_spatial_mask = image_comb != 0
+        edge_spatial_mask[:, 0] = 0
+        edge_spatial_mask[:, -1] = 0
+        edge_spatial_mask[0, :] = 0
+        edge_spatial_mask[-1, :] = 0
+        for k in range(3):
+            pos = np.where(edge_spatial_mask > 0)
+            spatial_mask2 = np.array(edge_spatial_mask)
+            for i, j in zip(pos[0], pos[1]):
+                if edge_spatial_mask[i - 1, j] == 0 or edge_spatial_mask[i + 1, j] == 0 or edge_spatial_mask[
+                    i, j - 1] == 0 or edge_spatial_mask[i, j + 1] == 0:
+                    spatial_mask2[i, j] = 0
+            edge_spatial_mask = np.array(spatial_mask2)
+        del (spatial_mask2)
+
+        # search for the brightest pixel
+        d_max = np.nanmax(image_comb[edge_spatial_mask])
+        image_comb[np.isnan(image_comb)] = 0
+        pos_brightest = np.argwhere(image_comb == d_max)[0]
+        print('position of the brightest pixel:', pos_brightest)
+
+
+        if mode == 'Custom':
+            template_case = 'polyfit' #'complex'
+
+            from scripts.fringe_correction import (fringe_custom_correction_1d,fringe_custom_pix_diff_model)
+
+
+
+            if hasattr(cube,'fringe_fq_model'):
+                fringe_fq_model = cube.fringe_fq_model
+
+
             # calculate and apply the correction for masked pixels
-            if first_source:
+            if template_case == 'composite':
+
+                d = image_comb / d_max
+                mask_warm_pixels = (image_snr > snr_lolimit) * edge_spatial_mask
+
                 pos = np.where(mask_warm_pixels == True)
-                #save orginal integrated flux
                 if 1:
                     flux = np.nanmean([image.data[:, posx, posy] for posx, posy in zip(pos[0], pos[1])], axis=0)
                     ferr = np.power(
                         np.nansum([np.power(image.err[:, posx, posy], 2) for posx, posy in zip(pos[0], pos[1])], axis=0),
                         0.5)
-                    s_integrated_A = sp(x=wavel, y=np.array(flux), err=np.array(ferr))
+                    sp_integrated = sp(x=wavel, y=np.array(flux), err=np.array(ferr))
 
                 pix_number = 0
                 for posx, posy in zip(pos[0], pos[1]):
@@ -4730,111 +4923,242 @@ class expRunWidget(QWidget):
                     sp_i_fringe_model = fringe_custom_correction_1d(sp_i, sp_integrated.copy(), debug=debug, show_fit_chunks=False,
                                                 fringe_fq_model=fringe_fq_model,title='('+str(posx)+','+str(posy)+')')
 
-                    #(sp_i_model, fr_model_i) = fringe_custom_correction_second_pixel(s_pix= sp_i.copy(), s_mean=sp_integrated.copy(), debug=debug,
-                    #                                                             show_fit_chunks=0, fringe_init=fr_model,
-                    #                                                                 label = str(round(posx,1))+' '+str(round(posy,1)))
+
                     if flag_update_data:
                         image.data[:, posx, posy] -= sp_i_fringe_model.y
 
-            if second_source == True:
-                sB_coords = self.parent.CUBE_A.conv_world_coord(t=6.53040021, x=278.41620026, y=-21.06127259,mode ='pipeline_world_to_pix')
-                print(sB_coords)
-                mask_warm_pixels_B = np.sqrt((image_ind[0] -sB_coords[2]) ** 2 + (image_ind[1] - sB_coords[1]) ** 2) < radius_warm_pixles_window*miri_psf_sigma
-                mask_warm_pixels_B*=edge_spatial_mask
-                mask_warm_pixels_B *= (image_comb  > (1 - brightness_level)*np.nanmax(image_comb[mask_warm_pixels_B]))
-                #
-                mask_warm_pixels_B *=~mask_warm_pixels
+            elif template_case == 'polyfit':
 
-                posB = np.where(mask_warm_pixels_B == True)
-                flux_B = np.nanmean([image.data[:, posx, posy] for posx, posy in zip(posB[0], posB[1])], axis=0)
-                ferr_B = np.power(np.nansum([np.power(image.err[:, posx, posy], 2) for posx, posy in zip(posB[0], posB[1])], axis=0), 0.5)
-                s_integrated_B = sp(x=wavel, y=np.array(flux_B), err=np.array(ferr_B))
+                d = image_comb / d_max
+                mask_warm_pixels = (image_snr>snr_lolimit)* edge_spatial_mask
+                mask_corrected_pixels = np.zeros_like(mask_warm_pixels)
 
-                # calculate the fringe correction for masked "bright" pixels
-                #mask_warm_pixels_B_plot = np.sqrt((image_ind[0] - sB_coords[2]) ** 2 + (image_ind[1] - sB_coords[1]) ** 2) < 1 * miri_psf_sigma
-                mask_warm_pixels_B_plot = mask_warm_pixels_B
-                posB = np.where(mask_warm_pixels_B_plot == True)
+
+                pos = np.where(mask_warm_pixels == True)
                 pix_number = 0
-                for posx, posy in zip(posB[0], posB[1]):
-                    print(pix_number, ' from ', pos[0].shape[0])
-                    print('pix coord (B):', posx, posy, ' relative brightness: ', d[posx, posy])
+                for posx, posy in zip(pos[0], pos[1]):
+                    print(pix_number,' from ',pos[0].shape[0])
+                    print('pix coord (A):',posx, posy,' relative brightness: ',d[posx,posy])
+                    debug=True
+                    if pix_number>10:
+                        debug = False
+                    flux = np.array(image.data[:, posx, posy])
+                    ferr = np.array(image.err[:, posx, posy])
+
+
+                    sp_i = sp(x=wavel, y=flux, err=ferr)
+                    mask_nan = np.isnan(np.array(flux))
+                    from numpy.polynomial import Chebyshev
+                    cheb_fit = Chebyshev.fit(sp_i.x[~mask_nan], np.array(flux)[~mask_nan], deg=3)
+                    #z = np.polyfit(sp_i.x[~mask_nan], np.array(flux)[~mask_nan], 10)
+                    sp_i_model = sp(x=wavel, y=cheb_fit(sp_i.x), err=ferr)
+
+                    sp_i_fringe_model = fringe_custom_correction_1d(sp_i, sp_i_model.copy(), debug=debug, show_fit_chunks=False,
+                                                fringe_fq_model=fringe_fq_model,title='('+str(posx)+','+str(posy)+')')
+                    mask_corrected_pixels[posx, posy] = 1
+
+
+                    if flag_update_data:
+                        image.data[:, posx, posy] -= sp_i_fringe_model.y
                     pix_number += 1
-                    if pix_number<100:
+
+                fig, ax = plt.subplots(1, 2, sharex=True, sharey=True)
+                ax[0].imshow(d, origin='lower')
+                ax[1].imshow(mask_corrected_pixels, origin='lower')
+                # plot mask
+                x = np.arange(mask_warm_pixels.shape[1])
+                y = np.arange(mask_warm_pixels.shape[0])
+                X, Y = np.meshgrid(x, y)
+                ax[0].contour(X, Y, mask_warm_pixels.astype(float), levels=[0], colors='red', linewidths=2, vmin=0,
+                              vmax=1)
+                plt.show()
+            # set quasar images model
+            elif template_case == 'complex':
+                #f = np.loadtxt('/home/slava/science/research/kulkarni/JWST-DLAs/ID2441/Continuum/fit_contA.dat')
+                f = np.loadtxt('/home/slava/science/projects/jwst/ID2441/Continuum/sightlineA.txt')
+                #f = np.loadtxt('/home/slava/science/research/kulkarni/JWST-DLAs/ID2441/Continuum/QSO-B1830-211-SIGHTLINEB_3A_ch3-short_FR_s3d_(A)_green.spec1d')
+                f_interp = interp1d(f[:, 0], f[:, 1], fill_value='extrapolate')
+                sp_integrated_A = sp(x=wavel, y=f_interp(wavel), err=f_interp(wavel) * 0.01)
+                f = np.array(np.nanmedian(sp_integrated_A.y))
+                sp_integrated_A.y /= f
+                sp_integrated_A.err /= f
+
+                #f = np.loadtxt('/home/slava/science/research/kulkarni/JWST-DLAs/ID2441/Continuum/fit_contB.dat')
+                f = np.loadtxt('/home/slava/science/projects/jwst/ID2441/Continuum/sightlineB.txt')
+                #f = np.loadtxt('/home/slava/science/research/kulkarni/JWST-DLAs/ID2441/Continuum/QSO-B1830-211-SIGHTLINEB_3A_ch3-short_FR_s3d_(A)_red.spec1d')
+                f_interp = interp1d(f[:, 0], f[:, 1], fill_value='extrapolate')
+                sp_integrated_B = sp(x=wavel, y=f_interp(wavel), err=f_interp(wavel) * 0.01)
+                f = np.array(np.nanmedian(sp_integrated_B.y))
+                sp_integrated_B.y /= f
+                sp_integrated_B.err /= f
+
+                # set quasar images coordinates
+                sA_coords = self.parent.CUBE_A.conv_world_coord(t=wavel[10], x=278.416405, y=-21.061055,
+                                                                mode='pipeline_world_to_pix')
+                posA = [int(sA_coords[2]),int(sA_coords[1])]
+                #mask_radA = np.sqrt((image_ind[0] - posA[0]) ** 2 + (image_ind[1] - posA[1]) ** 2) <= 1
+                mask_radA = ((image_ind[0] - posA[0] <= 1)*(image_ind[0] - posA[0] >=0)*
+                             (image_ind[1] - posA[1] <= 1) * (image_ind[1] - posA[1] >= 0))
+                im1 = np.array(image_comb)
+                im1[~mask_radA] = np.nan
+                posA = np.argwhere(im1 == np.nanmax(im1))[0]
+                #del mask_radA,im1
+
+                sB_coords = self.parent.CUBE_A.conv_world_coord(t=wavel[10], x=278.41620026, y=-21.06127259,
+                                                                mode='pipeline_world_to_pix')
+                posB = [int(sB_coords[2]), int(sB_coords[1])]
+                mask_radB = ((image_ind[0] - posB[0] <= 1) * (image_ind[0] - posB[0] >= 0) *
+                             (image_ind[1] - posB[1] <= 1) * (image_ind[1] - posB[1] >= 0))
+                im2 = np.array(image_comb)
+                im2[~mask_radB] = np.nan
+                posB = np.argwhere(im2 == np.nanmax(im2))[0]
+                #del im
+
+                if 0:
+                    fig,ax = plt.subplots(1,3,sharex=True,sharey=True)
+                    ax[0].imshow(image_comb,origin='lower')
+                    ax[1].imshow(im1, origin='lower')
+                    ax[2].imshow(im2, origin='lower')
+                    ax[0].plot(posA[1],posA[0],'o')
+                    ax[0].plot((sA_coords[1]),(sA_coords[2]), 'x',markersize=10)
+                    ax[0].plot(posB[1],posB[0],'o')
+                    ax[0].plot((sB_coords[1]),(sB_coords[2]), 'x',markersize=10)
+                    plt.show()
+                del mask_radA,mask_radB, im1,im2
+
+                print('pos:',posA,posB)
+                #fluxes of A and B quasars in their central pixels
+                fA = np.nanmedian(image.data[:, posA[0], posA[1]])
+                fB = np.nanmedian(image.data[:, posB[0], posB[1]])
+
+                plt.subplots()
+                plt.plot(wavel,image.data[:, posA[0], posA[1]])
+                plt.plot(wavel,sp_integrated_A.y*fA )
+                plt.plot(wavel,image.data[:, posB[0], posB[1]])
+                plt.plot(wavel,sp_integrated_B.y*fB )
+
+                plt.show()
+                #make a cube model
+                #def psf_model(r,sigma = miri_psf_sigma):
+                #    return np.exp(-r**2/2/sigma**2)
+
+
+                #make webbpsf model for quasars brightness distribution
+                if 1:
+                    from scripts.psf_subtraction import read_psf,model_img
+                    from lmfit import Parameters
+
+                    band_letter = {'SHORT': 'A', 'MEDIUM': 'B', 'LONG': 'C'}
+                    psf = read_psf(channel=channel+band_letter[band],source='custom_psf') #source= 'webbpsf')
+                    pars_tmp = Parameters()
+                    names = ['xc', 'yc', 'amp']
+                    values = [posA[0],posA[1],1]
+                    #values = [int(sA_coords[2]),int(sA_coords[1]),1]
+                    for name, value in zip(names, values):
+                        pars_tmp.add(name, value=value, min=0, max=np.inf)
+                    m_A = model_img(params=pars_tmp, img_shape=image_comb.shape, psf_image=psf,
+                                    overdist=False, debug=False, get_qso_pos=False)
+                    m_A*=fA/np.nanmax(m_A)
+                    values = [posB[0], posB[1], 1]
+                    #values = [int(sB_coords[2]), int(sB_coords[1]), 1]
+                    for name, value in zip(names, values):
+                        pars_tmp.add(name, value=value, min=0, max=np.inf)
+                    m_B = model_img(params=pars_tmp, img_shape=image_comb.shape, psf_image=psf,
+                                    overdist=False, debug=False, get_qso_pos=False)
+                    m_B *= fB / np.nanmax(m_B)
+
+                def model_qso_cube(pos=[1,2]):
+                    rA = m_A[pos[0],pos[1]]
+                    rB = m_B[pos[0], pos[1]]
+                    f = np.array(rA*sp_integrated_A.y + rB*sp_integrated_B.y)
+                    return f
+
+                #make a mask for calculating fringe corrections:
+                d = image_comb / d_max
+                mask_warm_pixels = (image_snr > snr_lolimit) * edge_spatial_mask
+                #mask_warm_pixels = (d > 1 - brightness_level)
+                mask_radA = np.sqrt((image_ind[0] - posA[0]) ** 2 + (image_ind[1] - posA[1]) ** 2) < 3 * miri_psf_sigma
+                mask_radB = np.sqrt((image_ind[0] - posB[0]) ** 2 + (image_ind[1] - posB[1]) ** 2) < 3 * miri_psf_sigma
+                mask_pixels =(mask_warm_pixels)*(mask_radA+mask_radB)*(edge_spatial_mask)
+                pos_fringes = np.where(mask_pixels == True)
+
+                if 1:
+                    fig, ax = plt.subplots(1, 3, sharex=True, sharey=True)
+                    ax[0].imshow(d, origin='lower')
+                    #plot mask
+                    m = mask_pixels.astype(float)
+                    x = np.arange(mask_pixels.shape[1])
+                    y = np.arange(mask_pixels.shape[0])
+                    X, Y = np.meshgrid(x, y)
+                    ax[0].contour(X, Y, m, levels=[0], colors='red', linewidths=2,vmin=0,vmax=1)
+
+                    ax[0].plot(posA[1], posA[0], 'o')
+                    ax[0].plot((sA_coords[1]), (sA_coords[2]), 'x', markersize=10)
+                    ax[0].plot(posB[1], posB[0], 'o')
+                    ax[0].plot((sB_coords[1]), (sB_coords[2]), 'x', markersize=10)
+
+                    dc = np.zeros_like(d)
+                    for posx, posy in zip(pos_fringes[0], pos_fringes[1]):
+                        dc[posx,posy] = np.nanmedian(model_qso_cube(pos=[posx,posy]))/d_max
+                    ax[1].imshow(dc, origin='lower',vmin=0,vmax=1)
+                    ax[2].imshow(d-dc, origin='lower',vmin=-0.1,vmax=0.1)
+                    plt.show()
+
+                #calculate fringes
+                pix_number = 0
+                for posx, posy in zip(pos_fringes[0], pos_fringes[1]):
+                    print(pix_number, ' from ', pos_fringes[0].shape[0])
+                    print('pix coordinate:', posx, posy, ' relative brightness: ', d[posx, posy])
+                    pix_number += 1
+                    if 1:
                         flux = np.array(image.data[:, posx, posy])
                         ferr = np.array(image.err[:, posx, posy])
                         sp_i = sp(x=wavel, y=flux, err=ferr)
-                        sp_i_fringe_model = fringe_custom_correction_1d(sp_i, s_integrated_B.copy(), debug=debug,
+                        model_i = sp(x=wavel,y=model_qso_cube(pos=[posx,posy]),err=ferr)
+                        sp_i_fringe_model = fringe_custom_correction_1d(sp_i, model_i, debug=True,
                                                                         show_fit_chunks=False,
                                                                         fringe_fq_model=fringe_fq_model,
                                                                         title='(' + str(posx) + ',' + str(posy) + ')')
 
-                        # (sp_i_model, fr_model_i) = fringe_custom_correction_second_pixel(s_pix= sp_i.copy(), s_mean=sp_integrated.copy(), debug=debug,
-                        #                                                             show_fit_chunks=0, fringe_init=fr_model,
-                        #                                                                 label = str(round(posx,1))+' '+str(round(posy,1)))
                         if flag_update_data:
                             image.data[:, posx, posy] -= sp_i_fringe_model.y
 
 
 
-            if show_results:
-                fig, ax = plt.subplots(1, 3, figsize=(20,4))
-                ax[0].imshow(np.log10(image_comb/np.nanmax(image_comb)), origin='lower',vmin=-3,vmax=0)
-                ax[0].set_title('Integrated Image')
-                #Plot contours
-                x = np.arange(mask_warm_pixels_B.shape[1])
-                y = np.arange(mask_warm_pixels_B.shape[0])
-                X, Y = np.meshgrid(x, y)
-                m =  mask_warm_pixels_B.astype(float)
-                ax[0].contour(X, Y,m, levels=[0], colors='red', linewidths=4           )
-                m = mask_warm_pixels.astype(float)
-                ax[0].contour(X, Y, m, levels=[0], colors='blue', linewidths=4)
+        elif mode == 'Pipeline':
+            from jwst.residual_fringe.utils import fit_residual_fringes_1d
 
-                ax[1].set_title('Source A')
-                s = sp_integrated.copy()
-                s.normalize()
-                ax[1].plot(s.x, s.y, color='tab:blue', label='Continuum Model')
-                s_integrated_A.normalize()
-                ax[1].plot(s_integrated_A.x, s_integrated_A.y, color='tab:blue', label='Before(A)')
-                s = sp(x=sp_integrated.x,
-                       y=np.nansum([image.data[:, posx, posy] for posx, posy in zip(pos[0], pos[1])], axis=0))
-                s.normalize()
-                ax[1].plot(s.x, s.y, color='tab:red', label='after(A)')
-                ax[1].plot(s.x, s_integrated_A.y - s.y, color='tab:red', label='Wiggles')
+            d = image_comb / d_max
+            mask_warm_pixels = (image_snr > snr_lolimit) * edge_spatial_mask
+            mask_corrected_pixels = np.zeros_like(mask_warm_pixels)
 
-                ax[1].legend()
+            pos = np.where(mask_warm_pixels == True)
+            pix_number = 0
+            for posx, posy in zip(pos[0], pos[1]):
+                print(pix_number, ' from ', pos[0].shape[0])
+                print('pix coord (A):', posx, posy, ' relative brightness: ', d[posx, posy])
+                pix_number += 1
+                flux = np.array(image.data[:, posx, posy])
+                sp_fringe_corrected = fit_residual_fringes_1d(np.array(flux), wavel, channel=int(channel),dichroic_only=False, max_amp=None)
+                mask_corrected_pixels[posx,posy] = 1
+                if pix_number<5:
+                    plt.subplots()
+                    plt.plot(wavel,np.array(flux))
+                    plt.plot(wavel,sp_fringe_corrected)
+                    plt.plot(wavel, np.array(flux)-sp_fringe_corrected,ls = '--',color='red')
 
-                if second_source == True:
-                    m = mask_warm_pixels_B_plot.astype(float)
-                    ax[0].contour(X, Y, m, levels=[0], colors='red', linewidths=2)
-                    ax[2].set_title('Source B')
-                    s_integrated_B.normalize()
-                    ax[2].plot(s_integrated_B.x, s_integrated_B.y, color='tab:blue', label='before(B)')
-                    s = sp(x=s_integrated_B.x,y=np.nansum([image.data[:, posx, posy] for posx, posy in zip(posB[0], posB[1])], axis=0))
-                    s.normalize()
-                    ax[2].plot(s.x, s.y, color='tab:red', label='after(B)')
-                    ax[2].plot(s.x, s_integrated_B.y-s.y, color='tab:red', label='Wiggles')
+                if flag_update_data:
+                    image.data[:, posx, posy] = sp_fringe_corrected
 
-                    ax[2].legend()
-                plt.show()
-
-    def make_fringe_correction_for_list(self, s=None, flag_update_data=True, debug=False):
-        table = self.parent.Cubes_A.table
-        for k, obj in enumerate(self.parent.Cubes_A.table.data):
-            name = obj['name']
-            if ('tmp' not in name) and ('fringe_corr' not in name):
-                print(obj['name'], ' - ', k, ' from', np.size(table.data))
-                self.parent.plot_3dcubeA.add(name, add=True)
-                self.parent.Cubes_A.current_name = name
-                self.make_fringe_correction(show_results=False)
-                self.SaveLocalCube(local_name='fringe_corr')
-                if 1:
-                    self.SetRoi_radius(roi_type='green', roi_size=3)
-                    self.SetRoi_radius(roi_type='red', roi_size=4)
-                    self.extract_Roi()
-                self.parent.plot_3dcubeA.add(name, add=False)
-            print('Fringe correction is done!')
-
-
+            fig, ax = plt.subplots(1,2,sharex=True,sharey=True)
+            ax[0].imshow(d, origin='lower')
+            ax[1].imshow(mask_corrected_pixels, origin='lower')
+            # plot mask
+            x = np.arange(mask_warm_pixels.shape[1])
+            y = np.arange(mask_warm_pixels.shape[0])
+            X, Y = np.meshgrid(x, y)
+            ax[0].contour(X, Y, mask_warm_pixels.astype(float), levels=[0], colors='red', linewidths=2, vmin=0, vmax=1)
+            plt.show()
     def set_DQ_map(self, debug = False):
         print('set_DQ_map, debug:', debug)
         self.parent.Cubes_A.table.set_dq()
@@ -4892,9 +5216,8 @@ class expRunWidget(QWidget):
 
     def CalcMedCube(self,click=False,debug=True):
         calc_median_mode = self.calc_median_mode.currentText()
-        self.parent.Cubes_A.table.calc_median_cube(radius=int(self.parent.exp_commands.mean_kernel_rad.text()), method =calc_median_mode,debug=debug)
-        #filename = './output/detector3/cash/median_cube.fits'
-        #self.parent.plot_3dcube_median.show()
+        self.parent.Cubes_A.table.calc_median_cube( method =calc_median_mode,debug=debug)
+
 
     def SubtractMedFlux(self, first_cube = 'B',debug=False):
         first_cube = self.name_cube_subtracted.currentText()

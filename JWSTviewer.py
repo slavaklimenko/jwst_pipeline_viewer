@@ -1319,6 +1319,7 @@ class EXPlistTable(pg.TableWidget):
                             break
                     photom_mask = get_mask(path=photom_file)
 
+
                 from scripts.CRshowers import calc_mean_rate
 
                 imtot, imtotsig = calc_mean_rate(images=im, sig_images=sigim, dqs=dqim,debug=debug,
