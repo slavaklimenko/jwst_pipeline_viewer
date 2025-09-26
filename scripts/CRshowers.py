@@ -5,6 +5,13 @@ import matplotlib.pyplot as plt
 from jwst.datamodels import dqflags
 import scipy
 import os,glob
+import pickle
+from matplotlib.ticker import AutoMinorLocator, MultipleLocator, FormatStrFormatter
+from IPython.core.pylabtools import figsize
+from matplotlib import rcParams
+from astropy.io import ascii, fits
+rcParams['font.family'] = 'serif'
+
 # Number of sample points
 #int_file = './output/results/jw02441001001_04104_00001_mirifushort_rateints.fits'
 #int_file = '/home/slava/science/codes/python/jwst/output/detector1/jw02441001001_04106_00002_mirifushort_rateints.fits'
@@ -356,7 +363,7 @@ if 0:
             bx[0].set_title('Backg.Image (Dither1)')
             bx[1].set_title('Backg.Image (Dither2)')
             bx[3].set_title('CR showers Mask')
-            bx[2].set_title('Mean Image')
+            bx[2].set_title('Median Image')
             bx[4].set_title('Mean CR corrected')
 
             # fig2.savefig('./output/detector2/bkgr_subtracted/bckgr_model.pdf', bbox_inches='tight',
@@ -370,8 +377,8 @@ if 0:
             plt.show()
 
         return imtot, imtotsig
-def calc_mean_rate(images, sig_images, dqs, photom_mask, debug=True, radius=10,  skip_cr_events=True,
-                   save_figure=False,level=0.2,alpha=1,n_smooth_iters = 1 ):
+def calc_mean_rate(images, sig_images, dqs, photom_mask, debug=False, radius=10,  skip_cr_events=True,
+                   save_figure=False,level=0.2,alpha=10,n_smooth_iters = 1 ):
     n_int = len(images)
     im = np.array([images[i] for i in range(n_int)])
     sigim = np.array([sig_images[i] for i in range(n_int)])
@@ -406,6 +413,8 @@ def calc_mean_rate(images, sig_images, dqs, photom_mask, debug=True, radius=10, 
         fig, ax = plt.subplots(5, n_int + 1, sharex=True, sharey=True)
         fig_h, ah = plt.subplots(2,n_int + 1, sharex=True)
 
+
+
         vmin, vmax = np.nanquantile(mean_im.flatten(), 0.2), np.nanquantile(mean_im.flatten(), 0.8)
         for i in range(n_int):
             ax[0, i].imshow(images[i], vmin=vmin, vmax=vmax, cmap=cmap,origin='lower')
@@ -437,13 +446,20 @@ def calc_mean_rate(images, sig_images, dqs, photom_mask, debug=True, radius=10, 
             sigma = 10
             hot_pix_limit = sigma
             mask_hot_pixels[i][np.abs(x) > hot_pix_limit] = 0
-            x[np.abs(x) > hot_pix_limit] = np.nan
+
             x[~photom_mask] = np.nan
+            if save_figure:
+                x[np.abs(x) > hot_pix_limit] = 0
+            else:
+                x[np.abs(x) > hot_pix_limit] = np.nan
+
             # set nan and outliers with abs(x)>10 as 0
             mean, sigma = np.nanmedian(x.flatten()), np.nanstd(x.flatten())
             print('mean,std of the ratio of images',i,': ', mean, sigma)
-            x[np.abs(x) > 3*sigma] = np.nan
-            #x[np.isnan(x)] = 0
+            if save_figure:
+                x[np.abs(x) > 3 * sigma] = 0
+            else:
+                x[np.abs(x) > 3*sigma] = np.nan
 
             x_smoothed = convlove2d(data=x, mask=~np.isnan(x),radius=radius)
 
@@ -468,29 +484,52 @@ def calc_mean_rate(images, sig_images, dqs, photom_mask, debug=True, radius=10, 
             #fit hist and estimate values for borders
             if 1:
                 mask = x_smoothed !=-out[0][1]
-                out, fitfunc, xdata, ydata = fit_hist(np.histogram(x_smoothed[mask].flatten(), bins=bins),return_full_range=True, debug=False)
+                out, fitfunc, xdata, ydata = fit_hist(np.histogram(x_smoothed[mask].flatten(), bins=bins),return_full_range=True, debug=True)
                 # determine upper border of distribution
-                mask_up = xdata > out[0][1]
-                signal_up = np.log10(ydata[mask_up]) - np.log10(fitfunc(out[0], xdata[mask_up]))
-                up_lim = len(xdata[mask_up]) - 1
-                if len(np.where(signal_up < np.log10(alpha*np.sqrt(ydata[mask_up])))[0]) > 0:
-                    up_lim = np.where(signal_up < np.log10(alpha*np.sqrt(ydata[mask_up])))[0][-1]
-                x_up = xdata[mask_up][up_lim]
+
+                if 0:
+                    mask_up = (xdata > out[0][1]) * (ydata > 30)
+                    signal_up = np.log10(ydata[mask_up])-np.log10(fitfunc(out[0], xdata[mask_up]))
+                    up_lim = len(xdata[mask_up]) - 1
+                    if len(np.where(signal_up < np.log10(alpha*np.sqrt(ydata[mask_up])))[0]) > 0:
+                        up_lim = np.where(signal_up < np.log10(alpha*np.sqrt(ydata[mask_up])))[0][-1]
+                    x_up = xdata[mask_up][up_lim]
+                else:
+                    mask_up = (xdata > out[0][1]) * (ydata > 100)
+                    signal_up = np.abs(ydata[mask_up] - fitfunc(out[0], xdata[mask_up]))
+                    delta_up = np.sqrt(ydata[mask_up])
+                    diff_up = signal_up - alpha * np.sqrt(ydata[mask_up])
+                    up_lim = len(xdata[mask_up]) - 1
+                    if len(np.where(signal_up < alpha * np.sqrt(ydata[mask_up]))[0]) > 0:
+                        up_lim = np.where(signal_up < (alpha * np.sqrt(ydata[mask_up])))[0][-1]
+                    x_up = xdata[mask_up][up_lim]
+
                 #print(up_lim,xdata[mask_up][up_lim])
                 #plt.show()
 
-                mask_low = xdata < out[0][1]
-                signal_low = np.log10(ydata[mask_low]) - np.log10(fitfunc(out[0], xdata[mask_low]))
-                low_lim = 0
-                if len(np.where(signal_low < np.log10(alpha*np.sqrt(ydata[mask_low])))[0]) > 0:
-                    low_lim = np.where(signal_low < np.log10(alpha*np.sqrt(ydata[mask_low])))[0][0]
-                x_low = xdata[mask_low][low_lim]
-
+                if 0:
+                    mask_low = xdata < out[0][1]
+                    signal_low = np.log10(ydata[mask_low]) - np.log10(fitfunc(out[0], xdata[mask_low]))
+                    low_lim = 0
+                    if len(np.where(signal_low < np.log10(alpha*np.sqrt(ydata[mask_low])))[0]) > 0:
+                        low_lim = np.where(signal_low < np.log10(alpha*np.sqrt(ydata[mask_low])))[0][0]
+                    x_low = xdata[mask_low][low_lim]
+                else:
+                    mask_low = (xdata < out[0][1])*(ydata > 100)
+                    signal_low = np.abs(ydata[mask_low] - fitfunc(out[0], xdata[mask_low]))
+                    low_lim = 0
+                    if len(np.where(signal_low < alpha * np.sqrt(ydata[mask_low]))[0]) > 0:
+                        low_lim = np.where(signal_low < alpha * np.sqrt(ydata[mask_low]))[0][0]
+                    x_low = xdata[mask_low][low_lim]
                 print('contours:',x_low,x_up, ' cen shift:', im_shift[i,k],im_shift[i,k+1])
 
 
             #mask outliers
-            mask_im[i][(x_smoothed > x_up) + (x_smoothed < x_low)] = 0
+            if n_int>2:
+                mask_im[i][(x_smoothed > x_up) + (x_smoothed < x_low)] = 0
+            else:
+                mask_im[i][(x_smoothed > x_up)] = 0
+            print('masked pixels:',np.sum((x_smoothed > x_up) + (x_smoothed < x_low)))
 
             #
             if debug and k == n_smooth_iters - 1:
@@ -500,9 +539,12 @@ def calc_mean_rate(images, sig_images, dqs, photom_mask, debug=True, radius=10, 
                 xi, yi = np.arange(x_smoothed.shape[1]), np.arange(x_smoothed.shape[0])
                 ax[2, i].contour(xi, yi,  x_smoothed, levels=[x_low, x_up], linewidths=0.5, colors='k')
                 ax[1, i].imshow(x, vmin=vmin_sm, vmax=vmax_sm, cmap=cmap, origin='lower')
+                if save_figure and i == 0:
+                    np.savetxt('./output/detector2/bkgr_subtracted/x_smoothed.dat', x_smoothed)
+                    with open('./output/detector2/bkgr_subtracted/x_smoothed_hist.pkl', 'wb') as f:
+                        pickle.dump([ xdata, ydata, bins, fitfunc(out[0], bins),xdata[mask_up][up_lim],xdata[mask_low][low_lim]], f)
 
                 # plot fit to hist
-
                 if 1:
                     ah[0,i].set_title('Image'+str(i)+' shift:'+str(round(im_shift[i,k],2)))
                     ah[0,i].plot(bins, fitfunc(out[0], bins))
@@ -512,9 +554,11 @@ def calc_mean_rate(images, sig_images, dqs, photom_mask, debug=True, radius=10, 
                     ah[0,i].set_yscale('log')
 
                     ah[1,i].plot(xdata[mask_up], signal_up)
-                    ah[1,i].plot(xdata[mask_up], np.log10(np.sqrt(ydata[mask_up])))
+                    #ah[1,i].plot(xdata[mask_up], np.log10(np.sqrt(ydata[mask_up])))
+                    ah[1, i].plot(xdata[mask_up], alpha*(np.sqrt(ydata[mask_up])))
                     ah[1,i].plot(xdata[mask_low], signal_low)
-                    ah[1,i].plot(xdata[mask_low], np.log10(np.sqrt(ydata[mask_low])))
+                    #ah[1,i].plot(xdata[mask_low], np.log10(np.sqrt(ydata[mask_low])))
+                    ah[1,i].plot(xdata[mask_low], alpha*(np.sqrt(ydata[mask_low])))
 
                     #print(up_lim, xdata[mask_up][up_lim])
                     ah[1,i].axvline(xdata[mask_up][up_lim],c='red')
@@ -632,6 +676,87 @@ def calc_mean_rate(images, sig_images, dqs, photom_mask, debug=True, radius=10, 
     if debug:
         plt.show()
 
+    if save_figure:
+        fig_save, ax_save = plt.subplots(1, 5, figsize=(16.5, 3))
+        fontsize = 10
+        cmap2 = plt.cm.viridis
+        cmap2.set_bad('black')
+        vmin, vmax = np.nanquantile(imtot.flatten(), 0.2), np.nanquantile(imtot.flatten(), 0.8)
+        ax_save[0].imshow(images[0],vmin=vmin,vmax=vmax, cmap=cmap2,origin='lower')
+        ax_save[1].imshow(np.nanmedian(np.array([images[i] for i in range(n_int)]), axis=0),vmin=vmin,vmax=vmax,
+                          cmap=cmap2,origin='lower')
+        #ax_save[1].plot(np.nanmedian(np.array([images[i] for i in range(n_int)]), axis=0))
+        x_smoothed = np.loadtxt('./output/detector2/bkgr_subtracted/x_smoothed.dat')
+
+        with open('./output/detector2/bkgr_subtracted/x_smoothed_hist.pkl', 'rb') as f:
+            (xdata, ydata,bins, fitfunc,  x_up,x_low) = pickle.load(f)
+        vmin_sm, vmax_sm = 2 * x_low, 2 * x_up
+        ax_save[2].imshow(x_smoothed, vmin=vmin_sm, vmax=vmax_sm, cmap=cmap2, origin='lower')
+        xi, yi = np.arange(x_smoothed.shape[1]), np.arange(x_smoothed.shape[0])
+        ax_save[2].contour(xi, yi, x_smoothed, levels=[x_up], linewidths=1, colors='red')
+        #ax_save[2].contour(xi, yi, x_smoothed, levels=[x_low], linewidths=1, colors='blue')
+        if 1:
+            h=0.4
+            add_ax = fig_save.add_axes([0.445+0.5*(0.579 - 0.445), 0.11+0.3*(0.579 - 0.445), (h)*(0.579 - 0.445), h*(0.88-0.11)])
+            add_ax.imshow(x_smoothed, vmin=vmin_sm, vmax=vmax_sm, cmap=cmap2, origin='lower')
+            add_ax.contour(xi, yi, x_smoothed, levels=[x_up], linewidths=1, colors='red')
+            add_ax.set_xlim(140,340)
+            add_ax.set_ylim(440,640)
+            for el in ['bottom','left','right','top']:
+                add_ax.spines[el].set_color('white')
+                add_ax.spines[el].set_lw(3)
+            add_ax.set_xticks([])
+            add_ax.set_yticks([])
+
+            ax_save[2].add_patch(plt.Rectangle((140,440), 200, 200, ls="--", ec="white", fc="none",lw=1.5))
+
+        ax_save[3].step(xdata,ydata,where='mid')
+        ax_save[3].fill_between(x=xdata, y1=ydata-alpha*np.sqrt(ydata), y2=ydata+alpha*np.sqrt(ydata), color='tab:blue',alpha=0.2,zorder=-10)
+        ax_save[3].plot(bins, fitfunc)
+        ax_save[3].axvline(x_up, c='red')
+        ax_save[3].axvline(x_low, c='blue')
+        ax_save[3].set_yscale('log')
+        x = np.array(imtot)
+        x[~photom_mask] = np.nan
+        img = ax_save[4].imshow(x,vmin=vmin,vmax=vmax, cmap=cmap2,origin='lower')
+
+        for axs in [ax_save[0],ax_save[1],ax_save[2],ax_save[4]]:
+            axs.tick_params(which='both', width=1, direction='in',
+                            labelsize=fontsize,
+                            right='True',
+                            top='True')
+            axs.tick_params(which='major', length=5)
+            axs.tick_params(which='minor', length=3)
+            axs.xaxis.set_minor_locator(AutoMinorLocator(4))
+            axs.xaxis.set_major_locator(MultipleLocator(200))
+            axs.yaxis.set_minor_locator(AutoMinorLocator(4))
+            axs.yaxis.set_major_locator(MultipleLocator(200))
+            axs.set_xlabel('X coordinate', fontsize=fontsize)
+        if 1:
+            axs =  ax_save[3]
+            axs.set_xlim(-0.5,0.5)
+            axs.set_ylim(10,1e5)
+            axs.xaxis.set_minor_locator(AutoMinorLocator(4))
+            axs.xaxis.set_major_locator(MultipleLocator(0.2))
+            #axs.set_ylabel('Number of bins', fontsize=fontsize)
+            axs.set_xlabel('Pixel Intensity', fontsize=fontsize)
+        ax_save[0].set_ylabel('Y coordinate', fontsize=fontsize)
+        ax_save[0].set_title('Background Image (Dither1)')
+        ax_save[1].set_title('Median Image')
+        ax_save[2].set_title('CR Showers Mask')
+        ax_save[3].set_title('CR Showers Mask Hist')
+        ax_save[4].set_title('Background Model')
+
+        cbar = fig_save.add_axes([0.91, 0.13, 0.01, 0.72])
+        fig_save.colorbar(img, cax=cbar)
+        # cbar.set_yticklabels(fontsize=fontsize)
+        ax_save[4].text(1450, 300, 'Rate (DN/s)', rotation=90, fontsize=fontsize)
+
+        fig_save.savefig('/home/slava/science/codes/python/jwst/output/detector2/tmp.pdf', bbox_inches='tight',
+                    dpi=200)
+        np.savetxt('./output/detector2/bkgr_subtracted/bckgr_model.dat', imtot)
+
+        plt.show()
     return imtot, imtotsig
 
 
@@ -653,7 +778,7 @@ def calc_hot_pixels(images, sig_images, dqs, debug=True, radius=10,  skip_cr_eve
 
     fig,ax = plt.subplots(n_int,3, sharex=True, sharey=True)
     cmap = plt.cm.viridis
-    cmap.set_bad('red')
+    cmap.set_bad('black')
     for i in range(n_int):
         ax[i,0].imshow(images[i],vmin=-1,vmax=4,cmap=cmap)
         ax[i,1].imshow(mask_im[i],cmap=cmap)

@@ -86,4 +86,22 @@ def get_trace_mask(path,debug=False):
 
     return orders_size
 
-get_trace_mask(path=path)
+def get_mask(path,debug=False):
+    hdulist = fits.open(path)
+    hdu = hdulist[1].data
+    hdulist.close()
+
+    data = hdu.copy()
+    mask = ~np.isnan(data)
+
+    if 0:
+        plt.subplots()
+        plt.imshow(mask)
+        plt.show()
+
+    return mask
+
+if __name__ == '__main__':
+    print('Hi PyCharm')
+    #get_trace_mask(path=path)
+    get_mask(path=path)

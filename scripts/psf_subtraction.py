@@ -10,12 +10,14 @@ from scipy.interpolate import interp1d
 import matplotlib.patches as patches
 from lmfit import Minimizer, Parameters
 import emcee
-from chainconsumer import ChainConsumer
+#from chainconsumer import ChainConsumer
 from multiprocessing import Pool
 
 
+path_to_jwst_folder = '/home/slava/science/codes/python/jwst/'
 
-def read_settings(init_file='./../init.dat'):
+
+def read_settings(init_file=path_to_jwst_folder+'/init.dat'):
     init_settings = {}
     with open(init_file) as f:
         for k, line in enumerate(f):
@@ -50,7 +52,6 @@ if 'CRDS_CONTEXT' in  settings.keys():
     os.environ["CRDS_CONTEXT"] = settings['CRDS_CONTEXT']
 os.environ["WEBBPSF_PATH"] = settings['WEBBPSF_PATH']
 
-path_to_jwst_folder = '/home/slava/science/codes/python/jwst/'
 
 
 if 0:
