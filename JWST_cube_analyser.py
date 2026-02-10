@@ -23,6 +23,7 @@ from scipy.optimize import bisect
 import sys
 import matplotlib.cm
 
+
 #from scripts.emcee_sampler import fontsize
 
 sys.path.append('/home/slava/science/codes/python')
@@ -422,8 +423,8 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
                                                 roi_diff_flux = fluxa - fluxb
                                                 roi_diff_flux_err = np.power(ferra ** 2 + ferrb  ** 2, 0.5)
                                                 del fluxa, fluxb, ferra, ferrb
-                                            self.parent.plot_spectrum.plot_specA2m1(data=roi_diff_flux, add=False, show_err_bar=True)
-                                            self.parent.plot_spectrum.plot_specA2m1(data=roi_diff_flux,err=roi_diff_flux_err,show_err_bar=True)
+                                            self.parent.plot_spectrum.plot_specA2m1(data=roi_diff_flux, add=False, show_err_bar=False)
+                                            self.parent.plot_spectrum.plot_specA2m1(data=roi_diff_flux,err=roi_diff_flux_err,show_err_bar=False)
 
 
                                 if self.cube_name == 'B':
@@ -802,7 +803,7 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
             angle = np.arctan(dy/dx) + np.pi*(1-np.sign(dx))/2
             scale = np.sqrt(dx**2+dy**2)*3600/8
             shape = image_comb.shape
-            xc,yc,rad = (0.25*shape[0],0.15*shape[1],0.11*shape[0])
+            xc,yc,rad = (0.35*shape[0],0.2*shape[1],0.11*shape[0])
             norm = np.sqrt(1+r**2)
             plt.plot([xc,xc-rad/norm],[yc,yc-rad*r/norm],ls='-',color='black',lw=4)
             plt.text(xc - rad / norm,  yc - rad * r / norm, 'E', color='black')
@@ -892,7 +893,11 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
 
                 vmin,vmax = (np.nanquantile(np.log10(np.abs(image_comb*pix_solid_angle*1e6*1e3)).flatten(), 0.1),
                                           np.nanquantile(np.log10(np.abs(image_comb*pix_solid_angle*1e6*1e3)).flatten(), 1))
-                sp = ax.imshow(np.log10(np.abs(image_comb*pix_solid_angle*1e6*1e3)), origin='lower', cmap=black_green_red_white, vmin=vmin, vmax=vmax)
+                vmin,vmax = 0,0.35
+                sp = ax.imshow(image_comb*pix_solid_angle*1e6*1e3,
+                               origin='lower',   cmap=black_green_red_white , vmin=vmin, vmax=vmax)
+                #sp = ax.imshow(np.log10(np.abs(image_comb/image_max_flux)), origin='lower',
+                #               cmap=black_green_red_white, vmin=vmin, vmax=vmax)
                 fig.colorbar(sp, fraction=0.046, pad=0.04,label='F(mJy)')
 
                 x1,y1  = np.cos(angle), -np.sin(angle)
@@ -905,12 +910,17 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
                     delta_y = -(-y1 * rad + y2 * rad)
 
 
-                color = 'black'
+                color = 'white'
                 ax.arrow(xc+delta_x, yc+delta_y,  -x1*rad,  -y1*rad, ls='-', color=color, lw=2,head_width=0.5)
                 ax.text(xc -  x1*rad*text_factor+delta_x, yc - y1*rad*text_factor +delta_y, 'E', color=color,fontsize=fontsize)
                 ax.arrow(xc+delta_x, yc+delta_y,  x2*rad,  y2*rad , ls='-', color=color, lw=2,head_width=0.5)
                 ax.text(xc+delta_x + x2*rad*text_factor, yc+delta_y + y2*rad*text_factor , 'N', color=color,fontsize=fontsize)
                 # xc,yc,rad = (0.2*shape[0],0.2*shape[1],0.15*shape[0])
+
+                #plot galaxy contours
+
+
+
                 #plot 1" bar
                 if 0:
                     r = 1/scale
@@ -941,7 +951,7 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
                 ax.tick_params(which='minor', length=3)
                 ax.set_xlabel('spaxel',fontsize=fontsize)
                 ax.set_ylabel('spaxel',fontsize=fontsize)
-                ax.set_title(name.split('_')[0])
+                #ax.set_title(name.split('_')[0])
             fig.savefig('/home/slava/science/codes/python/jwst/output/detector3/images/'+name+'_log.pdf', bbox_inches='tight')
 
 
@@ -3986,7 +3996,7 @@ class expParsWidget(QWidget):
 
         horizontal_layout.addWidget(QLabel('Band:'))
         self.asn_band = QComboBox()
-        self.asn_band.addItems(['SHORT', 'MEDIUM', 'LONG','ABC'])
+        self.asn_band.addItems(['SHORT', 'MEDIUM', 'LONG','SHORTMEDIUMLONG'])
         self.asn_band.setCurrentIndex(0)
         cb = self.asn_band
         width = cb.minimumSizeHint().width()

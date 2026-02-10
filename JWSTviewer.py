@@ -1304,39 +1304,43 @@ class EXPlistTable(pg.TableWidget):
 
             if 1:
 
-                if 1:
-                    # find path to photom mask
-                    from scripts.flat_field import get_mask
-                    band = self.parent.parent.EXP.data.meta.instrument.band
-                    channel = self.parent.parent.EXP.data.meta.instrument.channel
-                    photom_list = sorted(glob.glob(os.environ["CRDS_PATH"] + '/references/jwst/miri/*photom*'))
-                    for f in photom_list:
-                        hdulist = fits.open(f)
-                        header = hdulist[0].header
-                        f_band, f_ch = header['BAND'], header['CHANNEl']
-                        if band == f_band and f_ch == channel:
-                            photom_file = f
-                            break
-                    photom_mask = get_mask(path=photom_file)
+                if n_int>1:
+                    if 1:
+                        # find path to photom mask
+                        from scripts.flat_field import get_mask
+                        band = self.parent.parent.EXP.data.meta.instrument.band
+                        channel = self.parent.parent.EXP.data.meta.instrument.channel
+                        photom_list = sorted(glob.glob(os.environ["CRDS_PATH"] + '/references/jwst/miri/*photom*'))
+                        for f in photom_list:
+                            hdulist = fits.open(f)
+                            header = hdulist[0].header
+                            f_band, f_ch = header['BAND'], header['CHANNEl']
+                            if band == f_band and f_ch == channel:
+                                photom_file = f
+                                break
+                        photom_mask = get_mask(path=photom_file)
 
 
-                from scripts.CRshowers import calc_mean_rate
+                    from scripts.CRshowers import calc_mean_rate
 
-                imtot, imtotsig = calc_mean_rate(images=im, sig_images=sigim, dqs=dqim,debug=debug,
-                                                 skip_cr_events=True, radius=radius,
-                                                 photom_mask=photom_mask,n_smooth_iters = 3)
+                    imtot, imtotsig = calc_mean_rate(images=im, sig_images=sigim, dqs=dqim,debug=debug,
+                                                     skip_cr_events=True, radius=radius,
+                                                     photom_mask=photom_mask,n_smooth_iters = 3)
 
-                if debug:
-                    n_im = len(im)
-                    fig, ax = plt.subplots(1, n_im + 1, sharex=True, sharey=True)
-                    vmin, vmax = np.nanquantile(imtot.flatten(), 0.05), np.nanquantile(imtot.flatten(), 0.8)
-                    for i in range(n_im):
-                        ax[i].imshow(im[i], vmin=vmin, vmax=vmax)
-                        ax[i].set_title(str(i))
-                    ax[n_im].imshow(imtot, vmin=vmin, vmax=vmax)
-                    ax[n_im].set_title('MODEL')
-                    plt.show()
-
+                    if debug:
+                        n_im = len(im)
+                        fig, ax = plt.subplots(1, n_im + 1, sharex=True, sharey=True)
+                        vmin, vmax = np.nanquantile(imtot.flatten(), 0.05), np.nanquantile(imtot.flatten(), 0.8)
+                        for i in range(n_im):
+                            ax[i].imshow(im[i], vmin=vmin, vmax=vmax)
+                            ax[i].set_title(str(i))
+                        ax[n_im].imshow(imtot, vmin=vmin, vmax=vmax)
+                        ax[n_im].set_title('MODEL')
+                        plt.show()
+                else:
+                    imtot = np.nanmedian(im, axis=0)
+                    imsig_inv = np.power(sigim, -2)
+                    imtotsig = np.power(np.nansum(imsig_inv, axis=0), -0.5)
 
 
             self.parent.parent.EXP.mean_slope = imtot
@@ -1772,6 +1776,7 @@ class EXPlistTable(pg.TableWidget):
         debug = bool(self.parent.parent.exp_pars.debug.currentIndex())
         save_results = int(self.parent.parent.exp_pars.save_tmp_res.currentIndex())
         bkgr, bkgr_sig = self.parent.parent.stage2.create_background_model(filelist=table,smothing_rad=smothing_rad,debug=debug)
+        print('Subtract model')
         self.parent.parent.stage2.subtract_bkgr_model(bkgr_model=bkgr,bkgr_model_sig=bkgr_sig,savepdf=save_results)
 
         #self.parent.parent.stage2.background_subtraction()
@@ -2107,7 +2112,7 @@ class expParsWidget(QWidget):
         horizontal_layout.addWidget(self.ExoTiC_mode)
         horizontal_layout.addWidget(QLabel('Drop#gr:'))
         self.n_group_dropped = QLineEdit()
-        self.n_group_dropped.setText(str(12))
+        self.n_group_dropped.setText(str(1))
         cb = self.n_group_dropped
         width = cb.minimumSizeHint().width()
         cb.setFixedWidth(width)
