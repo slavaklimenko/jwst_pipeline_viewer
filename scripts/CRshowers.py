@@ -484,7 +484,7 @@ def calc_mean_rate(images, sig_images, dqs, photom_mask, debug=False, radius=10,
             #fit hist and estimate values for borders
             if 1:
                 mask = x_smoothed !=-out[0][1]
-                out, fitfunc, xdata, ydata = fit_hist(np.histogram(x_smoothed[mask].flatten(), bins=bins),return_full_range=True, debug=True)
+                out, fitfunc, xdata, ydata = fit_hist(np.histogram(x_smoothed[mask].flatten(), bins=bins),return_full_range=True, debug=False)
                 # determine upper border of distribution
 
                 if 0:
@@ -681,7 +681,8 @@ def calc_mean_rate(images, sig_images, dqs, photom_mask, debug=False, radius=10,
         fontsize = 10
         cmap2 = plt.cm.viridis
         cmap2.set_bad('black')
-        vmin, vmax = np.nanquantile(imtot.flatten(), 0.2), np.nanquantile(imtot.flatten(), 0.8)
+        #vmin, vmax = np.nanquantile(imtot.flatten(), 0.2), np.nanquantile(imtot.flatten(), 0.8)
+        vmin,vmax = -0.08,0.25
         ax_save[0].imshow(images[0],vmin=vmin,vmax=vmax, cmap=cmap2,origin='lower')
         ax_save[1].imshow(np.nanmedian(np.array([images[i] for i in range(n_int)]), axis=0),vmin=vmin,vmax=vmax,
                           cmap=cmap2,origin='lower')
