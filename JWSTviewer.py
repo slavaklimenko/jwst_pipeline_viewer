@@ -487,7 +487,8 @@ class plotPixProfile(pg.PlotWidget):
                     pixeldq = self.parent.EXP.data.groupdq[nint, :, row, col]
                     mask_diff = np.where(np.bitwise_and(pixeldq, dnu_flag) + np.bitwise_and(pixeldq, sat_flag))
                     median_diff = diffs.copy()
-                    print('pixel dq:', pixeldq)
+                    print('pixel group dq:', pixeldq)
+                    print('pixel dq:', self.parent.EXP.data.pixeldq[row, col])
                     median_diffs = 0
                     if np.sum(pixeldq!=0) != np.size(pixeldq):
                         if debug:
@@ -1068,9 +1069,7 @@ class EXPlistTable(pg.TableWidget):
         print('LAST STEP: DONE')
 
     def exotic_drop_groups(self):
-        mode = int(self.parent.parent.exp_pars.n_group_dropped.text())
-        #self.parent.parent.EXP.exotic_drop_groups(mode = 'small_n_gr')
-        self.parent.parent.EXP.drop_first_steps(mode = mode)
+        self.parent.parent.EXP.drop_first_steps(mode = int(self.parent.parent.exp_pars.n_group_dropped.text()))
         print('DROP GROUPS STEP by ExoTiC pipeline')
 
     def reset_correction(self):
@@ -1229,6 +1228,7 @@ class EXPlistTable(pg.TableWidget):
         self.parent.parent.EXP.slope_fitting_step(debug=debug,save_results=bool(save_res_flag),override_gain=override_gain,algorithm=algorithm)
         self.flags['slope_fit_step'] = True
         if algorithm == 'CHI2':
+            #mask_nan =   np.where(np.bitwise_and(self.parent.parent.EXP.ramp_fit[0].dq, dqflags.pixel['DO_NOT_USE']))
             self.parent.parent.EXP.data.pixeldq = self.parent.parent.EXP.ramp_fit[0].dq
             self.flags['CR_step'] = True
             self.parent.parent.EXP.data.meta.cal_step.jump = 'COMPLETE'
@@ -1239,6 +1239,7 @@ class EXPlistTable(pg.TableWidget):
 
     def calc_mean_rate(self,debug=False,radius=10,hot_pix_limit=4,algorithm='CHI2'):
         debug = bool(self.parent.parent.exp_pars.debug.currentIndex())
+        print('DEBUG calc mean rate: ',debug)
         if algorithm == 'CHI2':
             im = self.parent.parent.EXP.int_slopes[:,0].copy()
             sigim = self.parent.parent.EXP.int_sigslopes[:,0].copy()
@@ -1413,9 +1414,10 @@ class EXPlistTable(pg.TableWidget):
             dataerr = self.parent.parent.EXP.data.err
             self.parent.parent.EXP.int_slopes = ramp_info[0]*group_time
             self.parent.parent.EXP.int_sigslopes = ramp_info[1] * group_time
+            print('read pixel dq from ramp fit')
             self.parent.parent.EXP.int_pixeldq = ramp_fit[1].dq
             if 1:
-                first_gr,last_gr = int(self.parent.parent.exp_pars.n_group_dropped.text()),self.parent.parent.EXP.data.groupdq.shape[1]-1
+                first_gr,last_gr = self.parent.parent.EXP.drop_ngroups,self.parent.parent.EXP.data.groupdq.shape[1]-1
             self.parent.parent.EXP.data.groupdq[:,first_gr:last_gr,:,:] = ramp_info[7]
             self.parent.parent.EXP.int_jumps = ramp_info[8]
             self.parent.parent.EXP.slopes = ramp_fit[0].data * group_time  # in DN/groups
@@ -1754,7 +1756,7 @@ class EXPlistTable(pg.TableWidget):
 
 
     def stage2_fix_hot_pix(self):
-        self.parent.parent.stage2.select_hot_pix(output_dir='./data/Hot_pixels/ID02441/')
+        self.parent.parent.stage2.select_hot_pix(output_dir='./data_local/Hot_pixels/ID02441/')
         self.parent.parent.stage2.fix_hot_pix_step(debug=0)
         self.parent.parent.stage2.fix_cold_pix_step(debug=0)
 
@@ -1808,12 +1810,16 @@ class EXPlistTable(pg.TableWidget):
     def stage2_fringe_flat_correction(self):
         print('Source ID Step - Stage 2')
         debug = bool(self.parent.parent.exp_pars.debug.currentIndex())
+        save_results = int(self.parent.parent.exp_pars.save_tmp_res.currentIndex())
         self.parent.parent.stage2.fringe_flat_step(debug=debug)
 
     def stage2_residual_fringe_correction(self):
         debug = bool(self.parent.parent.exp_pars.debug.currentIndex())
         save_results = int(self.parent.parent.exp_pars.save_tmp_res.currentIndex())
         self.parent.parent.stage2.res_fringe_step(debug=debug,save_results=bool(save_results))
+
+    def stage2_read_flat_fringes(self):
+        return self.parent.parent.stage2.read_flat_fringes()
 
     def stage2_read_res_fringes(self):
         return self.parent.parent.stage2.read_res_fringes()
@@ -2112,7 +2118,7 @@ class expParsWidget(QWidget):
         horizontal_layout.addWidget(self.ExoTiC_mode)
         horizontal_layout.addWidget(QLabel('Drop#gr:'))
         self.n_group_dropped = QLineEdit()
-        self.n_group_dropped.setText(str(1))
+        self.n_group_dropped.setText(str(6))
         cb = self.n_group_dropped
         width = cb.minimumSizeHint().width()
         cb.setFixedWidth(width)
@@ -2614,8 +2620,8 @@ class expPipeline2Widget(QWidget):
 
 
 
-        self.run_all_stage2 = QPushButton('Run stage(2)')
-        self.run_all_stage2.clicked[bool].connect(partial(self.Run2_allsteps))
+        self.run_all_stage2 = QPushButton('Run Table (All)')
+        self.run_all_stage2.clicked[bool].connect(partial(self.run_stage2_table_1_to_8))
         self.run_all_stage2.resize(150, 60)
         horizontal_layout.addWidget(self.run_all_stage2)
 
@@ -2817,8 +2823,8 @@ class expPipeline2Widget(QWidget):
         if detector != 'MIRIMAGE':
             print('AssignWCS')
             self.parent.Exposures.table.stage2_call_wcs()
-            print('Fix hot Pix')
-            self.FixHotPix()
+            #print('Fix hot Pix')
+            #self.FixHotPix()
             print('Flat_Field')
             self.parent.Exposures.table.stage2_flat_field()
             print('Source_identification')
@@ -2866,13 +2872,18 @@ class expPipeline2Widget(QWidget):
         detector = self.parent.Exposures.table.init_stage2()
         print('read rate file')
         target_name = self.parent.stage2.data.meta.target.proposer_name
+        print('target name',target_name)
         s = self.parent.Exposures.table.stage2_read_res_fringes()
-        print('read fringe corrected file, s')
+        #s = self.parent.Exposures.table.stage2_read_flat_fringes()
+        print('read fringe corrected file',s)
         if s and 'BACKGROUND' not in target_name:
+            print('create corresponding background model for', target_name, s)
             self.Bkgr_Model()  # parent.Exposures.table.stage2_background_model()
             print('make bkgr model and subtract')
             self.parent.Exposures.table.stage2_flux_calibration()
             print('make flux calibration')
+        elif s and 'BACKGROUND' in target_name:
+            print('Ignore background exposure for', target_name)
         else:
             print('There is no the saved residual fringe file')
 
@@ -2957,6 +2968,17 @@ class expPipeline2Widget(QWidget):
         self.parent.Exposures.table.stage2_show_Xtrace(trace_Xpos=int(self.Xtrace_coord.text()))
             #trace_order=int(self.num_trace.text()),trace_size=int(self.size_trace.text()))
 
+
+
+    def run_stage2_table_1_to_8(self):
+        table = self.parent.Exposures.table
+        for k, obj in enumerate(self.parent.Exposures.table.data):
+            print(obj['name'], ' - ', k,' from',np.size(table.data))
+            name = obj['name']
+            self.parent.plot_image.add(name, add=True)
+            self.parent.Exposures.current_name = name
+            self.Run2_allsteps()
+            self.parent.plot_image.add(name, add=False)
 
 
 

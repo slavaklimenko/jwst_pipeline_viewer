@@ -8,6 +8,8 @@ from io import StringIO
 from matplotlib import cm
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use('TkAgg')
 from matplotlib.ticker import AutoMinorLocator, MultipleLocator
 import numpy as np
 import pickle
@@ -31,11 +33,11 @@ from stage3_pipeline import *
 from stage3_pipeline import detector3
 from stage2_pipeline import *
 from stage2_pipeline import detector2
-
 #from spectro.stats import distr2d,distr1d
 #from spectro.a_unc import a
 #from spectro.pyratio import pyratio
 import copy
+
 from stdatamodels.jwst.datamodels import dqflags
 from PyQt5.QtWidgets import (QApplication, QMessageBox, QMainWindow, QWidget,
                              QFileDialog, QTextEdit, QVBoxLayout,
@@ -124,7 +126,7 @@ class image():
 if 1:
     def miri_psf_pix(lam):
         # interpolation of miri psf https://jwst-docs.stsci.edu/jwst-mid-infrared-instrument/miri-performance/miri-point-spread-functions
-        f = np.loadtxt('./data/miri_psf_pix.dat')
+        f = np.loadtxt('./data_local/miri_psf_pix.dat')
 
         #print(f[:, 0])
         f1d = interp1d(f[:, 0], f[:, 1], fill_value='extrapolate')
@@ -134,7 +136,7 @@ if 1:
 
     def miri_psf_arcsec(lam):
         # interpolation of miri psf https://jwst-docs.stsci.edu/jwst-mid-infrared-instrument/miri-performance/miri-point-spread-functions
-        f = np.loadtxt('./data/miri_psf_arcsec_Argyriou_2023.dat')
+        f = np.loadtxt('./data_local/miri_psf_arcsec_Argyriou_2023.dat')
 
         #print(f[:, 0])
         f1d = interp1d(f[:, 0], f[:, 1], fill_value='extrapolate')
@@ -4679,168 +4681,195 @@ class expRunWidget(QWidget):
             spec1d[:,2] = spec/50
             np.savetxt('./output/detector3/background/'+name+'_median.dat',spec1d)
 
-    def make_fringe_model(self,s=None,flag_update_data=True,debug=False,show_results=False,snr_lolimit = 20):
-        from scripts.fringe_correction import spectrum as sp
-        from scripts.fringe_correction import fringe_custom_pix_diff_model
+    def make_fringe_model(self, s=None, flag_update_data=True, debug=False, show_results=False, brightness_level=0.9):
+        mode = 'Custom' #self.parent.exp_commands.fringe_correction_mode.text()
+        if mode == 'Custom':
+            radius_warm_pixles_window = 3
+            integrated_spectrum_mode = 'synthetic'
+            test_procedure = False
+            first_source = False
+            complex_model = True
 
-        #select pixel within 90% of the highest flux
-        cube_name = self.extract_1d_roi_cube.currentText()
-        if cube_name == '(A)':
-            cube = self.parent.CUBE_A
-            image = self.parent.CUBE_A.data
-            wavel = self.parent.CUBE_A.data.wavelength
-            wcs = self.parent.CUBE_A.data.wcs
-        elif cube_name == '(B)':
-            cube = self.parent.CUBE_B
-            image = self.parent.CUBE_B.data
-            wavel = self.parent.CUBE_B.data.wavelength
-            wcs = self.parent.CUBE_B.data.wcs
-        #read image
-        image_comb = np.nanmedian(image.data, axis=0)                #median image
-        image_ind = np.indices((image_comb.shape[0],image_comb.shape[1]))  # array with pix coordinates
-        # define miri psf size
-        miri_psf_fwhm = miri_psf_arcsec(np.nanmean(wavel)) * (1 / 3600 / wcs['CDELT1'])
-        miri_psf_sigma = miri_psf_fwhm / 2.355
+            from scripts.fringe_correction import spectrum as sp
+            from scripts.fringe_correction import (fringe_custom_multipix_model,fringe_custom_correction_second_pixel,
+                                                   fringe_custom_correction_1d,fringe_custom_pix_diff_model,
+                                                   fringe_custom_multipix_model_tmp)
 
-        #mask pixels near the edge (spatial_mask)
-        if 1:
-            edge_spatial_mask = image_comb != 0
-            edge_spatial_mask[:,0] = 0
-            edge_spatial_mask[:, -1] = 0
-            edge_spatial_mask[0,:] = 0
-            edge_spatial_mask[-1, :] = 0
-            for k in range(3):
-                pos = np.where(edge_spatial_mask > 0)
-                spatial_mask2 = np.array(edge_spatial_mask)
-                for i,j in zip(pos[0],pos[1]):
-                    if edge_spatial_mask[i-1,j] == 0 or edge_spatial_mask[i+1,j]==0 or edge_spatial_mask[i,j-1] == 0 or edge_spatial_mask[i,j+1]==0:
-                        spatial_mask2[i , j] = 0
-                edge_spatial_mask = np.array(spatial_mask2)
-            del(spatial_mask2)
+            #select pixel within 90% of the highest flux
+            cube_name = self.extract_1d_roi_cube.currentText()
+            if cube_name == '(A)':
+                cube = self.parent.CUBE_A
+                image = self.parent.CUBE_A.data
+                wavel = self.parent.CUBE_A.data.wavelength
+                channel = self.parent.CUBE_A.data.channel
+                wcs = self.parent.CUBE_A.data.wcs
+                band = self.parent.CUBE_A.data.band
+            elif cube_name == '(B)':
+                cube = self.parent.CUBE_B
+                image = self.parent.CUBE_B.data
+                wavel = self.parent.CUBE_B.data.wavelength
+                channel = self.parent.CUBE_B.data.channel
+                wcs = self.parent.CUBE_B.data.wcs
+                band = self.parent.CUBE_B.data.band
 
-        #search for the brightest pixel
-        d_max = np.nanmax(image_comb[edge_spatial_mask])
-        image_comb[np.isnan(image_comb)] = 0
-        pos_brightest = np.argwhere(image_comb==d_max)[0]
-        print('position of the brightest pixel:', pos_brightest)
+            #read image
+            image_comb = np.nanmedian(image.data, axis=0)                #median image
+            image_ind = np.indices((image_comb.shape[0],image_comb.shape[1]))  # array with pix coordinates
+            # define miri psf size
+            miri_psf_fwhm = miri_psf_arcsec(np.nanmean(wavel)) * (1 / 3600 / wcs['CDELT1'])
+            miri_psf_sigma = miri_psf_fwhm / 2.355
 
-        #derive fringes in spectra relative to the model
-        if 1:
-            #select pixels near the brightest pixel (cross-structure)
-            pixels_to_fit = []
-            pos_tmp = [[pos_brightest[0]-1,pos_brightest[1]-1],[pos_brightest[0],pos_brightest[1]-1],
-                       [pos_brightest[0]+1,pos_brightest[1]-1]]
-            #[pos_brightest[0]-1,pos_brightest[1]],[pos_brightest[0]+1,pos_brightest[1]]]
-            #pos_tmp.append([pos_brightest[0],pos_brightest[1]]) # add central spaxel
+            #mask pixels at the edge of the cube
             if 1:
-                plt.subplots()
-                plt.imshow(image_comb,origin='lower')
-                plt.plot(pos_brightest[1]-1,pos_brightest[0]-1,'o')
-                plt.plot(pos_brightest[1]-1,pos_brightest[0], 'o')
-                plt.plot(pos_brightest[1] - 1, pos_brightest[0]+1, 'o')
-                plt.show()
-            for p in pos_tmp:
-                pixels_to_fit.append(sp(x=wavel, y=np.array(image.data[:,p[0],p[1]]), err=np.array(image.err[:,p[0],p[1]])))
-            del pos_tmp
-            #save spectra in tmp folder
-            for k,p in enumerate(pixels_to_fit):
-                s_tmp = np.zeros(shape=(p.x.shape[0],3))
-                s_tmp[:,0] = p.x
-                s_tmp[:, 1] = p.y
-                s_tmp[:, 2] = p.err
-                np.savetxt('/home/slava/science/codes/python/jwst/output/tmp/fringe/spaxel_'+str(k)+'.spec1d',s_tmp)
+                edge_spatial_mask = image_comb != 0
+                edge_spatial_mask[:,0] = 0
+                edge_spatial_mask[:, -1] = 0
+                edge_spatial_mask[0,:] = 0
+                edge_spatial_mask[-1, :] = 0
+                for k in range(3):
+                    pos = np.where(edge_spatial_mask > 0)
+                    spatial_mask2 = np.array(edge_spatial_mask)
+                    for i,j in zip(pos[0],pos[1]):
+                        if edge_spatial_mask[i-1,j] == 0 or edge_spatial_mask[i+1,j]==0 or edge_spatial_mask[i,j-1] == 0 or edge_spatial_mask[i,j+1]==0:
+                            spatial_mask2[i , j] = 0
+                    edge_spatial_mask = np.array(spatial_mask2)
+                del(spatial_mask2)
 
-            # calc the integrated_flux
-            mode = 'synthetic'
-            if mode == 'median':
-                # define mask for the integrated spectrum: within "brightness_level" %  of the maximal brightness
-                d = image_comb / d_max
-                mask_warm_pixels = (d > 0.2) * edge_spatial_mask
-                print('fringe correction: number of warm pixels', np.sum(mask_warm_pixels))
-                mask_radial_constraint = np.sqrt((image_ind[0] - pos_brightest[0]) ** 2 + (
-                            image_ind[1] - pos_brightest[1]) ** 2) < radius_warm_pixles_window
-                mask_warm_pixels *= mask_radial_constraint
-                #calculate integrated spectrum
-                pos = np.where(mask_warm_pixels == True)
-                flux = np.nansum([image.data[:, posx, posy] for posx, posy in zip(pos[0], pos[1])], axis=0)
-                ferr = np.power(np.nansum([np.power(image.err[:, posx, posy], 2) for posx, posy in zip(pos[0], pos[1])], axis=0), 0.5)
-                sp_integrated = sp(x=wavel, y=np.array(flux), err=np.array(ferr))
-            elif mode == 'synthetic':
-                #read continuum from the file
-                #f = np.loadtxt('/home/slava/science/research/kulkarni/JWST-DLAs/ID2441/Continuum/fit_contA.dat')
-                f = np.loadtxt('/home/slava/science/research/kulkarni/JWST-DLAs/ID2441/Continuum/sightlineA.txt')
-                f_interp = interp1d(f[:,0], f[:,1], fill_value='extrapolate')
-                sp_integrated = sp(x=wavel, y=f_interp(wavel), err=f_interp(wavel)*0.01)
+            #search for the brightest pixel
+            d_max = np.nanmax(image_comb[edge_spatial_mask])
+            image_comb[np.isnan(image_comb)] = 0
+            pos_brightest = np.argwhere(image_comb==d_max)[0]
+            print('position of the brightest pixel:', pos_brightest)
+
+            #derive fringes in spectra relative to the model
+            if 1:
+                #select pixels near the brightest pixel (cross-structure)
+                pixels_to_fit = []
+                pos_tmp = [[pos_brightest[0]-1,pos_brightest[1]-1],[pos_brightest[0],pos_brightest[1]-1],
+                           [pos_brightest[0]+1,pos_brightest[1]-1],[pos_brightest[0]-1,pos_brightest[1]],
+                           [pos_brightest[0]+1,pos_brightest[1]], [pos_brightest[0]+1,pos_brightest[1]+1],
+                           [pos_brightest[0],pos_brightest[1]], [pos_brightest[0]-1,pos_brightest[1]]]
+                pos_tmp.append([pos_brightest[0],pos_brightest[1]]) # add central spaxel
                 if 1:
+                    plt.subplots()
+                    plt.imshow(image_comb,origin='lower')
+                    plt.plot(pos_brightest[1]-1,pos_brightest[0]-1,'o',label='SE')
+                    plt.plot(pos_brightest[1]-1,pos_brightest[0], 'o',label='S')
+                    plt.plot(pos_brightest[1] - 1, pos_brightest[0]+1, 'o',label='SW')
+                    plt.legend()
+                    plt.show()
+                for p in pos_tmp:
+                    pixels_to_fit.append(sp(x=wavel, y=np.array(image.data[:,p[0],p[1]]), err=np.array(image.err[:,p[0],p[1]])))
+                del pos_tmp
+                #save spectra in tmp folder
+                for k,p in enumerate(pixels_to_fit):
+                    s_tmp = np.zeros(shape=(p.x.shape[0],3))
+                    s_tmp[:,0] = p.x
+                    s_tmp[:, 1] = p.y
+                    s_tmp[:, 2] = p.err
+                    np.savetxt('/home/slava/science/codes/python/jwst/output/tmp/fringe/spaxel_'+str(k)+'.spec1d',s_tmp)
+
+                # calc the integrated_flux
+                if integrated_spectrum_mode == 'median':
+                    # define mask for the integrated spectrum: within "brightness_level" %  of the maximal brightness
                     d = image_comb / d_max
                     mask_warm_pixels = (d > 1 - brightness_level) * edge_spatial_mask
                     print('fringe correction: number of warm pixels', np.sum(mask_warm_pixels))
                     mask_radial_constraint = np.sqrt((image_ind[0] - pos_brightest[0]) ** 2 + (
-                            image_ind[1] - pos_brightest[1]) ** 2) < radius_warm_pixles_window*miri_psf_sigma
+                                image_ind[1] - pos_brightest[1]) ** 2) < radius_warm_pixles_window
                     mask_warm_pixels *= mask_radial_constraint
-
-                    plt.subplots()
-                    s = sp_integrated.copy()
-                    s.normalize()
-                    plt.plot(s.x,s.y,label='continuum')
+                    #calculate integrated spectrum
                     pos = np.where(mask_warm_pixels == True)
-                    s = sp(x=wavel, y= np.nansum([image.data[:, posx, posy] for posx, posy in zip(pos[0], pos[1])], axis=0))
-                    s.normalize()
-                    plt.plot(s.x,s.y,label='integrated')
-                    plt.legend(fontsize=15)
-                    plt.title('compare the continuum with the integrated spectrum')
-                    plt.show()
+                    flux = np.nansum([image.data[:, posx, posy] for posx, posy in zip(pos[0], pos[1])], axis=0)
+                    ferr = np.power(np.nansum([np.power(image.err[:, posx, posy], 2) for posx, posy in zip(pos[0], pos[1])], axis=0), 0.5)
+                    sp_integrated = sp(x=wavel, y=np.array(flux), err=np.array(ferr))
+                elif integrated_spectrum_mode == 'synthetic':
+                    #read continuum from the file
+                    #f = np.loadtxt('/home/slava/science/research/kulkarni/JWST-DLAs/ID2441/Continuum/fit_contA.dat')
+                    #f = np.loadtxt('/home/slava/science/research/kulkarni/JWST-DLAs/ID2441/Continuum/sightlineA.txt')
+                    #f = np.loadtxt('/home/slava/science/research/kulkarni/JWST-DLAs/calibration_program/HD159222fit_cont.dat')
+                    f = np.loadtxt(
+                        '/home/slava/science/research/kulkarni/JWST-DLAs/calibration_program/HD37122_cont.dat')
+                    f_interp = interp1d(f[:,0], f[:,1], fill_value='extrapolate')
+                    sp_integrated = sp(x=wavel, y=f_interp(wavel), err=f_interp(wavel)*0.01)
+                    if 1:
+                        d = image_comb / d_max
+                        mask_warm_pixels = (d > 1 - brightness_level) * edge_spatial_mask
+                        print('fringe correction: number of warm pixels', np.sum(mask_warm_pixels))
+                        mask_radial_constraint = np.sqrt((image_ind[0] - pos_brightest[0]) ** 2 + (
+                                image_ind[1] - pos_brightest[1]) ** 2) < radius_warm_pixles_window*miri_psf_sigma
+                        mask_warm_pixels *= mask_radial_constraint
 
-            #calcualte the fringe model for the brightest pixel
-            fringe_fq_model = fringe_custom_multipix_model(s_pix_array=pixels_to_fit, s_mean=sp_integrated.copy(), debug=True,
-                                           show_fit_chunks=False)
-        #derive fringes in spectra using the difference between spaxels
-        if 0:
-            # select pixels near the brightest pixel (cross-structure)
-            pixels_to_left,pixels_to_right = [],[]
-            pos_left = [[pos_brightest[0] - 1, pos_brightest[1] - 1],
-                 [pos_brightest[0], pos_brightest[1] - 1],
-                       [pos_brightest[0] + 1, pos_brightest[1] - 1]]
-            pos_right = [[pos_brightest[0] - 1, pos_brightest[1] + 1],
-                 [pos_brightest[0], pos_brightest[1] + 1],
-                        [pos_brightest[0] + 1, pos_brightest[1] + 1]]
+                        plt.subplots()
+                        s = sp_integrated.copy()
+                        s.normalize()
+                        plt.plot(s.x,s.y,label='continuum')
+                        pos = np.where(mask_warm_pixels == True)
+                        s = sp(x=wavel, y= np.nansum([image.data[:, posx, posy] for posx, posy in zip(pos[0], pos[1])], axis=0))
+                        s.normalize()
+                        plt.plot(s.x,s.y,label='integrated')
+                        plt.legend(fontsize=15)
+                        plt.title('compare the continuum with the integrated spectrum')
+                        plt.show()
 
             if 1:
-                plt.subplots()
-                plt.imshow(image_comb, origin='lower')
-                for p in pos_left:
-                    plt.plot(p[1],p[0], 'o',color='red')
-                for p in pos_right:
-                    plt.plot(p[1],p[0], 'o',color='blue')
+                fig,ax = plt.subplots(1,len(pixels_to_fit))
+                for k, p in enumerate(pixels_to_fit):
+                    ax[k].plot(p.x,p.y)
                 plt.show()
-            for p in pos_left:
-                pixels_to_left.append(sp(x=wavel, y=np.array(image.data[:, p[0], p[1]]), err=np.array(image.err[:, p[0], p[1]])))
-            for p in pos_right:
-                pixels_to_right.append(sp(x=wavel, y=np.array(image.data[:, p[0], p[1]]), err=np.array(image.err[:, p[0], p[1]])))
 
-            del pos_left,pos_right
-            # save spectra in tmp folder
-            for k, p in enumerate(pixels_to_left):
-                s_tmp = np.zeros(shape=(p.x.shape[0], 3))
-                s_tmp[:, 0] = p.x
-                s_tmp[:, 1] = p.y
-                s_tmp[:, 2] = p.err
-                np.savetxt('/home/slava/science/codes/python/jwst/output/tmp/fringe/spaxel_left_' + str(k) + '.spec1d',
-                           s_tmp)
-            for k, p in enumerate(pixels_to_right):
-                s_tmp = np.zeros(shape=(p.x.shape[0], 3))
-                s_tmp[:, 0] = p.x
-                s_tmp[:, 1] = p.y
-                s_tmp[:, 2] = p.err
-                np.savetxt('/home/slava/science/codes/python/jwst/output/tmp/fringe/spaxel_right_' + str(k) + '.spec1d',
-                           s_tmp)
 
-            # calculalte the fringe model for the brightest pixel
-            fringe_fq_model = fringe_custom_pix_diff_model(s_pix_array=pixels_to_left, s_ref_array=pixels_to_right,
-                                                           debug=True,
-                                                           show_fit_chunks=False)
-            cube.fringe_fq_model = fringe_fq_model
-            plt.show()
+            if 0:
+                #calcualte the fringe model for the brightest pixel
+                fringe_fq_model = fringe_custom_multipix_model_tmp(s_pix_array=pixels_to_fit, s_mean=sp_integrated.copy(), debug=True,
+                                               show_fit_chunks=True)
+                cube.fringe_fq_model = fringe_fq_model
+                plt.show()
+            #derive fringes in spectra using the difference between spaxels
+            if 0:
+                # select pixels near the brightest pixel (cross-structure)
+                pixels_to_left,pixels_to_right = [],[]
+                pos_left = [[pos_brightest[0] - 1, pos_brightest[1] - 1], [pos_brightest[0], pos_brightest[1] - 1],
+                           [pos_brightest[0] + 1, pos_brightest[1] - 1]]
+                pos_right = [[pos_brightest[0] - 1, pos_brightest[1] + 1], [pos_brightest[0], pos_brightest[1] + 1],
+                            [pos_brightest[0] + 1, pos_brightest[1] + 1]]
+
+                if 1:
+                    plt.subplots()
+                    plt.imshow(image_comb, origin='lower')
+                    for p in pos_left:
+                        plt.plot(p[1],p[0], 'o',color='red')
+                    for p in pos_right:
+                        plt.plot(p[1],p[0], 'o',color='blue')
+                    plt.show()
+                for p in pos_left:
+                    pixels_to_left.append(sp(x=wavel, y=np.array(image.data[:, p[0], p[1]]), err=np.array(image.err[:, p[0], p[1]])))
+                for p in pos_right:
+                    pixels_to_right.append(sp(x=wavel, y=np.array(image.data[:, p[0], p[1]]), err=np.array(image.err[:, p[0], p[1]])))
+
+                del pos_left,pos_right
+                # save spectra in tmp folder
+                for k, p in enumerate(pixels_to_left):
+                    s_tmp = np.zeros(shape=(p.x.shape[0], 3))
+                    s_tmp[:, 0] = p.x
+                    s_tmp[:, 1] = p.y
+                    s_tmp[:, 2] = p.err
+                    np.savetxt('/home/slava/science/codes/python/jwst/output/tmp/fringe/spaxel_left_' + str(k) + '.spec1d',
+                               s_tmp)
+                for k, p in enumerate(pixels_to_right):
+                    s_tmp = np.zeros(shape=(p.x.shape[0], 3))
+                    s_tmp[:, 0] = p.x
+                    s_tmp[:, 1] = p.y
+                    s_tmp[:, 2] = p.err
+                    np.savetxt('/home/slava/science/codes/python/jwst/output/tmp/fringe/spaxel_right_' + str(k) + '.spec1d',
+                               s_tmp)
+
+                # calculalte the fringe model for the brightest pixel
+                fringe_fq_model = fringe_custom_pix_diff_model(s_pix_array=pixels_to_left, s_ref_array=pixels_to_right,
+                                                               debug=True,
+                                                               show_fit_chunks=False)
+                cube.fringe_fq_model = fringe_fq_model
+                plt.show()
 
 
     def make_fringe_correction(self,s=None,flag_update_data=True,debug=False,snr_lolimit=20):
@@ -4896,244 +4925,256 @@ class expRunWidget(QWidget):
 
 
         if mode == 'Custom':
-            template_case = 'polyfit' #'complex'
+            template_case = 'synthetic'#'composite'#'polyfit' #'complex'
+            fringe_mode = 'both'
 
-            from scripts.fringe_correction import (fringe_custom_correction_1d,fringe_custom_pix_diff_model)
+            from scripts.fringe_correction import (fringe_custom_correction_1d,fringe_custom_pix_diff_model,
+                                                   fringe_custom_fit_1d)
 
+            #if hasattr(cube,'fringe_fq_model'):
+            #    fringe_fq_model = cube.fringe_fq_model
 
+            # mask_fitting_pixels = (image_snr > snr_lolimit) * edge_spatial_mask
+            mask_fitting_pixels = np.sqrt(
+                (image_ind[0] - pos_brightest[0]) ** 2 + (image_ind[1] - pos_brightest[1]) ** 2) < 2
+            pos = np.where(mask_fitting_pixels == True)
 
-            if hasattr(cube,'fringe_fq_model'):
-                fringe_fq_model = cube.fringe_fq_model
-
-
-            # calculate and apply the correction for masked pixels
+            # calculate continuum model
             if template_case == 'composite':
-
-                d = image_comb / d_max
-                mask_warm_pixels = (image_snr > snr_lolimit) * edge_spatial_mask
-
-                pos = np.where(mask_warm_pixels == True)
-                if 1:
-                    flux = np.nanmean([image.data[:, posx, posy] for posx, posy in zip(pos[0], pos[1])], axis=0)
-                    ferr = np.power(
-                        np.nansum([np.power(image.err[:, posx, posy], 2) for posx, posy in zip(pos[0], pos[1])], axis=0),
-                        0.5)
-                    sp_integrated = sp(x=wavel, y=np.array(flux), err=np.array(ferr))
-
-                pix_number = 0
-                for posx, posy in zip(pos[0], pos[1]):
-                    print(pix_number,' from ',pos[0].shape[0])
-                    print('pix coord (A):',posx, posy,' relative brightness: ',d[posx,posy])
-                    pix_number+=1
-                    flux = np.array(image.data[:, posx, posy])
-                    ferr = np.array(image.err[:, posx, posy])
-
-
-                    sp_i = sp(x=wavel, y=flux, err=ferr)
-                    sp_i_fringe_model = fringe_custom_correction_1d(sp_i, sp_integrated.copy(), debug=debug, show_fit_chunks=False,
-                                                fringe_fq_model=fringe_fq_model,title='('+str(posx)+','+str(posy)+')')
-
-
-                    if flag_update_data:
-                        image.data[:, posx, posy] -= sp_i_fringe_model.y
-
-            elif template_case == 'polyfit':
-
-                d = image_comb / d_max
-                mask_warm_pixels = (image_snr>snr_lolimit)* edge_spatial_mask
-                mask_corrected_pixels = np.zeros_like(mask_warm_pixels)
-
-
-                pos = np.where(mask_warm_pixels == True)
-                pix_number = 0
-                for posx, posy in zip(pos[0], pos[1]):
-                    print(pix_number,' from ',pos[0].shape[0])
-                    print('pix coord (A):',posx, posy,' relative brightness: ',d[posx,posy])
-                    debug=True
-                    if pix_number>10:
-                        debug = False
-                    flux = np.array(image.data[:, posx, posy])
-                    ferr = np.array(image.err[:, posx, posy])
-
-
-                    sp_i = sp(x=wavel, y=flux, err=ferr)
-                    mask_nan = np.isnan(np.array(flux))
-                    from numpy.polynomial import Chebyshev
-                    cheb_fit = Chebyshev.fit(sp_i.x[~mask_nan], np.array(flux)[~mask_nan], deg=3)
-                    #z = np.polyfit(sp_i.x[~mask_nan], np.array(flux)[~mask_nan], 10)
-                    sp_i_model = sp(x=wavel, y=cheb_fit(sp_i.x), err=ferr)
-
-                    sp_i_fringe_model = fringe_custom_correction_1d(sp_i, sp_i_model.copy(), debug=debug, show_fit_chunks=False,
-                                                fringe_fq_model=fringe_fq_model,title='('+str(posx)+','+str(posy)+')')
-                    mask_corrected_pixels[posx, posy] = 1
-
-
-                    if flag_update_data:
-                        image.data[:, posx, posy] -= sp_i_fringe_model.y
-                    pix_number += 1
-
-                fig, ax = plt.subplots(1, 2, sharex=True, sharey=True)
-                ax[0].imshow(d, origin='lower')
-                ax[1].imshow(mask_corrected_pixels, origin='lower')
-                # plot mask
-                x = np.arange(mask_warm_pixels.shape[1])
-                y = np.arange(mask_warm_pixels.shape[0])
-                X, Y = np.meshgrid(x, y)
-                ax[0].contour(X, Y, mask_warm_pixels.astype(float), levels=[0], colors='red', linewidths=2, vmin=0,
-                              vmax=1)
-                plt.show()
-            # set quasar images model
-            elif template_case == 'complex':
-                #f = np.loadtxt('/home/slava/science/research/kulkarni/JWST-DLAs/ID2441/Continuum/fit_contA.dat')
-                f = np.loadtxt('/home/slava/science/projects/jwst/ID2441/Continuum/sightlineA.txt')
-                #f = np.loadtxt('/home/slava/science/research/kulkarni/JWST-DLAs/ID2441/Continuum/QSO-B1830-211-SIGHTLINEB_3A_ch3-short_FR_s3d_(A)_green.spec1d')
+                flux = np.nanmean([image.data[:, posx, posy] for posx, posy in zip(pos[0], pos[1])], axis=0)
+                ferr = np.power(
+                    np.nansum([np.power(image.err[:, posx, posy], 2) for posx, posy in zip(pos[0], pos[1])], axis=0),
+                    0.5)
+                sp_continuum = sp(x=wavel, y=np.array(flux), err=np.array(ferr))
+            if template_case == 'synthetic':
+                #f = np.loadtxt(
+                #    '/home/slava/science/research/kulkarni/JWST-DLAs/calibration_program/HD159222fit_cont.dat')
+                #f = np.loadtxt(
+                #    '/home/slava/science/research/kulkarni/JWST-DLAs/calibration_program/HD37122_cont.dat')
+                f = np.loadtxt(
+                    './data_local/continuum/PKS1830_A_cont.dat')
+                #f = np.loadtxt(
+                #    './data_local/continuum/PKS1830_B_cont.dat')
                 f_interp = interp1d(f[:, 0], f[:, 1], fill_value='extrapolate')
-                sp_integrated_A = sp(x=wavel, y=f_interp(wavel), err=f_interp(wavel) * 0.01)
-                f = np.array(np.nanmedian(sp_integrated_A.y))
-                sp_integrated_A.y /= f
-                sp_integrated_A.err /= f
+                sp_continuum = sp(wavel, f_interp(wavel), f_interp(wavel)/100)
+                mask_features_in = np.loadtxt('./data_local/continuum/mask_CO.dat')
+                mask_features = interp1d(mask_features_in[:,0],mask_features_in[:,1],fill_value='extrapolate')
+                del mask_features_in
 
-                #f = np.loadtxt('/home/slava/science/research/kulkarni/JWST-DLAs/ID2441/Continuum/fit_contB.dat')
-                f = np.loadtxt('/home/slava/science/projects/jwst/ID2441/Continuum/sightlineB.txt')
-                #f = np.loadtxt('/home/slava/science/research/kulkarni/JWST-DLAs/ID2441/Continuum/QSO-B1830-211-SIGHTLINEB_3A_ch3-short_FR_s3d_(A)_red.spec1d')
-                f_interp = interp1d(f[:, 0], f[:, 1], fill_value='extrapolate')
-                sp_integrated_B = sp(x=wavel, y=f_interp(wavel), err=f_interp(wavel) * 0.01)
-                f = np.array(np.nanmedian(sp_integrated_B.y))
-                sp_integrated_B.y /= f
-                sp_integrated_B.err /= f
-
-                # set quasar images coordinates
-                sA_coords = self.parent.CUBE_A.conv_world_coord(t=wavel[10], x=278.416405, y=-21.061055,
-                                                                mode='pipeline_world_to_pix')
-                posA = [int(sA_coords[2]),int(sA_coords[1])]
-                #mask_radA = np.sqrt((image_ind[0] - posA[0]) ** 2 + (image_ind[1] - posA[1]) ** 2) <= 1
-                mask_radA = ((image_ind[0] - posA[0] <= 1)*(image_ind[0] - posA[0] >=0)*
-                             (image_ind[1] - posA[1] <= 1) * (image_ind[1] - posA[1] >= 0))
-                im1 = np.array(image_comb)
-                im1[~mask_radA] = np.nan
-                posA = np.argwhere(im1 == np.nanmax(im1))[0]
-                #del mask_radA,im1
-
-                sB_coords = self.parent.CUBE_A.conv_world_coord(t=wavel[10], x=278.41620026, y=-21.06127259,
-                                                                mode='pipeline_world_to_pix')
-                posB = [int(sB_coords[2]), int(sB_coords[1])]
-                mask_radB = ((image_ind[0] - posB[0] <= 1) * (image_ind[0] - posB[0] >= 0) *
-                             (image_ind[1] - posB[1] <= 1) * (image_ind[1] - posB[1] >= 0))
-                im2 = np.array(image_comb)
-                im2[~mask_radB] = np.nan
-                posB = np.argwhere(im2 == np.nanmax(im2))[0]
-                #del im
-
-                if 0:
-                    fig,ax = plt.subplots(1,3,sharex=True,sharey=True)
-                    ax[0].imshow(image_comb,origin='lower')
-                    ax[1].imshow(im1, origin='lower')
-                    ax[2].imshow(im2, origin='lower')
-                    ax[0].plot(posA[1],posA[0],'o')
-                    ax[0].plot((sA_coords[1]),(sA_coords[2]), 'x',markersize=10)
-                    ax[0].plot(posB[1],posB[0],'o')
-                    ax[0].plot((sB_coords[1]),(sB_coords[2]), 'x',markersize=10)
-                    plt.show()
-                del mask_radA,mask_radB, im1,im2
-
-                print('pos:',posA,posB)
-                #fluxes of A and B quasars in their central pixels
-                fA = np.nanmedian(image.data[:, posA[0], posA[1]])
-                fB = np.nanmedian(image.data[:, posB[0], posB[1]])
-
-                plt.subplots()
-                plt.plot(wavel,image.data[:, posA[0], posA[1]])
-                plt.plot(wavel,sp_integrated_A.y*fA )
-                plt.plot(wavel,image.data[:, posB[0], posB[1]])
-                plt.plot(wavel,sp_integrated_B.y*fB )
-
-                plt.show()
-                #make a cube model
-                #def psf_model(r,sigma = miri_psf_sigma):
-                #    return np.exp(-r**2/2/sigma**2)
+            #run corrections
+            pix_number = 0
+            for posx, posy in zip(pos[0], pos[1]):
+                print(pix_number,' from ',pos[0].shape[0])
+                print('spaxel coordinates:',posx, posy)
+                pix_number+=1
+                flux = np.array(image.data[:, posx, posy])
+                ferr = np.array(image.err[:, posx, posy])
 
 
-                #make webbpsf model for quasars brightness distribution
-                if 1:
-                    from scripts.psf_subtraction import read_psf,model_img
-                    from lmfit import Parameters
+                sp_i = sp(x=wavel, y=flux, err=ferr)
+                sp_i_fringe_model = fringe_custom_fit_1d(sp_i, sp_continuum.copy(),channel=channel+band,
+                                                         mode=fringe_mode,mask_features=mask_features(wavel))
 
-                    band_letter = {'SHORT': 'A', 'MEDIUM': 'B', 'LONG': 'C'}
-                    psf = read_psf(channel=channel+band_letter[band],source='custom_psf') #source= 'webbpsf')
-                    pars_tmp = Parameters()
-                    names = ['xc', 'yc', 'amp']
-                    values = [posA[0],posA[1],1]
-                    #values = [int(sA_coords[2]),int(sA_coords[1]),1]
-                    for name, value in zip(names, values):
-                        pars_tmp.add(name, value=value, min=0, max=np.inf)
-                    m_A = model_img(params=pars_tmp, img_shape=image_comb.shape, psf_image=psf,
-                                    overdist=False, debug=False, get_qso_pos=False)
-                    m_A*=fA/np.nanmax(m_A)
-                    values = [posB[0], posB[1], 1]
-                    #values = [int(sB_coords[2]), int(sB_coords[1]), 1]
-                    for name, value in zip(names, values):
-                        pars_tmp.add(name, value=value, min=0, max=np.inf)
-                    m_B = model_img(params=pars_tmp, img_shape=image_comb.shape, psf_image=psf,
-                                    overdist=False, debug=False, get_qso_pos=False)
-                    m_B *= fB / np.nanmax(m_B)
 
-                def model_qso_cube(pos=[1,2]):
-                    rA = m_A[pos[0],pos[1]]
-                    rB = m_B[pos[0], pos[1]]
-                    f = np.array(rA*sp_integrated_A.y + rB*sp_integrated_B.y)
-                    return f
+                if flag_update_data:
+                    image.data[:, posx, posy] -= sp_i_fringe_model
 
-                #make a mask for calculating fringe corrections:
-                d = image_comb / d_max
-                mask_warm_pixels = (image_snr > snr_lolimit) * edge_spatial_mask
-                #mask_warm_pixels = (d > 1 - brightness_level)
-                mask_radA = np.sqrt((image_ind[0] - posA[0]) ** 2 + (image_ind[1] - posA[1]) ** 2) < 3 * miri_psf_sigma
-                mask_radB = np.sqrt((image_ind[0] - posB[0]) ** 2 + (image_ind[1] - posB[1]) ** 2) < 3 * miri_psf_sigma
-                mask_pixels =(mask_warm_pixels)*(mask_radA+mask_radB)*(edge_spatial_mask)
-                pos_fringes = np.where(mask_pixels == True)
+            if 0:
+                if template_case == 'polyfit':
 
-                if 1:
-                    fig, ax = plt.subplots(1, 3, sharex=True, sharey=True)
-                    ax[0].imshow(d, origin='lower')
-                    #plot mask
-                    m = mask_pixels.astype(float)
-                    x = np.arange(mask_pixels.shape[1])
-                    y = np.arange(mask_pixels.shape[0])
-                    X, Y = np.meshgrid(x, y)
-                    ax[0].contour(X, Y, m, levels=[0], colors='red', linewidths=2,vmin=0,vmax=1)
+                    d = image_comb / d_max
+                    mask_warm_pixels = (image_snr>snr_lolimit)* edge_spatial_mask
+                    mask_corrected_pixels = np.zeros_like(mask_warm_pixels)
 
-                    ax[0].plot(posA[1], posA[0], 'o')
-                    ax[0].plot((sA_coords[1]), (sA_coords[2]), 'x', markersize=10)
-                    ax[0].plot(posB[1], posB[0], 'o')
-                    ax[0].plot((sB_coords[1]), (sB_coords[2]), 'x', markersize=10)
 
-                    dc = np.zeros_like(d)
-                    for posx, posy in zip(pos_fringes[0], pos_fringes[1]):
-                        dc[posx,posy] = np.nanmedian(model_qso_cube(pos=[posx,posy]))/d_max
-                    ax[1].imshow(dc, origin='lower',vmin=0,vmax=1)
-                    ax[2].imshow(d-dc, origin='lower',vmin=-0.1,vmax=0.1)
-                    plt.show()
-
-                #calculate fringes
-                pix_number = 0
-                for posx, posy in zip(pos_fringes[0], pos_fringes[1]):
-                    print(pix_number, ' from ', pos_fringes[0].shape[0])
-                    print('pix coordinate:', posx, posy, ' relative brightness: ', d[posx, posy])
-                    pix_number += 1
-                    if 1:
+                    pos = np.where(mask_warm_pixels == True)
+                    pix_number = 0
+                    for posx, posy in zip(pos[0], pos[1]):
+                        print(pix_number,' from ',pos[0].shape[0])
+                        print('pix coord (A):',posx, posy,' relative brightness: ',d[posx,posy])
+                        debug=True
+                        if pix_number>10:
+                            debug = False
                         flux = np.array(image.data[:, posx, posy])
                         ferr = np.array(image.err[:, posx, posy])
+
+
                         sp_i = sp(x=wavel, y=flux, err=ferr)
-                        model_i = sp(x=wavel,y=model_qso_cube(pos=[posx,posy]),err=ferr)
-                        sp_i_fringe_model = fringe_custom_correction_1d(sp_i, model_i, debug=True,
-                                                                        show_fit_chunks=False,
-                                                                        fringe_fq_model=fringe_fq_model,
-                                                                        title='(' + str(posx) + ',' + str(posy) + ')')
+                        mask_nan = np.isnan(np.array(flux))
+                        from numpy.polynomial import Chebyshev
+                        cheb_fit = Chebyshev.fit(sp_i.x[~mask_nan], np.array(flux)[~mask_nan], deg=3)
+                        #z = np.polyfit(sp_i.x[~mask_nan], np.array(flux)[~mask_nan], 10)
+                        sp_i_model = sp(x=wavel, y=cheb_fit(sp_i.x), err=ferr)
+
+                        sp_i_fringe_model = fringe_custom_correction_1d(sp_i, sp_i_model.copy(), debug=debug, show_fit_chunks=False,
+                                                    fringe_fq_model=fringe_fq_model,title='('+str(posx)+','+str(posy)+')')
+                        mask_corrected_pixels[posx, posy] = 1
+
 
                         if flag_update_data:
                             image.data[:, posx, posy] -= sp_i_fringe_model.y
+                        pix_number += 1
+
+                    fig, ax = plt.subplots(1, 2, sharex=True, sharey=True)
+                    ax[0].imshow(d, origin='lower')
+                    ax[1].imshow(mask_corrected_pixels, origin='lower')
+                    # plot mask
+                    x = np.arange(mask_warm_pixels.shape[1])
+                    y = np.arange(mask_warm_pixels.shape[0])
+                    X, Y = np.meshgrid(x, y)
+                    ax[0].contour(X, Y, mask_warm_pixels.astype(float), levels=[0], colors='red', linewidths=2, vmin=0,
+                                  vmax=1)
+                    plt.show()
+                # set quasar images model
+                elif template_case == 'complex':
+                    #f = np.loadtxt('/home/slava/science/research/kulkarni/JWST-DLAs/ID2441/Continuum/fit_contA.dat')
+                    f = np.loadtxt('/home/slava/science/projects/jwst/ID2441/Continuum/sightlineA.txt')
+                    #f = np.loadtxt('/home/slava/science/research/kulkarni/JWST-DLAs/ID2441/Continuum/QSO-B1830-211-SIGHTLINEB_3A_ch3-short_FR_s3d_(A)_green.spec1d')
+                    f_interp = interp1d(f[:, 0], f[:, 1], fill_value='extrapolate')
+                    sp_integrated_A = sp(x=wavel, y=f_interp(wavel), err=f_interp(wavel) * 0.01)
+                    f = np.array(np.nanmedian(sp_integrated_A.y))
+                    sp_integrated_A.y /= f
+                    sp_integrated_A.err /= f
+
+                    #f = np.loadtxt('/home/slava/science/research/kulkarni/JWST-DLAs/ID2441/Continuum/fit_contB.dat')
+                    f = np.loadtxt('/home/slava/science/projects/jwst/ID2441/Continuum/sightlineB.txt')
+                    #f = np.loadtxt('/home/slava/science/research/kulkarni/JWST-DLAs/ID2441/Continuum/QSO-B1830-211-SIGHTLINEB_3A_ch3-short_FR_s3d_(A)_red.spec1d')
+                    f_interp = interp1d(f[:, 0], f[:, 1], fill_value='extrapolate')
+                    sp_integrated_B = sp(x=wavel, y=f_interp(wavel), err=f_interp(wavel) * 0.01)
+                    f = np.array(np.nanmedian(sp_integrated_B.y))
+                    sp_integrated_B.y /= f
+                    sp_integrated_B.err /= f
+
+                    # set quasar images coordinates
+                    sA_coords = self.parent.CUBE_A.conv_world_coord(t=wavel[10], x=278.416405, y=-21.061055,
+                                                                    mode='pipeline_world_to_pix')
+                    posA = [int(sA_coords[2]),int(sA_coords[1])]
+                    #mask_radA = np.sqrt((image_ind[0] - posA[0]) ** 2 + (image_ind[1] - posA[1]) ** 2) <= 1
+                    mask_radA = ((image_ind[0] - posA[0] <= 1)*(image_ind[0] - posA[0] >=0)*
+                                 (image_ind[1] - posA[1] <= 1) * (image_ind[1] - posA[1] >= 0))
+                    im1 = np.array(image_comb)
+                    im1[~mask_radA] = np.nan
+                    posA = np.argwhere(im1 == np.nanmax(im1))[0]
+                    #del mask_radA,im1
+
+                    sB_coords = self.parent.CUBE_A.conv_world_coord(t=wavel[10], x=278.41620026, y=-21.06127259,
+                                                                    mode='pipeline_world_to_pix')
+                    posB = [int(sB_coords[2]), int(sB_coords[1])]
+                    mask_radB = ((image_ind[0] - posB[0] <= 1) * (image_ind[0] - posB[0] >= 0) *
+                                 (image_ind[1] - posB[1] <= 1) * (image_ind[1] - posB[1] >= 0))
+                    im2 = np.array(image_comb)
+                    im2[~mask_radB] = np.nan
+                    posB = np.argwhere(im2 == np.nanmax(im2))[0]
+                    #del im
+
+                    if 0:
+                        fig,ax = plt.subplots(1,3,sharex=True,sharey=True)
+                        ax[0].imshow(image_comb,origin='lower')
+                        ax[1].imshow(im1, origin='lower')
+                        ax[2].imshow(im2, origin='lower')
+                        ax[0].plot(posA[1],posA[0],'o')
+                        ax[0].plot((sA_coords[1]),(sA_coords[2]), 'x',markersize=10)
+                        ax[0].plot(posB[1],posB[0],'o')
+                        ax[0].plot((sB_coords[1]),(sB_coords[2]), 'x',markersize=10)
+                        plt.show()
+                    del mask_radA,mask_radB, im1,im2
+
+                    print('pos:',posA,posB)
+                    #fluxes of A and B quasars in their central pixels
+                    fA = np.nanmedian(image.data[:, posA[0], posA[1]])
+                    fB = np.nanmedian(image.data[:, posB[0], posB[1]])
+
+                    plt.subplots()
+                    plt.plot(wavel,image.data[:, posA[0], posA[1]])
+                    plt.plot(wavel,sp_integrated_A.y*fA )
+                    plt.plot(wavel,image.data[:, posB[0], posB[1]])
+                    plt.plot(wavel,sp_integrated_B.y*fB )
+
+                    plt.show()
+                    #make a cube model
+                    #def psf_model(r,sigma = miri_psf_sigma):
+                    #    return np.exp(-r**2/2/sigma**2)
 
 
+                    #make webbpsf model for quasars brightness distribution
+                    if 1:
+                        from scripts.psf_subtraction import read_psf,model_img
+                        from lmfit import Parameters
+
+                        band_letter = {'SHORT': 'A', 'MEDIUM': 'B', 'LONG': 'C'}
+                        psf = read_psf(channel=channel+band_letter[band],source='custom_psf') #source= 'webbpsf')
+                        pars_tmp = Parameters()
+                        names = ['xc', 'yc', 'amp']
+                        values = [posA[0],posA[1],1]
+                        #values = [int(sA_coords[2]),int(sA_coords[1]),1]
+                        for name, value in zip(names, values):
+                            pars_tmp.add(name, value=value, min=0, max=np.inf)
+                        m_A = model_img(params=pars_tmp, img_shape=image_comb.shape, psf_image=psf,
+                                        overdist=False, debug=False, get_qso_pos=False)
+                        m_A*=fA/np.nanmax(m_A)
+                        values = [posB[0], posB[1], 1]
+                        #values = [int(sB_coords[2]), int(sB_coords[1]), 1]
+                        for name, value in zip(names, values):
+                            pars_tmp.add(name, value=value, min=0, max=np.inf)
+                        m_B = model_img(params=pars_tmp, img_shape=image_comb.shape, psf_image=psf,
+                                        overdist=False, debug=False, get_qso_pos=False)
+                        m_B *= fB / np.nanmax(m_B)
+
+                    def model_qso_cube(pos=[1,2]):
+                        rA = m_A[pos[0],pos[1]]
+                        rB = m_B[pos[0], pos[1]]
+                        f = np.array(rA*sp_integrated_A.y + rB*sp_integrated_B.y)
+                        return f
+
+                    #make a mask for calculating fringe corrections:
+                    d = image_comb / d_max
+                    mask_warm_pixels = (image_snr > snr_lolimit) * edge_spatial_mask
+                    #mask_warm_pixels = (d > 1 - brightness_level)
+                    mask_radA = np.sqrt((image_ind[0] - posA[0]) ** 2 + (image_ind[1] - posA[1]) ** 2) < 3 * miri_psf_sigma
+                    mask_radB = np.sqrt((image_ind[0] - posB[0]) ** 2 + (image_ind[1] - posB[1]) ** 2) < 3 * miri_psf_sigma
+                    mask_pixels =(mask_warm_pixels)*(mask_radA+mask_radB)*(edge_spatial_mask)
+                    pos_fringes = np.where(mask_pixels == True)
+
+                    if 1:
+                        fig, ax = plt.subplots(1, 3, sharex=True, sharey=True)
+                        ax[0].imshow(d, origin='lower')
+                        #plot mask
+                        m = mask_pixels.astype(float)
+                        x = np.arange(mask_pixels.shape[1])
+                        y = np.arange(mask_pixels.shape[0])
+                        X, Y = np.meshgrid(x, y)
+                        ax[0].contour(X, Y, m, levels=[0], colors='red', linewidths=2,vmin=0,vmax=1)
+
+                        ax[0].plot(posA[1], posA[0], 'o')
+                        ax[0].plot((sA_coords[1]), (sA_coords[2]), 'x', markersize=10)
+                        ax[0].plot(posB[1], posB[0], 'o')
+                        ax[0].plot((sB_coords[1]), (sB_coords[2]), 'x', markersize=10)
+
+                        dc = np.zeros_like(d)
+                        for posx, posy in zip(pos_fringes[0], pos_fringes[1]):
+                            dc[posx,posy] = np.nanmedian(model_qso_cube(pos=[posx,posy]))/d_max
+                        ax[1].imshow(dc, origin='lower',vmin=0,vmax=1)
+                        ax[2].imshow(d-dc, origin='lower',vmin=-0.1,vmax=0.1)
+                        plt.show()
+
+                    #calculate fringes
+                    pix_number = 0
+                    for posx, posy in zip(pos_fringes[0], pos_fringes[1]):
+                        print(pix_number, ' from ', pos_fringes[0].shape[0])
+                        print('pix coordinate:', posx, posy, ' relative brightness: ', d[posx, posy])
+                        pix_number += 1
+                        if 1:
+                            flux = np.array(image.data[:, posx, posy])
+                            ferr = np.array(image.err[:, posx, posy])
+                            sp_i = sp(x=wavel, y=flux, err=ferr)
+                            model_i = sp(x=wavel,y=model_qso_cube(pos=[posx,posy]),err=ferr)
+                            sp_i_fringe_model = fringe_custom_correction_1d(sp_i, model_i, debug=True,
+                                                                            show_fit_chunks=False,
+                                                                            fringe_fq_model=fringe_fq_model,
+                                                                            title='(' + str(posx) + ',' + str(posy) + ')')
+
+                            if flag_update_data:
+                                image.data[:, posx, posy] -= sp_i_fringe_model.y
 
         elif mode == 'Pipeline':
             from jwst.residual_fringe.utils import fit_residual_fringes_1d
@@ -5169,6 +5210,8 @@ class expRunWidget(QWidget):
             X, Y = np.meshgrid(x, y)
             ax[0].contour(X, Y, mask_warm_pixels.astype(float), levels=[0], colors='red', linewidths=2, vmin=0, vmax=1)
             plt.show()
+
+
     def set_DQ_map(self, debug = False):
         print('set_DQ_map, debug:', debug)
         self.parent.Cubes_A.table.set_dq()
