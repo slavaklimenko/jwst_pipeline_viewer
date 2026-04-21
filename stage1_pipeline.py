@@ -246,7 +246,7 @@ class detector1():
         # Call using the output from the previously-run dq_init step
         self.data = saturation_step.run(input_file)
 
-        if debug and 1:
+        if debug and 0:
             saturation = self.data
             # Find indexes of saturated pixels
             saturated = np.where(saturation.groupdq & dqflags.pixel['SATURATED'] > 0)
@@ -289,8 +289,7 @@ class detector1():
                 saturated_points = copy.deepcopy(saturation.data[0, :, y, x])
                 saturated_points[~sat_dq] = np.nan
                 # Plot the pixel's values up the ramp and denote the saturated groups
-                plot_ramps(groups, full_ramp, saturated_points, label1='', label2='',
-                           title='Pixel ({}, {})'.format(x, y), ax=ax[0, axi])
+
 
             if 1:
                 normal_pixels = np.where(saturated_2d == 0)
@@ -397,8 +396,6 @@ class detector1():
         self.data = custom_drop_groups.run(input_file)
 
     def drop_first_steps(self,input_file=None, mode = 0, output_dir=None,):
-        if output_dir == None:
-            output_dir = self.output_dir
         if input_file == None:
             input_file = self.data
 
@@ -429,16 +426,21 @@ class detector1():
 
             # Update the step status, and if ngroups > 2, set all of the GROUPDQ in
             # the first N group to 'DO_NOT_USE'
-            if sci_ngroups > 12:
-                for i in range(N_drop):
-                    output.groupdq[:, i, :, :] = \
-                        np.bitwise_or(output.groupdq[:, i, :, :], dqflags.group['DO_NOT_USE'])
-                print("LastFrame Sub: resetting GROUPDQ in last frame to DO_NOT_USE")
-                output.meta.cal_step.drop_groups = 'COMPLETE'
-            else:  # too few groups
-                print("Too few groups to apply correction")
-                print("Step will be skipped")
-                output.meta.cal_step.drop_groups = 'SKIPPED'
+            if sci_ngroups < 20:
+                N_drop = 2
+            elif sci_ngroups >= 20 and sci_ngroups < 40:
+                if N_drop < 6:
+                    N_drop = 6
+            else:
+                if N_drop<12:
+                    N_drop = 12
+
+            self.drop_ngroups=N_drop
+            for i in range(N_drop):
+                output.groupdq[:, i, :, :] = \
+                    np.bitwise_or(output.groupdq[:, i, :, :], dqflags.group['DO_NOT_USE'])
+            print("LastFrame Sub: resetting GROUPDQ in last frame to DO_NOT_USE")
+            output.meta.cal_step.drop_groups = 'COMPLETE'
 
             return output
 

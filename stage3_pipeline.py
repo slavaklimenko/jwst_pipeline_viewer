@@ -63,8 +63,8 @@ from matplotlib import rc
 import jwst
 
 # JWST pipelines (encompassing many steps)
-from jwst.pipeline import Detector1Pipeline
-from jwst.pipeline import Spec2Pipeline
+#from jwst.pipeline import Detector1Pipeline
+#from jwst.pipeline import Spec2Pipeline
 from jwst.pipeline import Spec3Pipeline
 
 # Individual JWST pipeline steps
@@ -398,12 +398,47 @@ class detector3():
         # Otherwise, just copy cached outputs into our output directory structure
 
     def create_association(self, input_dir=None,source = 'Object',channel = '1', band ='SHORT',subfilename = '',dither=None):
-        if band != 'ABC':
+        if band != 'SHORTMEDIUMLONG':
             exp_list = []
             bandname = {}
             bandname['SHORT'] = 'A'
             bandname['MEDIUM'] = 'B'
             bandname['LONG'] = 'C'
+
+            #sstring = input_dir + '/' + ('*bkgr_sub_cal.fits')
+            sstring = input_dir + '/' + ('*_cal.fits')
+            cal_files = sorted(glob.glob(sstring))
+            for f in cal_files:
+                print('cal_file_name:', f)
+                hdulist = fits.open(f)
+                header = hdulist[0].header
+                f_targ_name = header['TARGPROP']
+                f_band = header['BAND']
+                f_channel = header['CHANNEL']
+                f_dit_pos = header['PATT_NUM']
+                hdulist.close()
+                if dither == None:
+                    f_dit_pos = None
+                if f_targ_name == source and channel in f_channel and f_band in band and f_dit_pos == dither: # and '5001_03' not in f:
+                    exp_list.append(f.split('/')[-1])
+            if subfilename == '':
+                asn_name = input_dir + '/'+ source + '_'+channel + bandname[band] + '.json'
+            else:
+                asn_name = input_dir + '/' + source + subfilename + '_'+channel + bandname[band] +'.json'
+            #exp_list = [exp_list[0],exp_list[1]]
+            if len(exp_list)>0:
+                print('ASN_FILE',asn_name, [el for el in exp_list])
+                self.writel3asn(exp_list, asn_name, source + '_'+channel + bandname[band])
+                self.local_asn_file = asn_name
+                return asn_name
+
+        elif band == 'SHORTMEDIUMLONG':
+            exp_list = []
+            bandname = {}
+            bandname['SHORT'] = 'A'
+            bandname['MEDIUM'] = 'B'
+            bandname['LONG'] = 'C'
+            bandname['SHORTMEDIUMLONG'] = 'ABC'
 
             #sstring = input_dir + '/' + ('*bkgr_sub_cal.fits')
             sstring = input_dir + '/' + ('*_cal.fits')
@@ -476,7 +511,7 @@ class detector3():
         spec3.cube_build.output_file = (input_file.split('/')[-1]).split('.')[0]
         spec3.extract_1d.skip = 1 - master_extract1d_flag
         spec3.coord_system = 'ifualign'
-        if band == 'ABC':
+        if band == 'SHORTMEDIUMLONG':
             spec3.cube_build.output_type = 'channel'
 
         print('master_background.skip', 1 - master_bkgr_flag)

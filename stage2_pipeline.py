@@ -116,11 +116,7 @@ class detector2():
 
     def read_ratefiles(self,det1_dir =None, input_file_base = None, debug=1):
         if det1_dir != None:
-            sstring = det1_dir + '/'+'*rate.fits'
-            ratefiles = sorted(glob.glob(sstring))
             for (dirpath, dirname, filenames) in os.walk(det1_dir):
-            #    print(filenames)
-            #for f in ratefiles:
                 for f in filenames:
                     if input_file_base in f  and '_rate.fits' in f:
                         self.rate_file = dirpath+'/'+f
@@ -138,6 +134,7 @@ class detector2():
 
 
     def init_rate_files(self, input_file=None,mode=None):
+        print('init_rate_file', input_file)
         with datamodels.open(input_file) as input_model:
             # If input type is not supported, log warning, set to 'skipped', exit
             if not (isinstance(input_model, datamodels.ImageModel) or
@@ -483,7 +480,7 @@ class detector2():
             ax[1].imshow(mmed)
             ax[2].imshow(mshort)
             plt.show()
-    def select_hot_pix(self,output_dir='./data/Hot_pixels/',debug=False):
+    def select_hot_pix(self,output_dir='./data_local/Hot_pixels/',debug=False):
         band = self.data.meta.instrument.band
         channel = self.data.meta.instrument.channel
         if channel == '34':
@@ -703,7 +700,10 @@ class detector2():
             s_band = s[4]
             s_ch = s[5]
             if s_band == band and s_ch == channel:
+                print('name',s[3])
                 if 'BACK' in s[3] and s[0].split('uncal')[0] != self.name:
+                    listnames_backgr.append(s)
+                elif 'BCK' in s[3] and s[0].split('uncal')[0] != self.name:
                     listnames_backgr.append(s)
                 else:
                     listnames_source.append(s)
@@ -897,8 +897,13 @@ class detector2():
             if s_band == band and s_ch == channel:
                 if 'BACK' in s[3]:
                     listnames_backgr.append(s)
+                elif 'BCK' in s[3]:
+                    listnames_backgr.append(s)
                 else:
                     listnames_source.append(s)
+
+        print('listnames_backgr',listnames_backgr)
+        print('listnames_source',listnames_source)
 
         bkgr_images = []
         bkgr_names = []
@@ -911,6 +916,9 @@ class detector2():
             elif  database == 'fringe_corr':
                 bkgr_data = detector2(miri_uncal_file=el[0]+'.fits',path = self.path, output_dir=self.output_dir)
                 bkgr_data.read_res_fringes()
+            elif  database == 'flat_fringe':
+                bkgr_data = detector2(miri_uncal_file=el[0]+'.fits',path = self.path, output_dir=self.output_dir)
+                bkgr_data.read_flat_fringes()
             bkgr_slope = bkgr_data.data.data
             bkgr_sig_slope = bkgr_data.data.err
             bkgr_dq = bkgr_data.data.dq
@@ -958,11 +966,17 @@ class detector2():
 
     def subtract_bkgr_model(self, bkgr_model,bkgr_model_sig,savepdf=True):
         targ_name = self.data.meta.target.proposer_name
+        print('targ name',targ_name)
         if 'BACKGROUND' in targ_name:
             self.data.data = bkgr_model
             self.data.err = bkgr_model_sig
             self.data.meta.background.subtracted = False
+        elif 'BCK' in targ_name:
+            self.data.data = bkgr_model
+            self.data.err = bkgr_model_sig
+            self.data.meta.background.subtracted = False
         else:
+            print('subtract')
             data_tmp = np.array(self.data.data)
             nan_mask = ~np.isnan(bkgr_model)
             self.data.data[nan_mask] -= bkgr_model[nan_mask]
@@ -1654,6 +1668,23 @@ class detector2():
 
         if debug:
             print('RES FRINGE STEP: Done.')
+
+    def read_flat_fringes(self):
+        updated = False
+        input_dir = self.output_dir + '*fringestep.fits'
+        obs_id = self.data.meta.observation.obs_id
+        print('read obs_id', obs_id)
+        filelist = sorted(glob.glob(input_dir))
+        for f in filelist:
+            hdulist = fits.open(f)
+            header = hdulist[0].header
+            f_obs_id = header['OBS_ID']
+            if obs_id == f_obs_id and self.name in f:
+                print('read from', f)
+                self.update_data_file(input_file=f)
+                updated = True
+                break
+        return updated
 
     def read_res_fringes(self):
         updated = False
