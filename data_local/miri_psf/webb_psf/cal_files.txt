@@ -1,0 +1,12 @@
+1A,jw02441001001_04106_00001_mirifushort_cal.fits
+1B,jw02441001001_04104_00001_mirifushort_cal.fits
+1C, jw02441001001_04102_00001_mirifushort_cal.fits
+2A, jw02441001001_04106_00001_mirifushort_cal.fits 
+2B, jw02441001001_04104_00001_mirifushort_cal.fits
+2C, jw02441001001_04102_00001_mirifushort_cal.fits
+3A, jw02441001001_04106_00001_mirifulong_cal.fits
+3B, jw02441001001_04104_00001_mirifulong_cal.fits
+3C, jw02441001001_04102_00001_mirifulong_cal.fits
+4A, jw02441001001_04106_00001_mirifulong_cal.fits
+4B, jw02441001001_04104_00001_mirifulong_cal.fits
+4C, jw02441001001_04102_00001_mirifulong_cal.fits
