@@ -929,6 +929,7 @@ class detector2():
             bkgr_sigimages.append(bkgr_sig_slope)
             bkgr_dqs.append(bkgr_dq)
             del bkgr_dq,bkgr_slope,bkgr_sig_slope
+        print('bkgr_names', bkgr_names)
 
         # find path to photom mask
         photom_list = sorted(glob.glob(os.environ["CRDS_PATH"] + '/references/jwst/miri/*photom*'))
