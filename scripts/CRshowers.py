@@ -28,6 +28,16 @@ def fit_hist(d=np.histogram([1,2,3]),mask_lim = 2,debug=False,return_full_range=
     mask = (d[0] > 0.1 * np.nanmax(d[0])) #*(np.abs(xc)>2*np.mean(np.diff(xc)))  # + (-mask_lim < xc) * (xc < mask_lim)
     xdata = xc[mask]
     ydata = d[0][mask]
+    if debug:
+        fig,ax = plt.subplots()
+        ax.plot(xc,d[0],'o')
+        ax.plot(xdata, ydata, 'o')
+        plt.show()
+    if ydata[0]>ydata[2]:
+        mask = (d[0] > 0.01 * np.nanmax(
+            d[0]))  # *(np.abs(xc)>2*np.mean(np.diff(xc)))  # + (-mask_lim < xc) * (xc < mask_lim)
+        xdata = xc[mask]
+        ydata = d[0][mask]
 
 
     #print('# pixel (<0.01)', np.sum(xc))
@@ -41,6 +51,10 @@ def fit_hist(d=np.histogram([1,2,3]),mask_lim = 2,debug=False,return_full_range=
         ax.plot(xc,d[0],'o')
         ax.plot(xdata, ydata, 'o')
         ax.plot(xdata, fitfunc(out[0], xdata))
+        ax.axvline(out[0][1])
+        ax.axvline(out[0][1]+out[0][2],ls=':')
+        ax.axvline(out[0][1]-out[0][2],ls=':')
+
         plt.show()
     if return_full_range:
         xdata, ydata = xc,d[0]
@@ -377,7 +391,7 @@ if 0:
             plt.show()
 
         return imtot, imtotsig
-def calc_mean_rate(images, sig_images, dqs, photom_mask, debug=False, radius=10,  skip_cr_events=True,
+def calc_mean_rate(images, sig_images, dqs, photom_mask, debug=False, radius=10,  skip_cr_events=False,
                    save_figure=False,level=0.2,alpha=10,n_smooth_iters = 1 ):
     n_int = len(images)
     im = np.array([images[i] for i in range(n_int)])
@@ -388,273 +402,244 @@ def calc_mean_rate(images, sig_images, dqs, photom_mask, debug=False, radius=10,
     mask_hot_pixels =np.ones((n_int, im.shape[1], im.shape[2]))
     im_shift = np.zeros((n_int,n_smooth_iters+1))
 
+    if n_int>1:
+        if skip_cr_events:
+            mask_cr = np.zeros_like(im)
+            for i in range(n_int):
+                mask_cr[i] = (np.bitwise_and(dqim[i], dqflags.pixel['JUMP_DET'])).astype(bool)
+                mask_im_CR[i][mask_cr[i] == 1] = 0
+                #plt.subplots()
+                #plt.imshow(mask_cr[i])
+                #plt.title('mask_cr[i]')
+                #plt.show()
+            mask_cr_tot = np.sum(mask_cr, axis=0)
+            for i in range(n_int):
+                mask_im_CR[i][mask_cr_tot == n_int] = 1
+                im[i][mask_im_CR[i] == 0] = np.nan
 
-    if skip_cr_events:
-        mask_cr = np.zeros_like(im)
-        for i in range(n_int):
-            mask_cr[i] = (np.bitwise_and(dqim[i], dqflags.pixel['JUMP_DET'])).astype(bool)
-            mask_im_CR[i][mask_cr[i] == 1] = 0
-            #plt.subplots()
-            #plt.imshow(mask_cr[i])
-            #plt.title('mask_cr[i]')
+        mean_im = np.nanmedian(im, axis=0)
+
+
+        #plot images
+        if debug:
+            cmap = plt.cm.viridis
+            cmap.set_bad('black')
+            fig, ax = plt.subplots(5, n_int + 1, sharex=True, sharey=True)
+            fig_h, ah = plt.subplots(2,n_int + 1, sharex=True)
+
+
+
+            vmin, vmax = np.nanquantile(mean_im.flatten(), 0.2), np.nanquantile(mean_im.flatten(), 0.8)
+            for i in range(n_int):
+                ax[0, i].imshow(images[i], vmin=vmin, vmax=vmax, cmap=cmap,origin='lower')
+                ax[0, i].set_title('Image ' + str(i))
+            ax[0, n_int].imshow(mean_im, vmin=vmin, vmax=vmax, cmap=cmap,origin='lower')
+            ax[0, n_int].set_title('Median')
             #plt.show()
-        mask_cr_tot = np.sum(mask_cr, axis=0)
-        for i in range(n_int):
-            mask_im_CR[i][mask_cr_tot == n_int] = 1
-            im[i][mask_im_CR[i] == 0] = np.nan
 
-    mean_im = np.nanmedian(im, axis=0)
-
-
-    #plot images
-    if debug:
-        cmap = plt.cm.viridis
-        cmap.set_bad('black')
-        fig, ax = plt.subplots(5, n_int + 1, sharex=True, sharey=True)
-        fig_h, ah = plt.subplots(2,n_int + 1, sharex=True)
+        # set kernel
+        filter_kernel = np.zeros((2 * radius + 1, 2 * radius + 1))
+        for i in range(filter_kernel.shape[0]):
+            for j in range(filter_kernel.shape[1]):
+                if (i - radius) ** 2 + (j - radius) ** 2 <= radius ** 2:
+                    filter_kernel[i, j] = 1
 
 
+        for k in range(n_smooth_iters):
+            print('outliers search iteration: ',k)
+            im = np.array([images[i] for i in range(n_int)])
+            mask_im = np.ones((n_int, im.shape[1], im.shape[2]))
+            for i in range(n_int):
+                print('itegration:', i)
+                # shift the median of image[i] distribution form zero
+                im[i] -= im_shift[i,k]*mean_im
+                x = np.array(im[i] / mean_im - 1)
+                # set nan and outliers with abs(x)>10 as 0
+                sigma = 10
+                hot_pix_limit = sigma
+                mask_hot_pixels[i][np.abs(x) > hot_pix_limit] = 0
 
-        vmin, vmax = np.nanquantile(mean_im.flatten(), 0.2), np.nanquantile(mean_im.flatten(), 0.8)
-        for i in range(n_int):
-            ax[0, i].imshow(images[i], vmin=vmin, vmax=vmax, cmap=cmap,origin='lower')
-            ax[0, i].set_title('Image ' + str(i))
-        ax[0, n_int].imshow(mean_im, vmin=vmin, vmax=vmax, cmap=cmap,origin='lower')
-        ax[0, n_int].set_title('Median')
-        #plt.show()
+                x[~photom_mask] = np.nan
+                if save_figure:
+                    x[np.abs(x) > hot_pix_limit] = 0
+                else:
+                    x[np.abs(x) > hot_pix_limit] = np.nan
 
+                # set nan and outliers with abs(x)>10 as 0
+                mean, sigma = np.nanmedian(x.flatten()), np.nanstd(x.flatten())
+                print('mean,std of the ratio of images',i,': ', mean, sigma)
+                if save_figure:
+                    x[np.abs(x) > 3 * sigma] = 0
+                else:
+                    x[np.abs(x) > 3*sigma] = np.nan
 
+                x_smoothed = convlove2d(data=x, mask=~np.isnan(x),radius=radius)
 
-    # set kernel
-    filter_kernel = np.zeros((2 * radius + 1, 2 * radius + 1))
-    for i in range(filter_kernel.shape[0]):
-        for j in range(filter_kernel.shape[1]):
-            if (i - radius) ** 2 + (j - radius) ** 2 <= radius ** 2:
-                filter_kernel[i, j] = 1
-
-
-    for k in range(n_smooth_iters):
-        print('outliers search iteration: ',k)
-        im = np.array([images[i] for i in range(n_int)])
-        mask_im = np.ones((n_int, im.shape[1], im.shape[2]))
-        for i in range(n_int):
-            print('itegration:', i)
-            # shift the median of image[i] distribution form zero
-            im[i] -= im_shift[i,k]*mean_im
-            x = np.array(im[i] / mean_im - 1)
-            # set nan and outliers with abs(x)>10 as 0
-            sigma = 10
-            hot_pix_limit = sigma
-            mask_hot_pixels[i][np.abs(x) > hot_pix_limit] = 0
-
-            x[~photom_mask] = np.nan
-            if save_figure:
-                x[np.abs(x) > hot_pix_limit] = 0
-            else:
-                x[np.abs(x) > hot_pix_limit] = np.nan
-
-            # set nan and outliers with abs(x)>10 as 0
-            mean, sigma = np.nanmedian(x.flatten()), np.nanstd(x.flatten())
-            print('mean,std of the ratio of images',i,': ', mean, sigma)
-            if save_figure:
-                x[np.abs(x) > 3 * sigma] = 0
-            else:
-                x[np.abs(x) > 3*sigma] = np.nan
-
-            x_smoothed = convlove2d(data=x, mask=~np.isnan(x),radius=radius)
-
-            # smooth diff (1 iter)
-            #npix = scipy.signal.convolve2d(np.ones_like(x), filter_kernel, mode='same', boundary='fill', fillvalue=0)
-            #x_smoothed = scipy.signal.convolve2d(x, filter_kernel, mode='same', boundary='fill', fillvalue=0) / npix
-
-
-            # fit the distribution of smoothed relative signal
-            if 1:
-                # correct for the shift
-                bins = np.linspace(-2 * sigma, 2 * sigma, 500)
-                mask = x_smoothed!=0
-                out, fitfunc, xdata, ydata = fit_hist(np.histogram(x_smoothed[mask].flatten(), bins=bins), debug=False)
-                im_shift[i,k+1] = im_shift[i,k] + out[0][1]
-                #print('shift image', i, ' by -', im_shift[i])
-                x_smoothed -= out[0][1]
-                #x -= im_shift[i,k+1]
+                # smooth diff (1 iter)
                 #npix = scipy.signal.convolve2d(np.ones_like(x), filter_kernel, mode='same', boundary='fill', fillvalue=0)
                 #x_smoothed = scipy.signal.convolve2d(x, filter_kernel, mode='same', boundary='fill', fillvalue=0) / npix
 
-            #fit hist and estimate values for borders
-            if 1:
-                mask = x_smoothed !=-out[0][1]
-                out, fitfunc, xdata, ydata = fit_hist(np.histogram(x_smoothed[mask].flatten(), bins=bins),return_full_range=True, debug=False)
-                # determine upper border of distribution
 
-                if 0:
-                    mask_up = (xdata > out[0][1]) * (ydata > 30)
-                    signal_up = np.log10(ydata[mask_up])-np.log10(fitfunc(out[0], xdata[mask_up]))
-                    up_lim = len(xdata[mask_up]) - 1
-                    if len(np.where(signal_up < np.log10(alpha*np.sqrt(ydata[mask_up])))[0]) > 0:
-                        up_lim = np.where(signal_up < np.log10(alpha*np.sqrt(ydata[mask_up])))[0][-1]
-                    x_up = xdata[mask_up][up_lim]
+                # fit the distribution of smoothed relative signal
+                if 1:
+                    # correct for the shift
+                    bins = np.linspace(-2 * sigma, 2 * sigma, 500)
+                    mask = x_smoothed!=0
+                    out, fitfunc, xdata, ydata = fit_hist(np.histogram(x_smoothed[mask].flatten(), bins=bins), debug=True)
+                    im_shift[i,k+1] = im_shift[i,k] + out[0][1]
+                    #print('shift image', i, ' by -', im_shift[i])
+                    x_smoothed -= out[0][1]
+                    #x -= im_shift[i,k+1]
+                    #npix = scipy.signal.convolve2d(np.ones_like(x), filter_kernel, mode='same', boundary='fill', fillvalue=0)
+                    #x_smoothed = scipy.signal.convolve2d(x, filter_kernel, mode='same', boundary='fill', fillvalue=0) / npix
+
+                #fit hist and estimate values for borders
+                if 1:
+                    mask = x_smoothed !=-out[0][1]
+                    out, fitfunc, xdata, ydata = fit_hist(np.histogram(x_smoothed[mask].flatten(), bins=bins),return_full_range=True, debug=False)
+                    # determine upper border of distribution
+
+                    if 0:
+                        mask_up = (xdata > out[0][1]) * (ydata > 30)
+                        signal_up = np.log10(ydata[mask_up])-np.log10(fitfunc(out[0], xdata[mask_up]))
+                        up_lim = len(xdata[mask_up]) - 1
+                        if len(np.where(signal_up < np.log10(alpha*np.sqrt(ydata[mask_up])))[0]) > 0:
+                            up_lim = np.where(signal_up < np.log10(alpha*np.sqrt(ydata[mask_up])))[0][-1]
+                        x_up = xdata[mask_up][up_lim]
+                    else:
+                        mask_up = (xdata > out[0][1]) * (ydata > 100)
+                        signal_up = np.abs(ydata[mask_up] - fitfunc(out[0], xdata[mask_up]))
+                        delta_up = np.sqrt(ydata[mask_up])
+                        diff_up = signal_up - alpha * np.sqrt(ydata[mask_up])
+                        up_lim = len(xdata[mask_up]) - 1
+                        if len(np.where(signal_up < alpha * np.sqrt(ydata[mask_up]))[0]) > 0:
+                            up_lim = np.where(signal_up < (alpha * np.sqrt(ydata[mask_up])))[0][-1]
+                        x_up = xdata[mask_up][up_lim]
+
+                    #print(up_lim,xdata[mask_up][up_lim])
+                    #plt.show()
+
+                    if 0:
+                        mask_low = xdata < out[0][1]
+                        signal_low = np.log10(ydata[mask_low]) - np.log10(fitfunc(out[0], xdata[mask_low]))
+                        low_lim = 0
+                        if len(np.where(signal_low < np.log10(alpha*np.sqrt(ydata[mask_low])))[0]) > 0:
+                            low_lim = np.where(signal_low < np.log10(alpha*np.sqrt(ydata[mask_low])))[0][0]
+                        x_low = xdata[mask_low][low_lim]
+                    else:
+                        mask_low = (xdata < out[0][1])*(ydata > 100)
+                        signal_low = np.abs(ydata[mask_low] - fitfunc(out[0], xdata[mask_low]))
+                        low_lim = 0
+                        if len(np.where(signal_low < alpha * np.sqrt(ydata[mask_low]))[0]) > 0:
+                            low_lim = np.where(signal_low < alpha * np.sqrt(ydata[mask_low]))[0][0]
+                        x_low = xdata[mask_low][low_lim]
+                    print('contours:',x_low,x_up, ' cen shift:', im_shift[i,k],im_shift[i,k+1])
+
+
+                #mask outliers
+                if n_int>2:
+                    mask_im[i][(x_smoothed > x_up) + (x_smoothed < x_low)] = 0
                 else:
-                    mask_up = (xdata > out[0][1]) * (ydata > 100)
-                    signal_up = np.abs(ydata[mask_up] - fitfunc(out[0], xdata[mask_up]))
-                    delta_up = np.sqrt(ydata[mask_up])
-                    diff_up = signal_up - alpha * np.sqrt(ydata[mask_up])
-                    up_lim = len(xdata[mask_up]) - 1
-                    if len(np.where(signal_up < alpha * np.sqrt(ydata[mask_up]))[0]) > 0:
-                        up_lim = np.where(signal_up < (alpha * np.sqrt(ydata[mask_up])))[0][-1]
-                    x_up = xdata[mask_up][up_lim]
+                    mask_im[i][(x_smoothed > x_up)] = 0
+                print('masked pixels:',np.sum((x_smoothed > x_up) + (x_smoothed < x_low)))
 
-                #print(up_lim,xdata[mask_up][up_lim])
+                #
+                if debug and k == n_smooth_iters - 1:
+                    vmin_sm, vmax_sm = 2*x_low, 2*x_up
+                    ax[2, i].imshow(x_smoothed, vmin=vmin_sm, vmax=vmax_sm, cmap=cmap, origin='lower')
+                    ax[2, i].set_title('Smoothed model' + str(i))
+                    xi, yi = np.arange(x_smoothed.shape[1]), np.arange(x_smoothed.shape[0])
+                    ax[2, i].contour(xi, yi,  x_smoothed, levels=[x_low, x_up], linewidths=0.5, colors='k')
+                    ax[1, i].imshow(x, vmin=vmin_sm, vmax=vmax_sm, cmap=cmap, origin='lower')
+                    if save_figure and i == 0:
+                        np.savetxt('./output/detector2/bkgr_subtracted/x_smoothed.dat', x_smoothed)
+                        with open('./output/detector2/bkgr_subtracted/x_smoothed_hist.pkl', 'wb') as f:
+                            pickle.dump([ xdata, ydata, bins, fitfunc(out[0], bins),xdata[mask_up][up_lim],xdata[mask_low][low_lim]], f)
+
+                    # plot fit to hist
+                    if 1:
+                        ah[0,i].set_title('Image'+str(i)+' shift:'+str(round(im_shift[i,k],2)))
+                        ah[0,i].plot(bins, fitfunc(out[0], bins))
+                        ah[0,i].plot(xdata, ydata, 'o')
+                        ah[0,i].axvline(xdata[mask_up][up_lim],c='red')
+                        ah[0,i].axvline(xdata[mask_low][low_lim],c='blue')
+                        ah[0,i].set_yscale('log')
+
+                        ah[1,i].plot(xdata[mask_up], signal_up)
+                        #ah[1,i].plot(xdata[mask_up], np.log10(np.sqrt(ydata[mask_up])))
+                        ah[1, i].plot(xdata[mask_up], alpha*(np.sqrt(ydata[mask_up])))
+                        ah[1,i].plot(xdata[mask_low], signal_low)
+                        #ah[1,i].plot(xdata[mask_low], np.log10(np.sqrt(ydata[mask_low])))
+                        ah[1,i].plot(xdata[mask_low], alpha*(np.sqrt(ydata[mask_low])))
+
+                        #print(up_lim, xdata[mask_up][up_lim])
+                        ah[1,i].axvline(xdata[mask_up][up_lim],c='red')
+                        ah[1,i].axvline(xdata[mask_low][low_lim],c='blue')
+
+            #add to mask CR events
+            if k == n_smooth_iters - 1:
                 #plt.show()
 
-                if 0:
-                    mask_low = xdata < out[0][1]
-                    signal_low = np.log10(ydata[mask_low]) - np.log10(fitfunc(out[0], xdata[mask_low]))
-                    low_lim = 0
-                    if len(np.where(signal_low < np.log10(alpha*np.sqrt(ydata[mask_low])))[0]) > 0:
-                        low_lim = np.where(signal_low < np.log10(alpha*np.sqrt(ydata[mask_low])))[0][0]
-                    x_low = xdata[mask_low][low_lim]
-                else:
-                    mask_low = (xdata < out[0][1])*(ydata > 100)
-                    signal_low = np.abs(ydata[mask_low] - fitfunc(out[0], xdata[mask_low]))
-                    low_lim = 0
-                    if len(np.where(signal_low < alpha * np.sqrt(ydata[mask_low]))[0]) > 0:
-                        low_lim = np.where(signal_low < alpha * np.sqrt(ydata[mask_low]))[0][0]
-                    x_low = xdata[mask_low][low_lim]
-                print('contours:',x_low,x_up, ' cen shift:', im_shift[i,k],im_shift[i,k+1])
+                for i in range(n_int):
+                    m = np.array(mask_im[i])
+                    m_sum = np.zeros_like(m)
+                    for j in range(n_int):
+                        if j!=i:
+                            m_sum += mask_im[j]
+                    mask_im[i][(mask_im_CR[i] == 0)*(m_sum>0)] = 0
+                    #if np.sum(mask_im,axis=0)
 
-
-            #mask outliers
-            if n_int>2:
-                mask_im[i][(x_smoothed > x_up) + (x_smoothed < x_low)] = 0
-            else:
-                mask_im[i][(x_smoothed > x_up)] = 0
-            print('masked pixels:',np.sum((x_smoothed > x_up) + (x_smoothed < x_low)))
-
-            #
-            if debug and k == n_smooth_iters - 1:
-                vmin_sm, vmax_sm = 2*x_low, 2*x_up
-                ax[2, i].imshow(x_smoothed, vmin=vmin_sm, vmax=vmax_sm, cmap=cmap, origin='lower')
-                ax[2, i].set_title('Smoothed model' + str(i))
-                xi, yi = np.arange(x_smoothed.shape[1]), np.arange(x_smoothed.shape[0])
-                ax[2, i].contour(xi, yi,  x_smoothed, levels=[x_low, x_up], linewidths=0.5, colors='k')
-                ax[1, i].imshow(x, vmin=vmin_sm, vmax=vmax_sm, cmap=cmap, origin='lower')
-                if save_figure and i == 0:
-                    np.savetxt('./output/detector2/bkgr_subtracted/x_smoothed.dat', x_smoothed)
-                    with open('./output/detector2/bkgr_subtracted/x_smoothed_hist.pkl', 'wb') as f:
-                        pickle.dump([ xdata, ydata, bins, fitfunc(out[0], bins),xdata[mask_up][up_lim],xdata[mask_low][low_lim]], f)
-
-                # plot fit to hist
-                if 1:
-                    ah[0,i].set_title('Image'+str(i)+' shift:'+str(round(im_shift[i,k],2)))
-                    ah[0,i].plot(bins, fitfunc(out[0], bins))
-                    ah[0,i].plot(xdata, ydata, 'o')
-                    ah[0,i].axvline(xdata[mask_up][up_lim],c='red')
-                    ah[0,i].axvline(xdata[mask_low][low_lim],c='blue')
-                    ah[0,i].set_yscale('log')
-
-                    ah[1,i].plot(xdata[mask_up], signal_up)
-                    #ah[1,i].plot(xdata[mask_up], np.log10(np.sqrt(ydata[mask_up])))
-                    ah[1, i].plot(xdata[mask_up], alpha*(np.sqrt(ydata[mask_up])))
-                    ah[1,i].plot(xdata[mask_low], signal_low)
-                    #ah[1,i].plot(xdata[mask_low], np.log10(np.sqrt(ydata[mask_low])))
-                    ah[1,i].plot(xdata[mask_low], alpha*(np.sqrt(ydata[mask_low])))
-
-                    #print(up_lim, xdata[mask_up][up_lim])
-                    ah[1,i].axvline(xdata[mask_up][up_lim],c='red')
-                    ah[1,i].axvline(xdata[mask_low][low_lim],c='blue')
-
-        #add to mask CR events
-        if k == n_smooth_iters - 1:
-            #plt.show()
+            # correct for pixels with zero sum mask
+            mask_zero = (np.sum(mask_im,axis=0) == 0)
+            print('#mask zero', np.sum(mask_zero))
+            for i in range(n_int):
+                mask_im[i][mask_zero] = 1
 
             for i in range(n_int):
-                m = np.array(mask_im[i])
-                m_sum = np.zeros_like(m)
-                for j in range(n_int):
-                    if j!=i:
-                        m_sum += mask_im[j]
-                mask_im[i][(mask_im_CR[i] == 0)*(m_sum>0)] = 0
-                #if np.sum(mask_im,axis=0)
-
-        # correct for pixels with zero sum mask
-        mask_zero = (np.sum(mask_im,axis=0) == 0)
-        print('#mask zero', np.sum(mask_zero))
-        for i in range(n_int):
-            mask_im[i][mask_zero] = 1
-
-        for i in range(n_int):
-            im[i][mask_im[i] == 0] = np.nan
+                im[i][mask_im[i] == 0] = np.nan
 
 
 
-#        if k <2:
-        mean_im = np.nanmedian(im, axis=0)
+    #        if k <2:
+            mean_im = np.nanmedian(im, axis=0)
 
-        if k == n_smooth_iters - 1 and debug:
-            vmin_sm, vmax_sm = -0.3, 0.3
+            if k == n_smooth_iters - 1 and debug:
+                vmin_sm, vmax_sm = -0.3, 0.3
+                for i in range(n_int):
+                    ax[3, i].imshow(im[i], vmin=vmin, vmax=vmax, cmap=cmap, origin='lower')
+
+                    ax[4, i].imshow(mask_im[i], cmap=cmap, origin='lower')
+                    ax[4, i].set_title('Mask Im ' + str(i))
+                    #ax[4, i].imshow(mask_im_CR[i], cmap=cmap, origin='lower')
+                    #ax[4, i].set_title('Mask CR ' + str(i))
+                    #ax[4, i].imshow(mask_hot_pixels[i], cmap=cmap, origin='lower')
+                    #ax[4, i].set_title('Mask HotPix ' + str(i))
+
+
+        if debug:
+            vmin, vmax = np.nanquantile(mean_im.flatten(), 0.2), np.nanquantile(mean_im.flatten(), 0.8)
+            ax[1, n_int].imshow(mean_im, vmin=vmin, vmax=vmax, cmap=cmap, origin='lower')
+            mask_n_sum = np.sum(mask_im,axis=0)
+            mask_n_sum[mask_n_sum==0] = np.nan
+            #cmap_npix = plt.cm.viridis
+            #cmap_npix.set_bad('red')
+            ax[2, n_int].imshow(mask_n_sum, vmin=0, vmax=n_int, cmap=cmap, origin='lower')
+            print('zero exp pixels:', np.sum( np.sum(mask_im,axis=0).flatten()==0) )
+
+        if skip_cr_events and 0:
+            mask_cr = np.zeros_like(im)
             for i in range(n_int):
-                ax[3, i].imshow(im[i], vmin=vmin, vmax=vmax, cmap=cmap, origin='lower')
+                mask_cr[i] = (np.bitwise_and(dqim[i], dqflags.pixel['JUMP_DET'])).astype(bool)
+            mask_cr_shower = 1 - mask_im
+            mask_cr_tot = mask_cr + mask_cr_shower
 
-                ax[4, i].imshow(mask_im[i], cmap=cmap, origin='lower')
-                ax[4, i].set_title('Mask Im ' + str(i))
-                #ax[4, i].imshow(mask_im_CR[i], cmap=cmap, origin='lower')
-                #ax[4, i].set_title('Mask CR ' + str(i))
-                #ax[4, i].imshow(mask_hot_pixels[i], cmap=cmap, origin='lower')
-                #ax[4, i].set_title('Mask HotPix ' + str(i))
+            mask_cr_tot = np.sum(mask_cr_tot.astype(bool), axis=0)
 
+            for i in range(n_int):
+                mask_im[i][(mask_cr[i] == 1) * (mask_cr_tot != n_int)] = 0
 
-    if debug:
-        vmin, vmax = np.nanquantile(mean_im.flatten(), 0.2), np.nanquantile(mean_im.flatten(), 0.8)
-        ax[1, n_int].imshow(mean_im, vmin=vmin, vmax=vmax, cmap=cmap, origin='lower')
-        mask_n_sum = np.sum(mask_im,axis=0)
-        mask_n_sum[mask_n_sum==0] = np.nan
-        #cmap_npix = plt.cm.viridis
-        #cmap_npix.set_bad('red')
-        ax[2, n_int].imshow(mask_n_sum, vmin=0, vmax=n_int, cmap=cmap, origin='lower')
-        print('zero exp pixels:', np.sum( np.sum(mask_im,axis=0).flatten()==0) )
-
-
-
-
-
-    if skip_cr_events and 0:
-        mask_cr = np.zeros_like(im)
-        for i in range(n_int):
-            mask_cr[i] = (np.bitwise_and(dqim[i], dqflags.pixel['JUMP_DET'])).astype(bool)
-        mask_cr_shower = 1 - mask_im
-        mask_cr_tot = mask_cr + mask_cr_shower
-
-        mask_cr_tot = np.sum(mask_cr_tot.astype(bool), axis=0)
-
-        for i in range(n_int):
-            mask_im[i][(mask_cr[i] == 1) * (mask_cr_tot != n_int)] = 0
-    if 0:
-        for i in range(n_int):
-            x = np.array(im[i] / mean_im - 1)
-            x[np.isnan(x)] = 0
-            x[x > hot_pix_limit] = 0
-            x[x < -hot_pix_limit] = 0
-
-            # smooth diff
-            npix = scipy.signal.convolve2d(np.ones_like(x), filter_kernel, mode='same', boundary='fill',
-                                           fillvalue=0)
-            x_smoothed = scipy.signal.convolve2d(x, filter_kernel, mode='same', boundary='fill',
-                                                 fillvalue=0) / npix
-
-            mask_im[i][x_smoothed < 0.1] = 1
-    #if debug:
-    #    for i in range(n_int):
-            #ax[3, i].imshow(mask_cr[i], cmap=cmap,origin='lower')
-            #ax[3, i].set_title('Mask for CR ' + str(i))
-
-    #plt.subplots()
-    #plt.hist(zi.flatten(), log=True)
-
-    #plt.show()
 
     imsig_inv = np.power(sigim, -2)
-    # imtot = np.nansum(im * imsig_inv * mask_im, axis=0) / np.nansum(imsig_inv * mask_im, axis=0)
     for i in range(n_int):
         im[i][mask_im[i] == 0] = np.nan
     imtot = np.nanmedian(im, axis=0)
