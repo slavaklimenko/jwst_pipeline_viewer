@@ -77,7 +77,6 @@ from jwst.fringe import FringeStep
 from jwst.photom import PhotomStep
 from jwst.cube_build import CubeBuildStep
 from jwst.extract_1d import Extract1dStep
-from jwst.cube_skymatch import CubeSkyMatchStep
 from jwst.master_background import MasterBackgroundStep
 from jwst.outlier_detection import OutlierDetectionStep
 from jwst.residual_fringe import ResidualFringeStep
@@ -87,8 +86,8 @@ from jwst import datamodels # JWST datamodels
 from jwst.associations import asn_from_list as afl # Tools for creating association files
 from jwst.associations.lib.rules_level2_base import DMSLevel2bBase # Definition of a Lvl2 association file
 from jwst.associations.lib.rules_level3_base import DMS_Level3_Base # Definition of a Lvl3 association file
-from stcal import dqflags # Utilities for working with the data quality (DQ) arrays
-from jwst.datamodels import dqflags
+#from jwst.datamodels import dqflags
+from stdatamodels.jwst.datamodels import dqflags
 import scipy
 
 #define input/output
@@ -707,44 +706,57 @@ class detector2():
                     listnames_backgr.append(s)
                 else:
                     listnames_source.append(s)
-        ref_list = listnames_backgr
 
-        ref_name = ref_list[0][0].replace('uncal', 'rate.fits')
-        ref_file = os.path.join(self.path + '/' + ref_name)
-        hdulist = fits.open(ref_file)
-        ref_slope = hdulist['SCI'].data
-        hdulist.close()
-
+        if len(listnames_backgr)>0:
+            print('list of backgr exposures:', listnames_backgr)
+            ref_name = listnames_backgr[0][0].replace('uncal', 'rate.fits')
+            ref_file = os.path.join(self.path + '/' + ref_name)
+            hdulist = fits.open(ref_file)
+            ref_slope = hdulist['SCI'].data
+            hdulist.close()
+        else:
+            ref_slope = np.array(self.data.data)
         # set mask of hot pixels
-        bkgr_name = listnames_backgr[0][0].replace('uncal', 'rate.fits')
-        bkgr_file = os.path.join(self.path + '/' + bkgr_name)
-        hdulist = fits.open(bkgr_file)
-        bkgr_slope = hdulist['SCI'].data
-        hdulist.close()
+        #bkgr_name = listnames_backgr[0][0].replace('uncal', 'rate.fits')
+        #bkgr_file = os.path.join(self.path + '/' + bkgr_name)
+        #hdulist = fits.open(bkgr_file)
+        #bkgr_slope = hdulist['SCI'].data
+        #hdulist.close()
 
-        bkgr_mean = np.zeros_like(bkgr_slope)
-        bkgr_std = np.zeros_like(bkgr_slope)
+        bkgr_mean = np.zeros_like(ref_slope)
+        bkgr_std = np.zeros_like(ref_slope)
 
-        bkgr_mean[500:,:500] = np.nanmean(bkgr_slope[500:,:500])
-        bkgr_mean[:500, :500] = np.nanmean(bkgr_slope[:500, :500])
-        print('bkgr_mean<500',np.nanmean(bkgr_slope[:500, :500]))
+        bkgr_mean[500:,:500] = np.nanmean(ref_slope[500:,:500])
+        bkgr_mean[:500, :500] = np.nanmean(ref_slope[:500, :500])
+        print('bkgr_mean<500',np.nanmean(ref_slope[:500, :500]))
 
-        bkgr_mean[:500, 500:] = np.nanmean(bkgr_slope[:500,500:])
-        bkgr_mean[500:, 500:] = np.nanmean(bkgr_slope[500:, 500:])
-        print('bkgr_mean>500',np.nanmean(bkgr_slope[500:, 500:]))
+        bkgr_mean[:500, 500:] = np.nanmean(ref_slope[:500,500:])
+        bkgr_mean[500:, 500:] = np.nanmean(ref_slope[500:, 500:])
+        print('bkgr_mean>500',np.nanmean(ref_slope[500:, 500:]))
 
-        bkgr_std[:500, :500] = np.nanstd(bkgr_slope[:500,:500])
-        bkgr_std[500:, :500] = np.nanstd(bkgr_slope[500:, :500])
-        print('bkgr_std<500', np.nanstd(bkgr_slope[500:, :500]))
+        bkgr_std[:500, :500] = np.nanstd(ref_slope[:500,:500])
+        bkgr_std[500:, :500] = np.nanstd(ref_slope[500:, :500])
+        print('bkgr_std<500', np.nanstd(ref_slope[500:, :500]))
 
 
-        bkgr_std[:500, 500:] = np.nanstd(bkgr_slope[:500,500:])
-        bkgr_std[500:, 500:] = np.nanstd(bkgr_slope[500:,500:])
-        print('bkgr_std>500', np.nanstd(bkgr_slope[500:,500:]))
+        bkgr_std[:500, 500:] = np.nanstd(ref_slope[:500,500:])
+        bkgr_std[500:, 500:] = np.nanstd(ref_slope[500:,500:])
+        print('bkgr_std>500', np.nanstd(ref_slope[500:,500:]))
 
-        mask_hot_pix_loc = np.abs(ref_slope - bkgr_mean)>1*bkgr_std
-        mask_hot_pix_ref = np.abs(self.data.data - bkgr_mean)>1*bkgr_std
-        mask_hot = mask_hot_pix_loc*mask_hot_pix_ref
+        mask_hot = np.abs(self.data.data - bkgr_mean) > 3 * bkgr_std
+        if len(listnames_backgr) > 0:
+            sigma_limit = 3
+            mask_hot = (np.abs(self.data.data - bkgr_mean) > sigma_limit * bkgr_std)*(np.abs(ref_slope - bkgr_mean)>sigma_limit*bkgr_std)
+
+        if 0:
+            fig,ax = plt.subplots(1,3,sharex=True,sharey=True)
+            ax[0].imshow(mask_hot)
+            ax[1].imshow(self.data.data- bkgr_mean,vmin=np.nanquantile(self.data.data.flatten(),0.05),vmax=np.nanquantile(self.data.data.flatten(),0.9))
+            ax[2].imshow(ref_slope- bkgr_mean, vmin=np.nanquantile(self.data.data.flatten(), 0.05),
+                         vmax=np.nanquantile(self.data.data.flatten(), 0.9))
+
+            plt.show()
+
         print('number of pixels to check:', np.sum(mask_hot))
         def check_nearby_pix(data,mask,sigma_limit=3):
             xi, yi = np.arange(self.data.data.shape[0]), np.arange(self.data.data.shape[1])
@@ -767,9 +779,9 @@ class detector2():
             return mask
 
         if not fast_mode:
-            m1 = check_nearby_pix(ref_slope,mask_hot)
-            m2 = check_nearby_pix(self.data.data,mask_hot)
-            mask_hot = m1*m2
+            mask_hot = check_nearby_pix(self.data.data,mask_hot)
+            if len(listnames_backgr) > 0:
+                mask_hot *=check_nearby_pix(ref_slope,mask_hot)
 
         print('number of hot pixels:',np.sum(mask_hot))
 
@@ -781,7 +793,7 @@ class detector2():
             ax[1].imshow(ref_slope,vmin=vmin,vmax=vmax)
             ax[1].set_title(ref_name)
             ax[2].imshow(mask_hot,vmin=vmin,vmax=vmax)
-            ax[3].imshow(m2, vmin=vmin, vmax=vmax)
+            #ax[3].imshow(m2, vmin=vmin, vmax=vmax)
 
 
         #interpolation of flux in hot pixels
@@ -946,7 +958,7 @@ class detector2():
         from scripts.CRshowers import calc_mean_rate
         imtot, imtotsig = calc_mean_rate(images=bkgr_images, sig_images=bkgr_sigimages, dqs=bkgr_dqs, debug=debug,
                                          skip_cr_events=False, radius=radius,
-                                         photom_mask=photom_mask, n_smooth_iters=3) #set to 1
+                                         photom_mask=photom_mask, n_smooth_iters=1) #set to 1
 
         if debug:
             n_im = len(bkgr_images)

@@ -38,66 +38,23 @@ os.environ["CRDS_SERVER_URL"] = settings['CRDS_SERVER_URL']
 if 'CRDS_CONTEXT' in  settings.keys():
     os.environ["CRDS_CONTEXT"] = settings['CRDS_CONTEXT']
 os.environ["WEBBPSF_PATH"] = settings['WEBBPSF_PATH']
-#os.environ["CRDS_PATH"] = "/home/slava/science/codes/python/jwst/data"
-#os.environ["CRDS_SERVER_URL"] = "https://jwst-crds.stsci.edu"
-import time
-import shutil
-import warnings
-import zipfile
-import urllib.request
 
-# Astropy utilities for opening FITS and ASCII files
 from astropy.io import fits
-from astropy.io import ascii
-from astropy.utils.data import download_file
-# Astropy utilities for making plots
 from astropy.visualization import LinearStretch, LogStretch, ImageNormalize, ZScaleInterval
-
-# Numpy for doing calculations
 import numpy as np
-
-# Matplotlib for making plots
 import matplotlib.pyplot as plt
-from matplotlib import rc
-# Import the base JWST package and warn if not the expected version
-import jwst
-
 # JWST pipelines (encompassing many steps)
-#from jwst.pipeline import Detector1Pipeline
-#from jwst.pipeline import Spec2Pipeline
 from jwst.pipeline import Spec3Pipeline
-
-# Individual JWST pipeline steps
-from jwst.assign_wcs import AssignWcsStep
-from jwst.background import BackgroundStep
-from jwst.flatfield import FlatFieldStep
-from jwst.srctype import SourceTypeStep
-from jwst.straylight import StraylightStep
-from jwst.fringe import FringeStep
-from jwst.photom import PhotomStep
 from jwst.cube_build import CubeBuildStep
 from jwst.extract_1d import Extract1dStep
-from jwst.cube_skymatch import CubeSkyMatchStep
 from jwst.master_background import MasterBackgroundStep
 from jwst.outlier_detection import OutlierDetectionStep
 
 # JWST pipeline utilities
-from jwst import datamodels # JWST datamodels
 from jwst.associations import asn_from_list as afl # Tools for creating association files
-from jwst.associations.lib.rules_level2_base import DMSLevel2bBase # Definition of a Lvl2 association file
 from jwst.associations.lib.rules_level3_base import DMS_Level3_Base # Definition of a Lvl3 association file
-from stcal import dqflags # Utilities for working with the data quality (DQ) arrays
-from jwst.datamodels import dqflags
 from stdatamodels.jwst import datamodels
-
-#define input/output
-#output_dir = './output/detector3/'
-#input_dir = './output/detector2/'
-#miri_uncal_file= 'jw02155001001_04102_00001_mirifulong_uncal.fits'
-#input_file_base = os.path.basename(miri_uncal_file).replace('uncal.fits', '')
-
-output_dir = settings['output3_dir'] #')./output/detector1/'
-input_dir = settings['input3_dir'] #./input/detector1/'
+from stdatamodels.jwst.datamodels import dqflags
 
 
 class IFScube():
@@ -120,8 +77,6 @@ class detector3():
         self.data = None
         self.spec3_cachedir = spec3_cachedir
         self.flags = {}
-        #self.read_ratefiles(det1_dir=self.path,input_file_base=self.name)
-        #self.read_associated_bkg_ratefiles(det1_dir=self.path,input_file_base=self.name)
 
     def add_cube(self,cubename=None, debug = True):
         if cubename != None:
@@ -129,7 +84,7 @@ class detector3():
             if debug:
                 print('Input file is updated to:', cubename)
 
-    def init_cube(self, read_spectum=True):
+    def init_cube(self):
         self.data = IFScube()
         if 1:
             data = datamodels.open(self.cubename)
@@ -143,9 +98,6 @@ class detector3():
             self.data.wmap = hdu1['WMAP'].data
             if 'CHANNEL' in hdu1[0].header:
                 self.data.channel =hdu1[0].header['CHANNEL']
-            #self.data.hdrtab = hdu1['HDRTAB'].data
-
-
             self.data.asdf = hdu1['ASDF'].data
             header = hdu1[0].header
             self.data.objname =  header['TARGPROP']
@@ -155,35 +107,34 @@ class detector3():
             elif 'NIRSPEC' in header['INSTRUME']:
                 self.data.band = header['FILTER']
                 self.data.channel = header['GRATING']
-            header = hdu1['SCI'].header
+
+            hdr = hdu1['SCI'].header
             wcs = {}
-            wcs['CRPIX1'] = header['CRPIX1']
-            wcs['CRPIX2'] = header['CRPIX2']
-            wcs['CRPIX3'] = header['CRPIX3']
-            wcs['CRVAL1'] = header['CRVAL1']
-            wcs['CRVAL2'] = header['CRVAL2']
-            wcs['CRVAL3'] = header['CRVAL3']
-            wcs['CDELT1'] = header['CDELT1']
-            wcs['CDELT2'] = header['CDELT2']
-            wcs['CDELT3'] =header['CDELT3']
-            wcs['NAXIS1'] = header['NAXIS1']
-            wcs['NAXIS2'] = header['NAXIS2']
-            wcs['NAXIS3'] = header['NAXIS3']
+            wcs['CRPIX1'] = hdr['CRPIX1']
+            wcs['CRPIX2'] = hdr['CRPIX2']
+            wcs['CRPIX3'] = hdr['CRPIX3']
+            wcs['CRVAL1'] = hdr['CRVAL1']
+            wcs['CRVAL2'] = hdr['CRVAL2']
+            wcs['CRVAL3'] = hdr['CRVAL3']
+            wcs['CDELT1'] = hdr['CDELT1']
+            wcs['CDELT2'] = hdr['CDELT2']
+            wcs['CDELT3'] = hdr['CDELT3']
+            wcs['NAXIS1'] = hdr['NAXIS1']
+            wcs['NAXIS2'] = hdr['NAXIS2']
+            wcs['NAXIS3'] = hdr['NAXIS3']
+
             self.flags['subtract_bkgr'] = False
+            # wavelength axis
+            self.data.wavelength = (np.arange(hdr['NAXIS3']) + hdr['CRPIX3'] - 1) * hdr['CDELT3'] + hdr['CRVAL3']
 
             self.data.wcs = wcs
             hdu1.close()
-        if read_spectum:
-            sstring = self.cubename.split('_s3d')[0] +  '_x1d.fits'
-            specfile = sorted(glob.glob(sstring))
-            hdu2 = fits.open(specfile[0])
-            self.data.wavelength = hdu2['EXTRACT1D'].data['WAVELENGTH']
-            hdu2.close()
+
         else:
-            self.data.wavelength = np.arange(self.data.data.shape[0])
+            #self.data.wavelength = np.arange(self.data.data.shape[0])
+            print('data has no WMAP')
     def conv_world_coord(self,t,x,y,mode='pipeline'):
         wcs1 = self.data.wcs
-        #print('wcs1: pix size',wcs1['CDELT1'],wcs1['CDELT2'])
         if mode == 'cubevis':
             x_world = wcs1['CRVAL1'] - (x - wcs1['CRPIX1']+1) * wcs1['CDELT1']*1.043
             y_world = wcs1['CRVAL2'] + (y - wcs1['CRPIX2']+1) * wcs1['CDELT2']*1.043
@@ -228,10 +179,6 @@ class detector3():
             # lam_world = wcs1['CRVAL3'] + (t - wcs1['CRPIX3'] + 1) * wcs1['CDELT3']
             return x, y
 
-        #with datamodels.open(self.cubename) as input_models:
-        #    if isinstance(input_models, datamodels.IFUImageModel):
-        #        hdu1 =datamodels.open(self.cubename)
-
 
     def writel3asn(self,files, asnfile, prodname, **kwargs):
         '''
@@ -259,30 +206,11 @@ class detector3():
         '''
         # Define the basic association of science files
         asn_exptypes = ['science', 'background']
-        if 1:
-            input_models = datamodels.open(asnfile, asn_exptypes=asn_exptypes)
-            table = input_models.meta.instance['asn_table']
-            ratefiles = table['products'][0]['members']
-        else:
-            d = {}
-            d['expname'] = './output/detector2/jw02155001001_04102_00001_mirifushort_cal.fits'
-            d['exptype'] = 'science'
-            ratefiles = []
-            ratefiles.append(d)
-            d = {}
-            d['expname'] = './output/detector2/jw02155001001_04102_00002_mirifushort_cal.fits'
-            d['exptype'] = 'science'
-            ratefiles.append(d)
-            d = {}
-            d['expname'] = './output/detector2/jw02155001001_04102_00003_mirifushort_cal.fits'
-            d['exptype'] = 'science'
-            ratefiles.append(d)
-            d = {}
-            d['expname'] = './output/detector2/jw02155001001_04102_00004_mirifushort_cal.fits'
-            d['exptype'] = 'science'
-            ratefiles.append(d)
+        input_models = datamodels.open(asnfile, asn_exptypes=asn_exptypes)
+        table = input_models.meta.instance['asn_table']
+        ratefiles = table['products'][0]['members']
         self.ratefiles = ratefiles
-        f = 1
+
 
     def read_ratefiles(self,det1_dir =None, input_file_base = None, debug=1):
         if det1_dir != None:
@@ -503,24 +431,37 @@ class detector3():
         spec3 = Spec3Pipeline()
         spec3.output_dir = output_dir
         spec3.save_results = True
-        spec3.master_background.skip = 1 - master_bkgr_flag
-        spec3.outlier_detection.skip = 1 - master_outlier_flag
-        spec3.mrs_imatch.skip = 1 - master_res_bkgr_flag
-        spec3.resample_spec.skip = 1 #-master_resample_spec_flag
+        spec3.master_background.skip = True #1 - master_bkgr_flag
+        spec3.outlier_detection.skip = True #1 - master_outlier_flag
+        spec3.adaptive_trace_model.skip = False
+        spec3.adaptive_trace_model.save_intermediate_results= True
+        spec3.adaptive_trace_model.slope_limit=0
+        spec3.adaptive_trace_model.fit_threshold=0
+        spec3.adaptive_trace_model.save_model = True
+        spec3.adaptive_trace_model.oversample = 3
+        spec3.pixel_replace.skip = False
+        spec3.resample_spec.skip = True #-master_resample_spec_flag
         spec3.cube_build.channel = channel
         spec3.cube_build.output_file = (input_file.split('/')[-1]).split('.')[0]
-        spec3.extract_1d.skip = 1 - master_extract1d_flag
-        spec3.coord_system = 'ifualign'
+        spec3.cube_build.coord_system = 'ifualign'
+        spec3.extract_1d.skip = False
+        spec3.photom.skip = True
+        spec3.spectral_leak.skip = True
+
         if band == 'SHORTMEDIUMLONG':
             spec3.cube_build.output_type = 'channel'
 
-        print('master_background.skip', 1 - master_bkgr_flag)
-        print('spec3.outlier_detection.skip', 1 - master_outlier_flag)
-        print('mrs_imatch.skip',1 - master_res_bkgr_flag)
-        print('mrs_resample_spec.skip', 1 - master_resample_spec_flag)
-        print('spec3.extract_1d.skip', 1 - master_extract1d_flag)
+        print('master_background.skip', spec3.master_background.skip)
+        print('outlier_detection.skip', spec3.outlier_detection.skip)
+        print('spec3.adaptive_trace_model.skip',spec3.adaptive_trace_model.skip)
+        print('spec3.pixel_replace.skip', spec3.pixel_replace.skip)
+        print('spec3.resample_spec.skip',  spec3.resample_spec.skip)
+        print('spec3.cube_build.channel', spec3.cube_build.channel)
+        print('spec3.cube_build.coord_system', spec3.cube_build.coord_system)
+        print('spec3.photom.skip ',spec3.photom.skip )
+        print('spec3.spectral_leak.skip ', spec3.spectral_leak.skip)
 
-        spec3(input_file)
+        spec3.run(input_file)
         print('DONE!')
 
     def spec_extraction(self, cube_filename = 'sci_1short_ch1-short_s3d.fits'):

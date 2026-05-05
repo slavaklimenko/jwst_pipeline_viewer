@@ -13,17 +13,19 @@ matplotlib.use('TkAgg')
 from matplotlib.ticker import AutoMinorLocator, MultipleLocator
 import numpy as np
 import pickle
-from PyQt5.QtCore import (Qt, )
-from PyQt5.QtGui import (QFont, )
-from PyQt5.QtWidgets import (QApplication, QMessageBox, QMainWindow, QSplitter, QWidget, QLabel,
+from PyQt6.QtCore import (Qt, )
+from PyQt6.QtGui import (QFont, )
+from PyQt6.QtWidgets import (QApplication, QMessageBox, QMainWindow, QSplitter, QWidget, QLabel,
                              QVBoxLayout, QHBoxLayout, QPushButton, QHeaderView, QCheckBox,
                              QRadioButton, QButtonGroup, QComboBox, QTableView, QLineEdit, QSlider)
+from PyQt6.QtCore import QPointF
 import pyqtgraph as pg
 from scipy.interpolate import interp1d, interp2d, RectBivariateSpline, Rbf
 from scipy.interpolate import RBFInterpolator
 from scipy.optimize import bisect
 import sys
 import matplotlib.cm
+import matplotlib as mpl
 
 
 #from scripts.emcee_sampler import fontsize
@@ -39,7 +41,7 @@ from stage2_pipeline import detector2
 import copy
 
 from stdatamodels.jwst.datamodels import dqflags
-from PyQt5.QtWidgets import (QApplication, QMessageBox, QMainWindow, QWidget,
+from PyQt6.QtWidgets import (QApplication, QMessageBox, QMainWindow, QWidget,
                              QFileDialog, QTextEdit, QVBoxLayout,
                              QSplitter, QFrame, QLineEdit, QLabel, QPushButton, QCheckBox,
                              QGridLayout, QTabWidget, QFormLayout, QHBoxLayout, QRadioButton,
@@ -48,7 +50,7 @@ from PyQt5.QtWidgets import (QApplication, QMessageBox, QMainWindow, QWidget,
 from pyqtgraph.Qt import QtCore, QtGui
 from stdatamodels.jwst import datamodels
 import csv
-from PyQt5.QtWidgets import (QApplication)
+from PyQt6.QtWidgets import (QApplication)
 from astropy import modeling
 from scipy import signal
 import scipy.signal
@@ -319,40 +321,28 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
                             #roi.curve.setData(data_roi.mean(axis=(1,2)))
                             roi.curve.setData(data_roi.mean(axis=(1, 2)))
 
-                        lst = []
                         if np.sum(roi.roi_mask)>0:
                             roi_selected_flux=np.zeros(self.data.shape[0])
                             roi_selected_flux_err = np.zeros(self.data.shape[0])
-                            roi_mean_w_flux = np.zeros(self.data.shape[0])
-                            roi_mean_w_flux_err = np.zeros(self.data.shape[0])
-                            roi_max_flux = np.zeros(self.data.shape[0])
-                            roi_max_flux_err = np.zeros(self.data.shape[0])
+
                             for i in range(self.data.shape[0]):
                                 d = np.array(self.data[i,:,:])
                                 d = d[roi.roi_mask]
                                 derr = np.array((self.data_tot.err[i, :, :])[roi.roi_mask])
                                 dq = np.array(self.dq[i,:,:])[roi.roi_mask]
                                 mask = (~np.isnan(d)) * (~np.isnan(derr))
-                                mask_dnu  = np.bitwise_and(dq,dqflags.pixel['DO_NOT_USE'])
-                                for el in dq:
-                                    if el not in lst:
-                                        lst.append(el)
-                                mask_jump = np.bitwise_and(dq, dqflags.pixel['JUMP_DET'])
+                                #mask_dnu  = np.bitwise_and(dq,dqflags.pixel['DO_NOT_USE'])
+                                #mask_jump = np.bitwise_and(dq, dqflags.pixel['JUMP_DET'])
                                 d = d[mask]
-                                d_npix = 1 #np.sum(mask)
                                 if np.sum(mask)>0:
                                     derr = derr[mask]
                                     w = np.power(derr, 2)
                                     roi_selected_flux[i] = np.nansum(d)
                                     roi_selected_flux_err[i] = np.power(np.nansum(w),0.5)
-                                    j = np.argwhere(d==np.max(d))[0]
-                                    roi_max_flux[i] = d[j]/d_npix
-                                    roi_max_flux_err[i] = derr[j]/d_npix
                                 else:
                                     roi_selected_flux[i] = np.nan
                                     roi_selected_flux_err[i] = 1
-                                    roi_max_flux[i] = np.nan
-                                    roi_max_flux_err[i] = 1
+
                             roi.curve.setData(roi_selected_flux)
                             if self.parent.exp_commands.norm_flag_roi.currentText() == 'yes':
                                 normalize = True
@@ -1081,10 +1071,18 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
     def mousePressEvent(self, event, pos=None):
         print(pos)
         if pos is None:
-            super(plotCube, self).mousePressEvent(event)
-            if event.button() == Qt.LeftButton:
-                self.mousePoint = self.vb.vb.mapSceneToView(event.pos())
-                #self.mousePoint = self.vb.mapRectToView(event.pos())
+            #super(plotCube, self).mousePressEvent(event)
+            super().mousePressEvent(event)
+            if event.button() == Qt.MouseButton.LeftButton:
+                #self.mousePoint = self.vb.vb.mapSceneToView(event.pos())
+                #self.mousePoint = self.vb.vb.mapSceneToView(event.scenePos())
+                #self.mousePoint = self.vb.vb.mapSceneToView(
+                #    self.vb.vb.mapToScene(event.pos())
+                #)
+
+                self.mousePoint = self.vb.vb.mapSceneToView(
+                    self.vb.vb.mapToScene(QPointF(event.pos()))
+                )
                 self.x, self.y = self.mousePoint.x(), self.mousePoint.y()
         else:
             self.x, self.y = pos
@@ -1225,7 +1223,6 @@ class plotImage(pg.ImageView): #(pg.PlotWidget):
         self.selected_pixels_cr = []
         self.selected_pixels_cr_multi = []
 
-        #self.show_mouse_event()
 
 
     def add(self, name, add,mode=None,Nscreen=1):
@@ -1293,7 +1290,8 @@ class plotImage(pg.ImageView): #(pg.PlotWidget):
             return
         pos = event.pos()
         i, j = pos.y(), pos.x()
-        self.mousePoint = self.vb.vb.mapSceneToView(event.pos())
+        #self.mousePoint = self.vb.vb.mapSceneToView(event.pos())
+        self.mousePoint = self.vb.vb.mapSceneToView(self.vb.vb.mapToScene(event.pos()))
         # self.mousePoint = self.vb.mapRectToView(event.pos())
         self.x, self.y = self.mousePoint.x(), self.mousePoint.y()
         col, row, val = int(self.x), int(self.y), None
@@ -1315,92 +1313,17 @@ class plotImage(pg.ImageView): #(pg.PlotWidget):
         print(pos)
         if pos is None:
             super(plotImage, self).mousePressEvent(event)
-            if event.button() == Qt.LeftButton:
+            if event.button() == Qt.MouseButton.LeftButton:
                 self.mousePoint = self.vb.vb.mapSceneToView(event.pos())
                 # self.mousePoint = self.vb.mapRectToView(event.pos())
                 self.x, self.y = self.mousePoint.x(), self.mousePoint.y()
         else:
             self.x, self.y = pos
         print('Position on Image:', self.x, self.y)
-        if self.s_status and 1:
+        #if self.s_status and 1:
             # name = self.parent.name
 
-            if 0:
-                ln =  self.parent.stage2.data.data[pos]
-                self.roiplot.plot(ln)
-            if 0:
-                rois = []
-                rois.append(pg.EllipseROI([15, 15], [10, 10], pen=(3, 9)))
 
-                # rois.append(pg.EllipseROI([20, 20], [12, 12], pen=(9, 2)))
-
-                def updateRoi(roi):
-                    if roi is None:
-                        return
-                    arr1 = roi.getArrayRegion(arr=self.data, img=self.imageItem, axes=(2, 1))
-                    if 1:  # set_roi_mask
-                        mask = np.array(np.zeros((self.data.shape[1], self.data.shape[2])), dtype='bool')
-                        rows, cols = self.data.shape[1], self.data.shape[2]
-                        m = np.mgrid[:rows, :cols]
-                        possx = m[0, :, :]  # make the x pos array
-                        possy = m[1, :, :]  # make the y pos array
-                        possx.shape = rows, cols
-                        possy.shape = rows, cols
-                        mpossx = roi.getArrayRegion(possx, self.imageItem).astype(int)
-                        mpossx = mpossx[np.nonzero(mpossx)]  # get the x pos from ROI
-                        mpossy = roi.getArrayRegion(possy, self.imageItem).astype(int)
-                        mpossy = mpossy[np.nonzero(mpossy)]  # get the y pos from ROI
-                        mask[mpossy, mpossx] = True  # self.data[0,mpossx, mpossy]>0
-                        self.roi_mask = mask
-                    updateRoiPlot(roi, arr1)
-
-                def updateRoiPlot(roi, data_roi=None):
-                    if data_roi is None:
-                        data_roi = roi.getArrayRegion(arr=self.data, img=self.imageItem, axes=(1, 2))
-                        # data = roi.getArrayRegion(im1.image, img=im1)
-                    if data_roi is not None:
-                        d = data_roi.mean(axis=(1, 2))
-                        roi.curve.setData(data_roi.mean(axis=(1, 2)))
-                        self.parent.plot_spectrum.plot_spec(data=d, add=False)
-                        self.parent.plot_spectrum.plot_spec(data=d)
-                    if np.sum(self.roi_mask) > 0:
-                        num_pixels = np.sum(self.roi_mask)
-                        roi_selected_flux = np.zeros(self.data.shape[0])
-                        for i in range(self.data.shape[0]):
-                            d = self.data[i, :, :]
-                            d = d[self.roi_mask]
-                            roi_selected_flux[i] = np.sum(d) / num_pixels
-                        self.parent.plot_spectrum.plot_spec_2(data=roi_selected_flux, add=False)
-                        self.parent.plot_spectrum.plot_spec_2(data=roi_selected_flux)
-
-                ## Add each ROI to the scene and link its data to a plot curve with the same color
-                for r in rois:
-                    self.vb.addItem(r)
-                    c = self.roi.plot(pen=r.pen)
-                    r.curve = c
-                    r.sigRegionChanged.connect(updateRoi)
-
-                # self.updateRoi = updateRoi(rois[0])
-
-                def updatePlotSpec():
-                    data_roi = self.roi.getArrayRegion(arr=self.data, img=self.imageItem, axes=(1, 2))
-                    if data_roi is not None:
-                        d = data_roi.mean(axis=(1, 2))
-                        self.roi.curve.setData(data_roi.mean(axis=(1, 2)))
-                        self.parent.plot_spectrum.plot_spec(data=d, add=False)
-                        self.parent.plot_spectrum.plot_spec(data=d)
-
-                # self.timeLine.sigPositionChanged.connect(updatePlotSpec)
-
-            #xMin,xMax,yMin,yMax =
-            #self.vb.setLimits(self.parent.plot_2dimage1)
-
-
-    # def paintEvent(self, x=250,y=250,rad=1):
-    #    painter = QPainter(self)
-    #    painter.setPen(QPen(QColor(0, 0, 255), 2, Qt.SolidLine))
-    #    painter.setBrush(QColor(0, 0, 255, 50))
-    #    painter.drawEllipse(x, y, rad, rad)
 
     def selectPixel(self, add=False, x=250, y=250, rad=1, color='r', type='saturated'):
         if add:
@@ -1472,9 +1395,7 @@ class plotSpec(pg.PlotWidget):
         self.image = None
         self.text = None
         self.grid = image()
-        cdict = cm.get_cmap('viridis')
-        #print(cm.cmap_d.keys())
-        #cdict = cm.get_cmap('coolwarm')
+        cdict = mpl.colormaps['viridis']
         cmap = np.array(cdict.colors)
         cmap[-1] = [1, 0.4, 0]
         map = pg.ColorMap(np.linspace(0, 1, cdict.N), cmap, mode='rgb')
@@ -1489,7 +1410,8 @@ class plotSpec(pg.PlotWidget):
 
 
 
-    def plot_specA1(self, data=None, err=None, add=True,pen=pg.mkPen(color='white', style=Qt.DashLine, width=1),normalize=False,show_err_bar=False,label='A1',smoothing=True):
+    def plot_specA1(self, data=None, err=None, add=True,pen=pg.mkPen(color='white', style=Qt.PenStyle.DashLine, width=1),
+                    normalize=False,show_err_bar=False,label='A1',smoothing=True):
         if add:
             wavel = self.parent.CUBE_A.data.wavelength
             if np.size(data) == np.size(wavel):
@@ -1502,15 +1424,14 @@ class plotSpec(pg.PlotWidget):
                 if smoothing and 0:
                     win = signal.windows.hann(50)
                     data = signal.convolve(data, win, mode='same') / sum(win)
-                if 1:
-                    miri_psf_fwhm = miri_psf_arcsec(wavel[0])
-                    wcs1 = self.parent.CUBE_A.data.wcs
-                    delta_x = wcs1['CDELT1']
-                    miri_psf_fwhm *= 1 / 3600 / delta_x
-                    # convert MJy/Sr to Jy
-                    pix_solid_angle = wcs1['CDELT1'] * wcs1['CDELT2'] * (np.pi / 180) ** 2 * 1e6
-                    data*=pix_solid_angle
-                    err*=pix_solid_angle
+                # convert MJy/Sr to Jy
+                miri_psf_fwhm = miri_psf_arcsec(wavel[0])
+                wcs1 = self.parent.CUBE_A.data.wcs
+                delta_x = wcs1['CDELT1']
+                miri_psf_fwhm *= 1 / 3600 / delta_x
+                pix_solid_angle = wcs1['CDELT1'] * wcs1['CDELT2'] * (np.pi / 180) ** 2 * 1e6
+                data*=pix_solid_angle
+                err*=pix_solid_angle
                 if snr>1:
                     self.plot_lineA1 = pg.PlotCurveItem(wavel, data,pen='lightgreen')
                     self.plot_errbarA1 = pg.ErrorBarItem(x=wavel,y=data,height=2*err,pen=pen, beam=1/6000)
@@ -1522,26 +1443,12 @@ class plotSpec(pg.PlotWidget):
                 self.legend_model.addItem(self.plot_lineA1, label)
                 if show_err_bar:
                     self.vb.addItem(self.plot_errbarA1)
-                pen = pg.mkPen(color='darkgray', style=Qt.DashLine, width=1)
-                #self.zero_level = pg.PlotCurveItem([wavel[0]-2, wavel[-1] + 2], [0, 0], pen=pen)
+                pen = pg.mkPen(color='darkgray', style=Qt.PenStyle.DashLine, width=1)
                 self.zero_level = pg.PlotCurveItem([0, 30], [0, 0], pen=pen)
                 self.vb.addItem(self.zero_level)
 
                 self.show_template = False
-                if 0:
-                    #NGC = np.loadtxt('/home/slava/science/codes/python/jwst/input/NGC19.txt',delimiter=',')
-                    #NGC = np.loadtxt('/home/slava/science/data/SPITZER/AO0235/cassis_yaaar_spcfw_15121152t.dat')
-                    #NGC = np.loadtxt('/media/slava/14999070-ec17-4bcc-993d-c556030e9642/home/slava/science/data/SPITZER/AO0235/cassis_yaaar_spcfw_15121152t-copy-red_norm.dat')
-                    NGC = np.loadtxt('./data/reference_spectrum.dat')
-                    x,y = NGC[:,0], NGC[:,1]
-                    mask = (x>wavel[350])*(x<wavel[450])
-                    self.show_template = False
-                    if np.sum(mask)>0 and 0:
-                        self.show_template = True
-                        norm = 1/np.mean(y[mask])*np.mean(data[350:450])
-                        self.plot_NGC = pg.PlotCurveItem(x,y*norm, pen='pink')
-                        self.vb.addItem(self.plot_NGC)
-                        self.legend_model.addItem(self.plot_NGC, 'Template')
+
 
                 self.lr = pg.LinearRegionItem(values=[5,5])
                 self.lr.setZValue(-10)
@@ -1592,7 +1499,7 @@ class plotSpec(pg.PlotWidget):
                 pass
 
 
-    def plot_specA2(self, data=None, err=None, add=True, pen=pg.mkPen(color='royalblue', style=Qt.DashLine, width=1),
+    def plot_specA2(self, data=None, err=None, add=True, pen=pg.mkPen(color='royalblue', style=Qt.PenStyle.DashLine, width=1),
                      normalize=False, show_err_bar=False, label='A2',smoothing=False):
         if add:
             wavel = self.parent.CUBE_A.data.wavelength
@@ -1639,7 +1546,8 @@ class plotSpec(pg.PlotWidget):
             except:
                 pass
 
-    def plot_specA2m1(self, data=None, err=None, add=True, pen=pg.mkPen(color='royalblue', style=Qt.SolidLine, width=2),
+    def plot_specA2m1(self, data=None, err=None, add=True, pen=pg.mkPen(color='royalblue',
+                    style=Qt.PenStyle.SolidLine, width=2),
                     normalize=False, show_err_bar=False, label='A2-A1'):
         if add:
             wavel = self.parent.CUBE_A.data.wavelength
@@ -1675,8 +1583,9 @@ class plotSpec(pg.PlotWidget):
                 pass
 
 
-    def plot_specB1(self, data=None, err=None, add=True, pen=pg.mkPen(color='white', style=Qt.DashLine, width=1),
-                    normalize=True,show_err_bar=False,smoothing=False,label='CubeB - Purple',plot_ref_backgroud=False):  # pg.mkPen(color='gray', style=Qt.DashLine, width=3)
+    def plot_specB1(self, data=None, err=None, add=True, pen=pg.mkPen(color='white', style=Qt.PenStyle.DashLine, width=1),
+                    normalize=True,show_err_bar=False,smoothing=False,
+                    label='CubeB - Purple',plot_ref_backgroud=False):  # pg.mkPen(color='gray', style=Qt.PenStyle.DashLine, width=3)
         if add:
             wavel = self.parent.CUBE_B.data.wavelength
             if np.size(data) == np.size(wavel):
@@ -1728,8 +1637,8 @@ class plotSpec(pg.PlotWidget):
             except:
                 pass
 
-    def plot_specB2(self, data=None, add=True, pen=pg.mkPen(color='white', style=Qt.DashLine,
-                                                            width=1),normalize=True,smoothing=False, label='CubeB: Yellow'):  # pg.mkPen(color='gray', style=Qt.DashLine, width=3)
+    def plot_specB2(self, data=None, add=True, pen=pg.mkPen(color='white', style=Qt.PenStyle.DashLine,
+                        width=1),normalize=True,smoothing=False, label='CubeB: Yellow'):
         if add:
             wavel = self.parent.CUBE_B.data.wavelength
             if np.size(data) == np.size(wavel):
@@ -1770,7 +1679,8 @@ class plotHist(pg.PlotWidget):
         self.image = None
         self.text = None
         self.grid = image()
-        cdict = cm.get_cmap('viridis')
+        #cdict = cm.get_cmap('viridis')
+        cdict = mpl.colormaps['viridis']
         #cdict = cm.get_cmap('coolwarm')
         cmap = np.array(cdict.colors)
         cmap[-1] = [1, 0.4, 0]
@@ -1783,7 +1693,8 @@ class plotHist(pg.PlotWidget):
         self.setTitle("Roi Flux Hist", color="olive", size="10pt")
         self.lines = self.listDataItems()
 
-    def plot_hist(self, data=None, roi_mask=[1], timeind=0, add=True,pen=pg.mkPen(color='white', style=Qt.DashLine, width=1),med_mode='median',brush='green'): #pg.mkPen(color='gray', style=Qt.DashLine, width=3)
+    def plot_hist(self, data=None, roi_mask=[1], timeind=0, add=True,
+                  pen=pg.mkPen(color='white', style=Qt.PenStyle.DashLine, width=1),med_mode='median',brush='green'):
         if add:
             if np.sum(roi_mask) > 0:
                 num_pixels = np.sum(roi_mask)
@@ -1826,8 +1737,9 @@ class plotHist(pg.PlotWidget):
             except:
                 pass
 
-    def plot_hist2(self, data=None, roi_mask=[1], timeind=0, add=True, pen=pg.mkPen(color='white', style=Qt.DashLine,
-                                                                                   width=1),med_mode = 'median',brush='red'):  # pg.mkPen(color='gray', style=Qt.DashLine, width=3)
+    def plot_hist2(self, data=None, roi_mask=[1], timeind=0, add=True,
+                   pen=pg.mkPen(color='white', style=Qt.PenStyle.DashLine,width=1),
+                   med_mode = 'median',brush='red'):
         if add:
             if np.sum(roi_mask) > 0:
                 num_pixels = np.sum(roi_mask)
@@ -1866,8 +1778,7 @@ class plotSlit(pg.PlotWidget):
         self.image = None
         self.text = None
         self.grid = image()
-        cdict = cm.get_cmap('viridis')
-        #cdict = cm.get_cmap('coolwarm')
+        cdict = mpl.colormaps['viridis'] #('coolwarm')
         cmap = np.array(cdict.colors)
         cmap[-1] = [1, 0.4, 0]
         map = pg.ColorMap(np.linspace(0, 1, cdict.N), cmap, mode='rgb')
@@ -1879,7 +1790,7 @@ class plotSlit(pg.PlotWidget):
         self.setTitle("Slit profile", color="olive", size="10pt")
         self.lines = self.listDataItems()
 
-    def plot_slit(self, data=None, add=True,pen=pg.mkPen(color='white', style=Qt.DashLine, width=1)): #pg.mkPen(color='gray', style=Qt.DashLine, width=3)
+    def plot_slit(self, data=None, add=True,pen=pg.mkPen(color='white', style=Qt.PenStyle.DashLine, width=1)):
         if add:
             if np.sum(data) > 0:
                 x = np.arange(data.shape[0])
@@ -1911,7 +1822,8 @@ class plotSlit(pg.PlotWidget):
                     #g_init.mean.fixed = True #tied = tie_disp
                     g_fit = fit_lines(spectrum, g_init)
                     y_fit = g_fit(np.linspace(x[0],x[-1],100) * u.um)
-                    self.plot_model2 = pg.PlotCurveItem(np.linspace(x[0],x[-1],100), y_fit, pen=pg.mkPen(color='yellow', style=Qt.DashLine, width=1))
+                    self.plot_model2 = pg.PlotCurveItem(np.linspace(x[0],x[-1],100), y_fit,
+                                                        pen=pg.mkPen(color='yellow', style=Qt.PenStyle.DashLine, width=1))
                     label_yellow = 'Fit(FWHM=fix)'
                     fitter = modeling.fitting.LevMarLSQFitter()
                     model = modeling.models.Gaussian1D()  # depending on the data you need to give some initial values
@@ -1977,33 +1889,16 @@ class CUBElistTable(pg.TableWidget):
             for k, v in self.format.items():
                 self.setFormat(v, self.columnIndex(k))
         self.resizeColumnsToContents()
-        self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        #self.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         w = 180 + self.verticalHeader().width() + self.autoScrollMargin()*1.5
         w += sum([self.columnWidth(c) for c in range(self.columnCount())])
         self.resize(int(w), self.size().height())
         self.setSortingEnabled(True)
 
     def update_cube_list(self):
-        if 1:
-            self.parent.parent.Cubes_A.__init__(self.parent.parent, closebutton=False)
-        else:
-            Cubes = self.parent.parent.Cubes
-            filenames, fileparams, codenames = Cubes.readfolder(self.parent.parent.CUBE.output_dir)
-            lst = []
-            for s, pars in zip(filenames, fileparams):
-                d = [s.split('/')[-1]]
-                for p in pars:
-                    d.append(p)
-                lst.append(d)
-                # filenamelst.append(d[0].split('/')[-1])
-                Cubes.filelist[d[0].split('/')[-1]] = s
-                Cubes.associtations_list[d[0].split('/')[-1]] = self.parent.parent.CUBE.output_dir + d[-1]
-            lst = np.array([tuple(l) for l in lst], dtype=[('name', 'U400')] + [(p, 'U50') for p in codenames])
-            data = lst
-            #self.parent.parent.Cubes.table.setdata(data)
-            self.setdata(data)
+        self.parent.parent.Cubes_A.__init__(self.parent.parent, closebutton=False)
+
 
     def create_asn_file(self):
         source = self.parent.parent.exp_pars.asn_source.currentText()
@@ -5374,71 +5269,51 @@ class JWST_spec_viewer(QMainWindow):
 
             # self.plot.setFrameShape(QFrame.StyledPanel)
 
-            self.splitter = QSplitter(Qt.Vertical)
-            self.splitter_image = QSplitter(Qt.Horizontal)
+            self.splitter = QSplitter(Qt.Orientation.Vertical)
+            self.splitter_image = QSplitter(Qt.Orientation.Horizontal)
             self.splitter_image.addWidget(self.plot_3dcubeA)
 
             if 1:
-                self.spec_image1 = QSplitter(Qt.Vertical)
-                self.spec_image12 = QSplitter(Qt.Horizontal)
+                self.spec_image1 = QSplitter(Qt.Orientation.Vertical)
+                self.spec_image12 = QSplitter(Qt.Orientation.Horizontal)
                 self.spec_image12.addWidget(self.plot_2dimage1)
                 self.spec_image12.addWidget(self.plot_2dimage2)
                 self.spec_image1.addWidget(self.spec_image12)
-                self.spec_image34 = QSplitter(Qt.Horizontal)
+                self.spec_image34 = QSplitter(Qt.Orientation.Horizontal)
                 self.spec_image34.addWidget(self.plot_2dimage3)
                 self.spec_image34.addWidget(self.plot_2dimage4)
                 self.spec_image1.addWidget(self.spec_image34)
             if 1:
-                self.roi_hist = QSplitter(Qt.Horizontal)
+                self.roi_hist =QSplitter(Qt.Orientation.Horizontal)
                 self.roi_hist.addWidget(self.plot_hist1)
                 self.roi_hist.addWidget(self.plot_hist2)
                 self.roi_hist.addWidget(self.plot_hist3)
                 self.roi_hist.addWidget(self.plot_hist4)
             if 1:
-                self.roi_slit = QSplitter(Qt.Horizontal)
+                self.roi_slit = QSplitter(Qt.Orientation.Horizontal)
                 self.roi_slit.addWidget(self.plot_slit)
 
 
-
-
-            #self.splitter_image.addWidget(self.spec_image1)
             self.splitter_image.addWidget(self.plot_3dcubeB)
-            #self.splitter_image.addWidget(self.plot_2dimage)
             self.splitter.addWidget(self.splitter_image)
 
-            self.splitter_plot = QSplitter(Qt.Vertical)
+            self.splitter_plot = QSplitter(Qt.Orientation.Vertical)
             self.splitter_plot.addWidget(self.plot_spectrum)
-            #self.splitter_plot.addWidget(self.roi_hist)
             self.splitter.addWidget(self.splitter_plot)
 
-            self.splitter_pars = QSplitter(Qt.Horizontal)
-            self.splitter_pars_left_panel = QSplitter(Qt.Vertical)
+            self.splitter_pars = QSplitter(Qt.Orientation.Horizontal)
+            self.splitter_pars_left_panel = QSplitter(Qt.Orientation.Vertical)
             self.splitter_pars_left_panel.addWidget(self.exp_pars)
             self.splitter_pars_left_panel.addWidget(self.exp_commands)
             self.splitter_pars.addWidget(self.splitter_pars_left_panel)
-            self.splitter_pars_right_panel = QSplitter(Qt.Vertical)
+            self.splitter_pars_right_panel = QSplitter(Qt.Orientation.Vertical)
             self.splitter_pars_right_panel.addWidget(self.Cubes_A)
             self.splitter_pars_right_panel.addWidget(self.Cubes_B)
             self.splitter_pars.addWidget(self.splitter_pars_right_panel)
             self.splitter.addWidget(self.splitter_pars)
 
             self.splitter.setSizes([150, 300,100,100,100,100])
-            #self.splitter.setStretchFactor(0, 10)
-            #self.splitter.setStretchFactor(1, 10)
-            #self.splitter.setStretchFactor(2, 10)
-            #self.splitter.setStretchFactor(3, 10)
-
             self.setCentralWidget(self.splitter)
-
-            # >>> create Menu
-            #self.initMenu()
-
-            # create toolbar
-            # self.toolbar = self.addToolBar('B-spline')
-            # self.toolbar.addAction(Bspline)
-
-
-            #self.draw()
             self.showMaximized()
             self.show()
 
@@ -5447,5 +5322,4 @@ if __name__ == '__main__':
 
     app = QApplication(sys.argv)
     ex2 = JWST_spec_viewer()
-    sys.exit(app.exec_())
-
+    sys.exit(app.exec())

@@ -1,16 +1,8 @@
 #settings
 #Before running the code set correct values to input1_dir and CRDS_PATH
 #input1_dir: /home/slava/science/data/JWST/ID2732/NGC7319   #path to folder with uncalibrated data
-#input1_dir: /media/slava/14999070-ec17-4bcc-993d-c556030e9642/home/slava/science/data/JWST/ID2155/J0235/UNCALIB/JWST   #path to folder with uncalibrated data
-#input1_dir: /media/slava/14999070-ec17-4bcc-993d-c556030e9642/home/slava/science/data/JWST/ID2155/J0901/UNCALIB
-#input1_dir: /media/slava/14999070-ec17-4bcc-993d-c556030e9642/home/slava/science/data/JWST/ID2155/J1007/UNCAL
-#input1_dir: /media/slava/14999070-ec17-4bcc-993d-c556030e9642/home/slava/science/data/JWST/ID2155/J1017/UNCAL
-input1_dir: /media/slava/14999070-ec17-4bcc-993d-c556030e9642/home/slava/science/data/JWST/ID2155/J0900/UNCAL
-#input1_dir: /home/slava/science/research/kulkarni/JWST-DLAs/cube_data/J1431
-#input1_dir: /media/slava/14999070-ec17-4bcc-993d-c556030e9642/home/slava/science/data/JWST/IRAS23385+6053
-#input1_dir: /media/slava/14999070-ec17-4bcc-993d-c556030e9642/home/slava/science/data/JWST/Sz98
-#input1_dir: /media/slava/14999070-ec17-4bcc-993d-c556030e9642/home/slava/science/data/JWST/NGC7469
-#input1_dir: /media/slava/14999070-ec17-4bcc-993d-c556030e9642/home/slava/science/data/JWST/ID2441/J1830
+# cycle 3 - 5491
+input1_dir: /home/slava/science/data/jwst-miri/J0218/UNCAL/JWST
 input2_dir: ./output/results/
 input3_dir: ./output/detector2/
 spec2_cachedir: ./temp/spec2/
@@ -18,7 +10,10 @@ output1_dir: ./output/detector1/
 output2_dir: ./output/detector2/
 output3_dir: ./output/detector3/
 CRDS_SERVER_URL: https://jwst-crds.stsci.edu
-CRDS_PATH: /home/slava/science/codes/python/jwst/data_latest
-CRDS_CONTEXT: jwst_1236.pmap
+#CRDS_PATH: /home/slava/science/codes/python/jwst/data_latest
+#CRDS_CONTEXT: jwst_1236.pmap
+CRDS_PATH: /home/slava/science/codes/python/jwst/data_2.0.0
+CRDS_CONTEXT: jwst_1533.pmap
+WEBBPSF_PATH:  /home/slava/science/codes/python/jwst/data_latest/webbpsf-data
 #CRDS_PATH: /home/slava/science/codes/python/jwst/data
 #CRDS_CONTEXT: jwst_1185.pmap

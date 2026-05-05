@@ -24,7 +24,7 @@ def read_settings(init_file='init.dat'):
                 if values[0] == 'CRDS_CONTEXT:':
                     init_settings['CRDS_CONTEXT'] = values[1]
     return init_settings
-settings =  read_settings()
+settings =  read_settings(init_file='init.dat')
 os.environ["CRDS_PATH"] = settings['CRDS_PATH']
 os.environ["CRDS_SERVER_URL"] = settings['CRDS_SERVER_URL']
 if 'CRDS_CONTEXT' in  settings.keys():
@@ -49,7 +49,7 @@ from astropy.utils.data import download_file
 from astropy.visualization import ImageNormalize, ManualInterval, LogStretch
 #Import JWST pipeline-related modules
 # List of possible data quality flags
-from jwst.datamodels import dqflags
+from stdatamodels.jwst.datamodels import dqflags
 
 # The entire calwebb_detector1 pipeline
 from jwst.pipeline import calwebb_detector1
@@ -79,9 +79,9 @@ from stdatamodels.jwst.datamodels import dqflags
 from jwst.assign_wcs import AssignWcsStep
 from jwst.superbias import SuperBiasStep
 
-from exotic_miri.reference import SetCustomGain, SetCustomLinearity, GetWavelengthMap
-from exotic_miri.stage_1 import DropGroupsStep
-from exotic_miri.stage_2 import CleanOutliersStep, BackgroundSubtractStep, Extract1DBoxStep, AlignSpectraStep
+#from exotic_miri.reference import SetCustomGain, SetCustomLinearity, GetWavelengthMap
+#from exotic_miri.stage_1 import DropGroupsStep
+#from exotic_miri.stage_2 import CleanOutliersStep, BackgroundSubtractStep, Extract1DBoxStep, AlignSpectraStep
 
 import jwst
 print(jwst.__version__)
@@ -303,32 +303,7 @@ class detector1():
                     full_ramp = saturation.data[0, :, y, x]
                     plot_ramp(groups, full_ramp, title='Normal pixel', xpixel=x, ypixel=y, ax=ax[1, axi])
 
-    def roeba_step(self,input_file=None, debug=True, output_dir=None,save_results=False):
-        from tshirt.tests import test_phot_algorithms
-        import numpy as np
-        from tshirt.pipeline.instrument_specific import rowamp_sub
 
-        if output_dir == None:
-            output_dir = self.output_dir
-        if input_file == None:
-            input_file = self.data
-        superbias_step = SuperBiasStep()
-        # superbias_step.output_dir = output_dir
-        # superbias_step.save_results = True
-
-        # Call using the the output from the previously-run saturation step
-        superbias = superbias_step.run(input_file)
-
-        mod_refpix = deepcopy(superbias)
-
-        ngroups = superbias.meta.exposure.ngroups
-        nints = superbias.data.shape[0]  ## could be split into ints per segment
-
-        for oneInt in tqdm.tqdm(np.arange(nints)):
-            for oneGroup in np.arange(ngroups):
-                rowSub, modelImg = rowamp_sub.do_backsub(superbias.data[oneInt, oneGroup, :, :],
-                                                         backgMask=simDict['bkgmask'], amplifiers=1)
-                mod_refpix.data[oneInt, oneGroup, :, :] = rowSub
 
     def reset_step(self, input_file=None, debug=True, output_dir=None,save_results=False):
         if output_dir == None:
@@ -546,19 +521,19 @@ class detector1():
         jump_step = JumpStep()
         jump_step.output_dir = output_dir
         jump_step.save_results = save_results
-        jump_step.rejection_threshold = limit
-        jump_step.three_group_rejection_threshold = limit
-        jump_step.four_group_rejection_threshold = limit
-        jump_step.min_jump_to_flag_neighbors = 15.
-        jump_step.debug=debug
-        jump_step.flag_4_neighbors = flag_4_neighbors
-        jump_step.expand_large_events = False
+        #jump_step.rejection_threshold = limit
+        #jump_step.three_group_rejection_threshold = limit
+        #jump_step.four_group_rejection_threshold = limit
+        #jump_step.min_jump_to_flag_neighbors = 15.
+        #jump_step.debug=debug
+        #jump_step.flag_4_neighbors = flag_4_neighbors
+        #jump_step.expand_large_events = False
         jump_step.skip = False
-        jump_step.recalculate_median = RecalcMedian
-        jump_step.maximum_cores = 'all'
+        #jump_step.recalculate_median = RecalcMedian
+        jump_step.maximum_cores = 'all' #'1', 'half', 'all'
         jump_step.find_showers = find_showers
-        if override_gain:
-            jump_step.override_gain = self.gain_model
+        #if override_gain:
+        #    jump_step.override_gain = self.gain_model
         print('jump_step.find_showers',jump_step.find_showers)
 
         # Call using the dark instance from the previously-run
@@ -594,7 +569,8 @@ class detector1():
             hdul.writeto(output_dir+self.name.split('uncal.fits')[0] + 'groupdq.fits', overwrite=True)
 
 
-    def slope_fitting_step(self, input_file=None, debug=True, output_dir=None,save_results=False,override_gain=False,algorithm='CHI2'):
+    def slope_fitting_step(self, input_file=None, debug=True, output_dir=None,
+                           save_results=False,override_gain=False,algorithm='OLS_C'):
         '''
 
         :param input_file:
@@ -618,16 +594,22 @@ class detector1():
         ramp_fit_step.debug = debug
         ramp_fit_step.algorithm = algorithm
         #ramp_fit_step.maximum_cores = 'all'
-        if override_gain:
-            ramp_fit_step.override_gain = self.gain_model
+        #if override_gain:
+        #    ramp_fit_step.override_gain = self.gain_model
 
         # Let's save the optional outputs, in order
         # to help with visualization later
-        ramp_fit_step.save_opt = save_results
+        ramp_fit_step.save_opt = False
 
         # Call using the dark instance from the previously-run
         # jump step
-        self.ramp_fit,self.ramp_fit_info = ramp_fit_step.run(input_file)
+        #self.ramp_fit,self.ramp_fit_info = ramp_fit_step.run(input_file)
+        self.ramp_fit = ramp_fit_step.run(input_file) #out_model, int_model
+        if ramp_fit_step.save_opt:
+            self.ramp_fit_info = datamodels.open(ramp_fit_step.output_dir+
+                                                 self.name.split('_uncal.fits')[0]+'_fitopt.fits')
+            print()
+            #jw05491003001_03104_00001_mirifulong_fitopt.fits
 
 
     def chiq_ramp_fit(self, input_file=None, debug=True, output_dir=None,save_results=False):
@@ -824,54 +806,66 @@ class detector1():
             self.readnoisearray = readnoise_2d
             return self.readnoisearray
 
+    def run_detector1(self):
+        from jwst.pipeline import Detector1Pipeline
+        inpfile = self.path + '/'+ self.input_file
+        crds_config = Detector1Pipeline.get_config_from_reference(inpfile)
+        detector1 = Detector1Pipeline.from_config_section(crds_config)
+        detector1.jump.maximum_cores = 'half'  # Set the jump step to use half of the available cores
+        detector1.ramp_fit.maximum_cores = 'half'  # Set the ramp fitting step to use half of the available cores
+        detector1.save_results = True  # Save results to disk
+        detector1.input_data=inpfile
+        result = detector1.run()
 
-    def calc_gain_model(self):
-        '''
-        make mddel for gain corection from https://exotic-miri.readthedocs.io/en
-        :return: gain_model
-        '''
-        custom_set_gain = SetCustomGain()
-        # Make custom gain datamodel (using the final segment).
-        uncal_last = datamodels.RampModel(os.path.join(self.path, self.input_file))
-        gain_model = custom_set_gain.call(uncal_last, gain_value=3.1)
-        self.gain_model = gain_model
-        del uncal_last
+    #def calc_gain_model(self):
+    #    '''
+    #    make mddel for gain corection from https://exotic-miri.readthedocs.io/en
+    #    :return: gain_model
+    #    '''
+    #    custom_set_gain = SetCustomGain()
+    #    # Make custom gain datamodel (using the final segment).
+    #    uncal_last = datamodels.RampModel(os.path.join(self.path, self.input_file))
+    #    gain_model = custom_set_gain.call(uncal_last, gain_value=3.1)
+    #    self.gain_model = gain_model
+    #    del uncal_last
 
-    def calc_linearity_model(self):
-        '''
-        make mddel for gain corection from https://exotic-miri.readthedocs.io/en
-        :return: gain_model
-        '''
-        custom_set_linearity = SetCustomLinearity()
-        # Make custom gain datamodel (using the final segment).
-        uncal_last = datamodels.RampModel(os.path.join(self.path, self.input_file))
-        linearity_model = custom_set_linearity.call(uncal_last, group_idx_start_fit=10, group_idx_end_fit=28,
-            group_idx_start_derive=10, group_idx_end_derive=28, row_idx_start_used=300, row_idx_end_used=380)
-        del uncal_last
-        self.linearity_model = linearity_model
+    #def calc_linearity_model(self):
+    #    '''
+    #    make mddel for gain corection from https://exotic-miri.readthedocs.io/en
+    #    :return: gain_model
+    #    '''
+    #    custom_set_linearity = SetCustomLinearity()
+    #    # Make custom gain datamodel (using the final segment).
+    #    uncal_last = datamodels.RampModel(os.path.join(self.path, self.input_file))
+    #    linearity_model = custom_set_linearity.call(uncal_last, group_idx_start_fit=10, group_idx_end_fit=28,
+    #        group_idx_start_derive=10, group_idx_end_derive=28, row_idx_start_used=300, row_idx_end_used=380)
+    #    del uncal_last
+    #    self.linearity_model = linearity_model
 
 
 if __name__ == '__main__':
     print('Hi PyCharm')
-    miri_uncal_file = 'jw02155004001_03102_00004_mirifushort/jw02155004001_03102_00004_mirifushort_uncal.fits'
+    miri_uncal_file = 'jw05491003001_03102_00001_mirifushort/jw05491003001_03102_00001_mirifushort_uncal.fits'
 
     exp1 =  detector1(input_file=miri_uncal_file, path = input_dir, output_dir=output_dir)
     exp1.dq_init_step()
-    exp1.get_readnoise()
-    exp1.show_dq()
-    exp1.plot_image()
-    #exp1.saturation_step()
-    #exp1.reset_dq()
-    exp1.reset_step()
-    exp1.first_step()
-    exp1.last_step()
-    exp1.linear_step(debug=False)
-    exp1.rscd_step()
-    exp1.dark_step()
-    exp1.refpix_corr_step()
-    exp1.plot_image()
-    exp1.jump_corr_step(debug=1,limit=5)
-    exp1.slope_fitting_step(debug=True)
+    exp1.run_detector1()
+    if 0:
+        exp1.get_readnoise()
+        exp1.show_dq()
+        exp1.plot_image()
+        #exp1.saturation_step()
+        #exp1.reset_dq()
+        exp1.reset_step()
+        exp1.first_step()
+        exp1.last_step()
+        exp1.linear_step(debug=False)
+        exp1.rscd_step()
+        exp1.dark_step()
+        exp1.refpix_corr_step()
+        exp1.plot_image()
+        exp1.jump_corr_step(debug=1,limit=5)
+        exp1.slope_fitting_step(debug=True)
 
 
 #    exp1.show_dq()
