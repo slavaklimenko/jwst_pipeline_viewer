@@ -1,4 +1,7 @@
 # jwst_Viewer
+
+The code provides interface for jwst pipeline v2.0.0
+
 How to run the code
 1) download it directly or by
    git clone https://github.com/slavaklimenko/jwst_Viewer
