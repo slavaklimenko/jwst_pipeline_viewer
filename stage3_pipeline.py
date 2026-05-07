@@ -428,6 +428,23 @@ class detector3():
         if output_dir == None:
             output_dir = self.output_dir
 
+        from JWST_cube_analyser import miri_psf_arcsec
+
+        binning = {} #5.32, 6.15, 7.09, 8.14, 9.40, 10.86, 12.51, 14.46, 16.72, 19.32, 22.57, 26.25
+        N = 6
+        binning['1SHORT'] = miri_psf_arcsec(5.32)/N
+        binning['1MEDIUM'] = miri_psf_arcsec(6.15)/N
+        binning['1LONG'] = miri_psf_arcsec(7.09)/N
+        binning['2SHORT'] = miri_psf_arcsec(8.14)/N
+        binning['2MEDIUM'] = miri_psf_arcsec(9.40)/N
+        binning['2LONG'] = miri_psf_arcsec(10.86)/N
+        binning['3SHORT'] = miri_psf_arcsec(12.51)/N
+        binning['3MEDIUM'] = miri_psf_arcsec(14.46)/N
+        binning['3LONG'] = miri_psf_arcsec(16.7)/N
+        binning['4SHORT'] = miri_psf_arcsec(19.3)/N
+        binning['4MEDIUM'] = miri_psf_arcsec(22.6)/N
+        binning['4LONG'] = miri_psf_arcsec(26.2)/N
+
         spec3 = Spec3Pipeline()
         spec3.output_dir = output_dir
         spec3.save_results = True
@@ -439,11 +456,14 @@ class detector3():
         spec3.adaptive_trace_model.fit_threshold=0
         spec3.adaptive_trace_model.save_model = True
         spec3.adaptive_trace_model.oversample = 3
-        spec3.pixel_replace.skip = False
+        spec3.pixel_replace.skip = True
         spec3.resample_spec.skip = True #-master_resample_spec_flag
         spec3.cube_build.channel = channel
+        #spec3.cube_build.band = band
         spec3.cube_build.output_file = (input_file.split('/')[-1]).split('.')[0]
         spec3.cube_build.coord_system = 'ifualign'
+        spec3.cube_build.scalexy = binning[channel+band]
+        spec3.cube_build.rois = binning[channel+band]
         spec3.extract_1d.skip = False
         spec3.photom.skip = True
         spec3.spectral_leak.skip = True
