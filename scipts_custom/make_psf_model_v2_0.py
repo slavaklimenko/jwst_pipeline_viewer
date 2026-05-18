@@ -89,8 +89,8 @@ if __name__ == '__main__':
 
         if mode == 'star_psf':
             print('ch',ch)
-            filename = (path + 'output/detector3/HD159222-ATCN3_N6/'+
-                        'HD-159222_ATC_N3_N6_'+ch+'_s3d.fits')
+            filename = (path + 'output/detector3/HD159222_ATCN6_N6/'+
+                        'HD-159222_ATCN6_N6_'+ch+'_s3d.fits')
             star_psf_cube = datamodels.open(filename)
             data = np.array(star_psf_cube.data)
             #wcs = star_psf_cube.meta.wcs
