@@ -5,6 +5,8 @@ import astropy.constants as ac
 from astropy.cosmology import FlatLambdaCDM
 from functools import partial
 from io import StringIO
+
+from lmfit.lineshapes import rectangle
 from matplotlib import cm
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
@@ -26,6 +28,7 @@ from scipy.optimize import bisect
 import sys
 import matplotlib.cm
 import matplotlib as mpl
+from tqdm import tqdm
 
 
 
@@ -138,14 +141,29 @@ if 1:
 
 
     def miri_psf_arcsec(lam):
-        # interpolation of miri psf https://jwst-docs.stsci.edu/jwst-mid-infrared-instrument/miri-performance/miri-point-spread-functions
+        # interpolation of the miri psf
         #f = np.loadtxt('./data_local/miri_psf_arcsec_Argyriou_2023.dat')
-        f = np.loadtxt('./data_local/miri_psf_arcsec_Gasman_2024.dat')  #
-
-        #print(f[:, 0])
+        module_dir = os.path.dirname(os.path.abspath(__file__))
+        psf_file = os.path.join(module_dir, 'data_local', 'miri_psf_arcsec_Gasman_2024.dat')
+        f = np.loadtxt(psf_file)  #
         f1d = interp1d(f[:, 0], f[:, 1], fill_value='extrapolate')
-        #print('miri psf =', f1d(lam))
         return f1d(lam)
+
+def process_pixel(args):
+    from jwst.residual_fringe.utils import fit_residual_fringes_1d
+
+    posx, posy, image_data, wavel, channel, d = args
+
+    flux = image_data[:, posx, posy]
+
+    sp_fringe_corrected = fit_residual_fringes_1d(
+        flux,
+        wavel,
+        channel=int(channel),
+        dichroic_only=False
+    )
+
+    return posx, posy, sp_fringe_corrected
 
 
 class plotCube(pg.ImageView): #(pg.PlotWidget):
@@ -333,8 +351,7 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
                                 derr = np.array((self.data_tot.err[i, :, :])[roi.roi_mask])
                                 dq = np.array(self.dq[i,:,:])[roi.roi_mask]
                                 mask = (~np.isnan(d)) * (~np.isnan(derr))
-                                #mask_dnu  = np.bitwise_and(dq,dqflags.pixel['DO_NOT_USE'])
-                                #mask_jump = np.bitwise_and(dq, dqflags.pixel['JUMP_DET'])
+
                                 d = d[mask]
                                 if np.sum(mask)>0:
                                     derr = derr[mask]
@@ -860,13 +877,16 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
                 # show the position of sources
                 l, raq, deq = np.nanmean(wave), 35.272754, 35.937156
                 asec = 1 / 3600.
-                qA_pos_pix = cube.conv_world_coord(t=l, x=raq, y=deq,
-                                                   mode='pipeline_world_to_pix')
-                qB_pos_pix = cube.conv_world_coord(t=l, x=raq + 0.307 * asec, y=deq + 0.126 * asec,
-                                                   mode='pipeline_world_to_pix')
+
+                qA_pos_pix = cube.meta.wcs.world_to_pixel_values( raq, deq,l)
+                qB_pos_pix = cube.meta.wcs.world_to_pixel_values(raq + 0.307 * asec, deq + 0.126 * asec,l)
+                #qA_pos_pix = cube.conv_world_coord(t=l, x=raq, y=deq,mode='pipeline_world_to_pix')
+                #qB_pos_pix = cube.conv_world_coord(t=l, x=raq + 0.307 * asec, y=deq + 0.126 * asec, mode='pipeline_world_to_pix')
                 tcolor = 'black'
-                plt.text(qA_pos_pix[1], qA_pos_pix[2], 'A', color=tcolor, fontsize=10)
-                plt.text(qB_pos_pix[1], qB_pos_pix[2], 'B', color=tcolor, fontsize=10)
+                print('pos A',qA_pos_pix)
+                print('pos B', qB_pos_pix)
+                plt.text(qA_pos_pix[0], qA_pos_pix[1], 'A', color=tcolor, fontsize=10)
+                plt.text(qB_pos_pix[0], qB_pos_pix[1], 'B', color=tcolor, fontsize=10)
 
                 # plt.text(qC_pos_pix[1], qC_pos_pix[2], 'C', color=tcolor, fontsize=10)
 
@@ -5077,26 +5097,63 @@ class expRunWidget(QWidget):
 
             d = image_comb / d_max
             mask_highsnr_pixels = (image_snr > snr_lolimit) * edge_spatial_mask
+            # add a rectangle window mask
+            if 1:
+                rectangle_mask = np.zeros_like(mask_highsnr_pixels)
+                half_size = 20
+                y0, x0 = pos_brightest
+                ymin, ymax = y0 - half_size, y0 + half_size
+                xmin, xmax = x0 - half_size, x0 + half_size
+                # primary science cube
+                rectangle_mask[ymin:ymax, xmin:xmax] = 1
+                mask_highsnr_pixels*=rectangle_mask
+
             mask_corrected_pixels = np.zeros_like(mask_highsnr_pixels)
 
             pos = np.where(mask_highsnr_pixels == True)
-            pix_number = 0
-            for posx, posy in zip(pos[0], pos[1]):
-                print(pix_number, ' from ', pos[0].shape[0])
-                print('pix coord (A):', posx, posy, ' relative brightness: ', d[posx, posy])
-                pix_number += 1
-                flux = np.array(image.data[:, posx, posy])
-                sp_fringe_corrected = fit_residual_fringes_1d(np.array(flux), wavel, channel=int(channel),
-                                                              dichroic_only=False)
-                mask_corrected_pixels[posx,posy] = 1
-                if pix_number<5:
-                    plt.subplots()
-                    plt.plot(wavel,np.array(flux))
-                    plt.plot(wavel,sp_fringe_corrected)
-                    plt.plot(wavel, np.array(flux)-sp_fringe_corrected,ls = '--',color='red')
+            if 0:
+                pix_number = 0
+                for posx, posy in zip(pos[0], pos[1]):
+                    print(pix_number, ' from ', pos[0].shape[0])
+                    print('pix coord (A):', posx, posy, ' relative brightness: ', d[posx, posy])
+                    pix_number += 1
+                    flux = np.array(image.data[:, posx, posy])
+                    sp_fringe_corrected = fit_residual_fringes_1d(np.array(flux), wavel, channel=int(channel),
+                                                                  dichroic_only=False)
+                    mask_corrected_pixels[posx,posy] = 1
+                    if pix_number<5:
+                        plt.subplots()
+                        plt.plot(wavel,np.array(flux))
+                        plt.plot(wavel,sp_fringe_corrected)
+                        plt.plot(wavel, np.array(flux)-sp_fringe_corrected,ls = '--',color='red')
 
-                if flag_update_data:
-                    image.data[:, posx, posy] = sp_fringe_corrected
+                    if flag_update_data:
+                        image.data[:, posx, posy] = sp_fringe_corrected
+            if 1:
+                tasks = [
+                    (posx, posy, image.data, wavel, channel, d)
+                    for posx, posy in zip(pos[0], pos[1])
+                ]
+
+
+
+                from multiprocessing import Pool
+
+               # with Pool(processes=8) as pool:
+               #     results = pool.map(process_pixel, tasks)
+
+                with Pool(processes=16) as pool:
+                    results = list(
+                        tqdm(
+                            pool.imap(process_pixel, tasks),
+                            total=len(tasks)
+                        )
+                    )
+
+                for posx, posy, sp in results:
+                    # store or process output
+                    print(posx, posy, "done")
+                    image.data[:, posx, posy] = sp
 
             fig, ax = plt.subplots(1,2,sharex=True,sharey=True)
             ax[0].imshow(d, origin='lower')
@@ -5110,7 +5167,6 @@ class expRunWidget(QWidget):
             ax[0].contour(X, Y, mask_highsnr_pixels.astype(float), levels=[0], colors='red', linewidths=2, vmin=0, vmax=1)
             plt.show()
 
-
     def set_DQ_map(self, debug = False):
         print('set_DQ_map, debug:', debug)
         self.parent.Cubes_A.table.set_dq()
@@ -5118,7 +5174,6 @@ class expRunWidget(QWidget):
     def show_DQ_map(self, debug = False,group=None):
         print('set_DQ_map, debug:', debug)
         self.parent.Cubes_A.table.show_dq()
-
 
     def SaturationStep(self, debug = False):
         print('SaturationStep, debug:', debug)
@@ -5139,11 +5194,8 @@ class expRunWidget(QWidget):
     def ResetStep(self, debug=False):
         self.parent.Cubes_A.table.reset_correction()
 
-
     def LinearStep(self, debug=False):
         self.parent.Cubes_A.table.linear_correction()
-
-
 
     def ShowROI(self, debug=False):
         roi_type = self.roi_type.currentText()
@@ -5154,6 +5206,7 @@ class expRunWidget(QWidget):
         rois['yellow'] =  'B2'
         rois['blue'] =  'S1'
         self.parent.Cubes_A.table.show_roi(mode = rois[roi_type])
+
     def ShowDetectorROI(self):
         roi_type = self.roi_type.currentText()
         rois = {}
@@ -5169,7 +5222,6 @@ class expRunWidget(QWidget):
     def CalcMedCube(self,click=False,debug=True):
         calc_median_mode = self.calc_median_mode.currentText()
         self.parent.Cubes_A.table.calc_median_cube( method =calc_median_mode,debug=debug)
-
 
     def SubtractMedFlux(self, first_cube = 'B',debug=False):
         first_cube = self.name_cube_subtracted.currentText()

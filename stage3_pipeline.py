@@ -3,7 +3,10 @@ import glob
 import sys
 #Modify the path to a directory on your machine
 import os
-def read_settings(init_file='init.dat'):
+def read_settings():
+    module_dir = os.path.dirname(os.path.abspath(__file__))
+    init_file = os.path.join(module_dir, 'init.dat')
+
     init_settings = {}
     with open(init_file) as f:
         for k, line in enumerate(f):
@@ -451,11 +454,11 @@ class detector3():
         spec3.master_background.skip = True #1 - master_bkgr_flag
         spec3.outlier_detection.skip = True #1 - master_outlier_flag
         spec3.adaptive_trace_model.skip = False
-        spec3.adaptive_trace_model.save_intermediate_results= True
+        spec3.adaptive_trace_model.save_intermediate_results= False
         spec3.adaptive_trace_model.slope_limit=0
         spec3.adaptive_trace_model.fit_threshold=0
         spec3.adaptive_trace_model.save_model = True
-        spec3.adaptive_trace_model.oversample = 3
+        spec3.adaptive_trace_model.oversample = 6
         spec3.pixel_replace.skip = True
         spec3.resample_spec.skip = True #-master_resample_spec_flag
         spec3.cube_build.channel = channel
