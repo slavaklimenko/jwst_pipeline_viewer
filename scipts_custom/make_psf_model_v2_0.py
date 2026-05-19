@@ -90,7 +90,7 @@ if __name__ == '__main__':
         if mode == 'star_psf':
             print('ch',ch)
             filename = (path + 'output/detector3/HD159222_ATCN6_N6/'+
-                        'HD-159222_ATCN6_N6_'+ch+'_s3d.fits')
+                        'HD-159222_ATCN6_N6_'+ch+'__CORR_s3d.fits')
             star_psf_cube = datamodels.open(filename)
             data = np.array(star_psf_cube.data)
             #wcs = star_psf_cube.meta.wcs
@@ -135,8 +135,12 @@ if __name__ == '__main__':
             norm_data = data / norm_flux_1sigma[:, None, None]
 
             print(norm_data.shape)
+            fig, ax = plt.subplots()
+            plt.imshow(norm_data[100,:,:],origin='lower')
+            plt.plot(cenA[1],cenA[0],'o',color='red')
+            plt.show()
             #save data
-            if 1:
+            if 0:
                 half_size = 20
                 y0, x0 = cenA
                 ymin, ymax = y0 - half_size, y0 + half_size
@@ -149,26 +153,6 @@ if __name__ == '__main__':
                 hdul = fits.HDUList([hdu_sci, hdu_wave])
                 hdul.writeto(path+'data_local/miri_psf/psf_v2.0/'+ch+'_test.fits', overwrite=True)
 
-
-            if 0:
-                star_psf_img = star_psf_img_A
-                star_psf_img /= np.nansum(star_psf_img)
-                 #save psf
-                with open( path+'data/miri_psf/custom_psf/star_psf_'+ch+'.pkl', 'wb') as f:
-                    pickle.dump(star_psf_img,f)
-                if debug:
-                    fig,ax = plt.subplots(1,4,sharex=True,sharey=True)
-                    ax[0].imshow(np.log10(np.abs(star_psf_img_A)))
-                    ax[0].set_title('A')
-                    ax[1].imshow(np.log10(np.abs(star_psf_img_B)))
-                    ax[1].set_title('B')
-
-                    ax[2].imshow(np.log10(np.abs(star_psf_img)))
-                    ax[2].set_title(ch)
-
-                    im1= ax[3].imshow(np.log10(np.abs(star_psf_img_A))-np.log10(np.abs(star_psf_img_B)),vmin=-0.3,vmax=0.3)
-                    fig.colorbar(im1)
-                    plt.show()
 
 
 print('Ok!')

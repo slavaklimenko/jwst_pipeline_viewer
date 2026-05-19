@@ -171,7 +171,7 @@ def model_img(params , cube_shape, psf_cube, spectrum_model,  debug=False, get_q
     else:
         return model_convolved
 
-def plot_comparison(data, params,psf_cube,mask_fitting, spectrum_model):
+def plot_comparison(data, params,psf_cube,mask_fitting, spectrum_model,params_init):
     cmap = plt.cm.coolwarm
     cmap.set_bad('black')
 
@@ -197,6 +197,10 @@ def plot_comparison(data, params,psf_cube,mask_fitting, spectrum_model):
     ax[3].imshow(np.log10(np.abs(image - image_model)), origin='lower', vmin=vmin,  vmax=vmax, cmap=cmap)
     ax[3].set_title('Data-Model\n log')
 
+    for axs in ax[:]:
+        axs.plot(params['yc'].value,params['xc'].value,'o',color='red')
+        axs.plot(params_init['yc'].value,params_init['xc'].value,'X',color='black')
+
 
 
     if 1:
@@ -212,8 +216,9 @@ def plot_comparison(data, params,psf_cube,mask_fitting, spectrum_model):
         fig.colorbar(im2, ax=ax[2], orientation='vertical', fraction=0.046, pad=0.04)
 
 
-
-    plt.show()
+    fig.savefig(path_to_jwst_folder+'output/scripts/psf_subtraction.pdf')
+    plt.close(fig)
+    #plt.show()
 
 
 def lnprior(parameters):
@@ -247,7 +252,9 @@ def log_probability(theta, data_tmp, mask_tmp, parameters, psf_cube, spectrum_mo
     residuals[:, ~mask_tmp] = np.nan
 
     snr = 10
-    err = np.abs(data_tmp) / snr
+    err = np.ones_like(data_tmp)
+    median_err = np.median(data_tmp[:, mask_tmp], axis=1) / snr
+    err[:, mask_tmp] = median_err[:, None]
     weights = np.ones_like(residuals)
     # weights[residuals<-err] *= 10
     chiq = np.nansum(np.power(residuals / err * weights, 2))
@@ -281,9 +288,7 @@ def log_probability(theta, data_tmp,mask_tmp,parameters,psf_cube,spectrum_model)
 '''
 
 def subtract_psf(data,psf_cube,spectrum_model,params,mask_fitting,
-                 algorithm = 'mcmc',subtract=False,save_results=True, nwalkers=100, nsteps = 100):
-
-    debug = True
+                 debug = False,save_results=True, nwalkers=100, nsteps = 100):
 
     #copy input
     data = np.array(data)
@@ -295,6 +300,7 @@ def subtract_psf(data,psf_cube,spectrum_model,params,mask_fitting,
     params_new = copy.deepcopy(params)
     params_new['xc'].value = params['xc'].value - y0
     params_new['yc'].value = params['yc'].value - x0
+    params_init = copy.deepcopy(params)
 
     #find init values for qso center
     data_tmp = np.array(data_new)
@@ -353,7 +359,7 @@ def subtract_psf(data,psf_cube,spectrum_model,params,mask_fitting,
                                         args=[data_tmp,mask_new,params_new,psf_cube,spectrum_model], pool=pool)
             sampler.run_mcmc(p0, nsteps, progress=True)
 
-    samples = sampler.chain[:, int(nsteps / 2):, :].reshape((-1, ndim))
+    samples = sampler.chain[:, int(0.75*nsteps):, :].reshape((-1, ndim))
     #samples = sampler.chain[:, :, :].reshape((-1, ndim))
 
     if debug:
@@ -374,15 +380,13 @@ def subtract_psf(data,psf_cube,spectrum_model,params,mask_fitting,
     names, truth = par_names, init
     print('truth', truth)
     c.add_chain(samples, walkers=nwalkers, parameters=names)
-    c.configure(smooth=True,
-                cloud=True,
-                sigmas=[0, 1, 2, 3],
-                )
-    c.configure_truth(ls='--', lw=1., c='lightblue')
-    c.plotter.plot(figsize=(30, 30),
-                   display=True,
-                   truth=truth
-                   )
+
+    if debug:
+        c.configure(smooth=True,cloud=True,sigmas=[0, 1, 2, 3])
+        c.configure_truth(ls='--', lw=1., c='lightblue')
+        c.plotter.plot(figsize=(30, 30),
+                       display=True,
+                       truth=truth)
 
     res_mcmc = c.analysis.get_summary(parameters=names)
     print('res_mcmc:', res_mcmc)
@@ -390,7 +394,7 @@ def subtract_psf(data,psf_cube,spectrum_model,params,mask_fitting,
     for name in par_names:
         params_new[name].value = res_mcmc[name][1]
 
-    plot_comparison(data_new, params_new, psf_cube, mask_new, spectrum_model)
+    #plot_comparison(data_new, params_new, psf_cube, mask_new, spectrum_model)
 
     #convert to original scale
     params['xc'].value = params_new['xc'].value + y0
@@ -398,7 +402,7 @@ def subtract_psf(data,psf_cube,spectrum_model,params,mask_fitting,
     params['amp'].value = params_new['amp'].value
     params['psf_rot'].value = params_new['psf_rot'].value
 
-    plot_comparison(data, params, psf_cube, mask_fitting, spectrum_model)
+    plot_comparison(data, params, psf_cube, mask_fitting, spectrum_model, params_init)
 
     if save_results:
         model = model_img(params, data.shape, psf_cube=psf_cube, spectrum_model=spectrum_model)
@@ -484,125 +488,166 @@ if __name__ == '__main__':
 
     #subtract two image in parallel
     if 1:
-        # read source
-        if 1:
-            fname = path_to_jwst_folder + '/output/detector3/' + 'B0218-ATCN3_N6/TXS0218+357_ATC_N3_N6_1B_ch1-medium_s3d.fits'
-            psf_center_A = (49, 40)  # sA
-            psf_center_B = (41, 39)  # sA
 
-        cube = datamodels.open(fname)
-        with fits.open(fname) as hdu:
-            hdr = hdu['SCI'].header
-        wavelength = (np.arange(hdr['NAXIS3']) + hdr['CRPIX3'] - 1) * hdr['CDELT3'] + hdr['CRVAL3']
-        cube_shape = cube.data.shape  # Data cube: 5 slices, 60x60 pixels each
-        image = np.nanmedian(cube.data, axis=0)  # [slice_numer]
-        data = np.array(cube.data)
-        from astropy.wcs import WCS
-
-        wcs = WCS(hdr)
-
-        # set 1 sigma aperture
-        miri_psf_fwhm = miri_psf_arcsec(np.nanmean(wavelength))  # in arcsec
-        miri_psf_sigma = miri_psf_fwhm / 2.355  # in arcsec
-        cdelt1 = wcs.wcs.cdelt[0]
-        pix_size = cdelt1 * 3600  # in arcsec
-        miri_psf_sigma_pix = miri_psf_sigma / (pix_size)
-        print('1sigma rad =', miri_psf_sigma_pix, 'pix')
-
-        # pixel grids
-        yy, xx = np.indices(image.shape)
-        # distance from center
-        cenA = psf_center_A
-        cenB = psf_center_B
-        rr = np.hypot(xx - cenA[1], yy - cenA[0])
-        rr_B = np.hypot(xx - cenB[1], yy - cenB[0])
-
-        #define psf
-        (psf,psf_w) = read_psf(channel='1B_ch1-medium_test.fits')
-
-        #define parameters
-        params = Parameters()
-        names = ['xc', 'yc', 'amp','psf_rot']
-        for name, value in zip(names, [cenA[0], cenA[1], 1.0, 0.0]):
-            params.add(name, value=value, min=0, max=np.inf)
-        params['amp'].max = 2
-        params['psf_rot'].min = -90
-        params['psf_rot'].max = 90
+        ch_list = ['1A_ch1-short', '1B_ch1-medium', '1C_ch1-long',
+                   '2A_ch2-short', '2B_ch2-medium', '2C_ch2-long',
+                   '3A_ch3-short', '3B_ch3-medium', '3C_ch3-long',
+                   '4A_ch4-short', '4B_ch4-medium', '4C_ch4-long']
+        for ch in ch_list:
+            # read source
+            if 1:
+                fname = path_to_jwst_folder + '/output/detector3/' + 'B0218-ATCN6_N6/TXS0218+357ATCN6_N6_'+ch+'__CORR_s3d.fits'
 
 
-        #prepare data
-        if 1:
-            params_A = copy.deepcopy(params)
-            params_B = copy.deepcopy(params)
-            params_A['xc'].value = cenA[0]
-            params_A['yc'].value = cenA[1]
-            params_B['xc'].value = cenB[0]
-            params_B['yc'].value = cenB[1]
-            model_A = np.zeros_like(data)
-            model_B = np.zeros_like(data)
-            maskA = rr <= miri_psf_sigma_pix
-            maskB = rr_B <= miri_psf_sigma_pix
-            fitting_radius = 2*miri_psf_sigma_pix #pix
-            mask_radius = 3 * miri_psf_sigma_pix
-            flux_1sigma_A = np.nansum((data - model_B)[:, maskA], axis=1)
-            flux_1sigma_B = np.nansum((data - model_A)[:, maskB], axis=1)
-            save_model = True
+            cube = datamodels.open(fname)
+            with fits.open(fname) as hdu:
+                hdr = hdu['SCI'].header
+            wavelength = (np.arange(hdr['NAXIS3']) + hdr['CRPIX3'] - 1) * hdr['CDELT3'] + hdr['CRVAL3']
+            cube_shape = cube.data.shape  # Data cube: 5 slices, 60x60 pixels each
+            image = np.nanmedian(cube.data, axis=0)  # [slice_numer]
+            data = np.array(cube.data)
 
-        # run calculations
-        if 1:
-            for it in range(2):
-                print('Iter', it, 'Step 1. subtract B and get model for spectrum A')
-                flux_1sigma_A = np.nansum((data-model_B)[:, maskA], axis=1)
-                print('Iter', it, 'Step 2. model A and subtract "model A"')
-                params['xc'].value= params_A['xc'].value
-                params['yc'].value =params_A['yc'].value
-                params['amp'].value = params_A['amp'].value
-                params['psf_rot'].value = params_B['psf_rot'].value
-                #set 2d mask for fitting region
-                mask_fitting = rr< fitting_radius
-                if 'cenB' in locals():
-                    mask_fitting[rr_B<mask_radius] = False
-                modelA, params_A = subtract_psf(data = data, psf_cube=psf, spectrum_model=flux_1sigma_A, params=params,
-                             mask_fitting=mask_fitting,algorithm='mcmc', subtract=False)
-                #save model
-                if save_model:
-                    params_A.dump(open('paramsA.json', 'w'))
-                    cube.data = modelA
-                    # (optional but recommended) update history
-                    cube.history.append("Replaced data with PSF-convolved model")
-                    # save new file
-                    cube.save(path_to_jwst_folder + '/output/detector3/' + 'model_psf_cube_A_s3d.fits')
-                    # save psf subtracted cube
-                    cube.data = data - modelA
-                    # (optional but recommended) update history
-                    cube.history.append("Replaced data with PSF-subtracted data")
-                    # save new file
-                    cube.save(path_to_jwst_folder + '/output/detector3/' + 'psf_subtracted_cube_A_s3d.fits')
+            if 0:
+                psf_center_A = (58, 50)  # (49, 40)  # sA
+                psf_center_B = (49, 48)  # (41, 39)  # sA
+            else:
+                l, raq, deq = np.nanmean(wavelength), 35.272790, 35.937148 #35.272754, 35.937156
+                asec = 1 / 3600.
+                psf_center_A = cube.meta.wcs.world_to_pixel_values(raq, deq, l)
+                psf_center_B = cube.meta.wcs.world_to_pixel_values(raq + 0.307 * asec, deq + 0.126 * asec, l)
 
-                print('Iter', it, 'Step 3. get model for spectrum B.')
-                flux_1sigma_B = np.nansum((data - model_A)[:, maskB], axis=1)
-                print('Iter', it, 'Step 4. model B and subtract "model B"')
-                mask_fitting = rr_B < fitting_radius
-                mask_fitting[rr < mask_radius] = False
-                params['xc'].value= params_B['xc'].value
-                params['yc'].value =params_B['yc'].value
-                params['amp'].value = params_B['amp'].value
-                params['psf_rot'].value =params_A['psf_rot'].value
-                modelB, params_B = subtract_psf(data=data, psf_cube=psf, spectrum_model=flux_1sigma_B, params=params,
-                                              mask_fitting=mask_fitting, algorithm='mcmc', subtract=False)
-                # save model
-                if save_model:
-                    params_B.dump(open('paramsB.json', 'w'))
-                    cube.data = modelB
-                    # (optional but recommended) update history
-                    cube.add_history_entry("Replaced data with PSF-subtracted data")
-                    # save new file
-                    cube.save(path_to_jwst_folder + '/output/detector3/' + 'model_psf_cube_B_s3d.fits')
-                    cube.data = data - modelB
-                    # (optional but recommended) update history
-                    cube.add_history_entry("Replaced data with PSF-subtracted data")
-                    # save new file
-                    cube.save(path_to_jwst_folder + '/output/detector3/' + 'psf_subtracted_cube_B_s3d.fits')
+
+            from astropy.wcs import WCS
+            wcs = WCS(hdr)
+
+            # set 1 sigma aperture
+            miri_psf_fwhm = miri_psf_arcsec(np.nanmean(wavelength))  # in arcsec
+            miri_psf_sigma = miri_psf_fwhm / 2.355  # in arcsec
+            cdelt1 = wcs.wcs.cdelt[0]
+            pix_size = cdelt1 * 3600  # in arcsec
+            miri_psf_sigma_pix = miri_psf_sigma / (pix_size)
+            print('1sigma rad =', miri_psf_sigma_pix, 'pix')
+
+            # pixel grids
+            yy, xx = np.indices(image.shape)
+            # distance from center
+            cenA = (psf_center_A[1],psf_center_A[0])
+            cenB = (psf_center_B[1],psf_center_A[0])
+            rr = np.hypot(xx - cenA[1], yy - cenA[0])
+            rr_B = np.hypot(xx - cenB[1], yy - cenB[0])
+
+            #define psf
+            (psf,psf_w) = read_psf(channel=ch+'_test.fits')
+
+            #define parameters
+            params = Parameters()
+            names = ['xc', 'yc', 'amp','psf_rot']
+            for name, value in zip(names, [cenA[0], cenA[1], 1.0, 0.0]):
+                params.add(name, value=value, min=0, max=np.inf)
+            params['amp'].max = 2
+            params['psf_rot'].min = -90
+            params['psf_rot'].max = 90
+
+
+            #prepare data
+            if 1:
+                params_A = copy.deepcopy(params)
+                params_B = copy.deepcopy(params)
+                params_A['xc'].value = cenA[0]
+                params_A['yc'].value = cenA[1]
+                params_B['xc'].value = cenB[0]
+                params_B['yc'].value = cenB[1]
+                params['psf_rot'].vary = False
+                modelA = np.zeros_like(data)
+                modelB = np.zeros_like(data)
+                maskA = rr <= miri_psf_sigma_pix
+                maskB = rr_B <= miri_psf_sigma_pix
+                fitting_radius = 3*miri_psf_sigma_pix #pix
+                mask_radius = 2 * miri_psf_sigma_pix
+                flux_1sigma_A = np.nansum((data - modelB)[:, maskA], axis=1)
+                flux_1sigma_B = np.nansum((data - modelA)[:, maskB], axis=1)
+                save_model = True
+
+            if 0:
+                plt.subplots()
+                plt.imshow(np.log10(np.abs(image)),origin='lower')
+                plt.plot(cenA[1],cenA[0],'o',color='red')
+                plt.plot(cenB[1],cenB[0],'o',color='blue')
+                cen_max = np.argwhere(image == np.nanmax(image))[0]
+                plt.plot(cen_max[1], cen_max[0], 'x', color='black')
+
+                x = np.arange(maskA.shape[1])
+                y = np.arange(maskA.shape[0])
+                X, Y = np.meshgrid(x, y)
+                plt.contour(X, Y, maskA.astype(float), levels=[0], colors='green', linewidths=1.5)
+                plt.contour(X, Y, (rr< fitting_radius).astype(float), levels=[0], colors='black', linewidths=1.5)
+                plt.contour(X, Y, maskB.astype(float), levels=[0], colors='green', linewidths=1.5)
+                plt.contour(X, Y, (rr_B < fitting_radius).astype(float), levels=[0], colors='black', linewidths=1.5)
+
+                plt.subplots()
+                plt.plot(wavelength,flux_1sigma_A ,color='red')
+                plt.plot(wavelength,flux_1sigma_B  ,color='blue')
+
+                plt.show()
+            # run calculations
+            if 1:
+                for it in range(3):
+                    print('Iter', it, 'Step 1. subtract B and get model for spectrum A')
+                    flux_1sigma_A = np.nansum((data-modelB)[:, maskA], axis=1)
+                    print('Iter', it, 'Step 2. model A and subtract "model A"')
+                    params['xc'].value= params_A['xc'].value
+                    params['yc'].value =params_A['yc'].value
+                    params['amp'].value = params_A['amp'].value
+                    params['psf_rot'].value = params_B['psf_rot'].value
+                    #set 2d mask for fitting region
+                    mask_fitting = rr< fitting_radius
+                    if 'cenB' in locals():
+                        mask_fitting[rr_B<mask_radius] = False
+                    data_fit = data if it == 0 else data - modelB
+                    modelA, params_A = subtract_psf(data = data_fit, psf_cube=psf, spectrum_model=flux_1sigma_A, params=params,
+                             mask_fitting=mask_fitting)
+
+                    #save model
+                    if save_model:
+                        params_A.dump(open('paramsA.json', 'w'))
+                        cube.data = modelA
+                        # (optional but recommended) update history
+                        cube.add_history_entry("Replaced data with PSF-convolved model")
+                        # save new file
+                        cube.save(fname.split('s3d.fits')[0] + 'modelA_s3d.fits')
+                        # save psf subtracted cube
+                        cube.data = data - modelA
+                        # (optional but recommended) update history
+                        cube.add_history_entry("Replaced data with PSF-subtracted data")
+                        #cube.history.append("Replaced data with PSF-subtracted data")
+                        # save new file
+                        cube.save(fname.split('s3d.fits')[0]+  'subtr_A_s3d.fits')
+
+                    print('Iter', it, 'Step 3. get model for spectrum B.')
+                    flux_1sigma_B = np.nansum((data - modelA)[:, maskB], axis=1)
+                    print('Iter', it, 'Step 4. model B and subtract "model B"')
+                    mask_fitting = rr_B < fitting_radius
+                    mask_fitting[rr < mask_radius] = False
+                    params['xc'].value= params_B['xc'].value
+                    params['yc'].value =params_B['yc'].value
+                    params['amp'].value = params_B['amp'].value
+                    params['psf_rot'].value =params_A['psf_rot'].value
+                    data_fit = data if it == 0 else data - modelA
+                    modelB, params_B = subtract_psf(data=data_fit, psf_cube=psf, spectrum_model=flux_1sigma_B, params=params,
+                                                  mask_fitting=mask_fitting)
+                    # save model
+                    if save_model:
+                        params_B.dump(open('paramsB.json', 'w'))
+                        cube.data = modelB
+                        # (optional but recommended) update history
+                        cube.add_history_entry("Replaced data with PSF-subtracted data")
+                        # save new file
+                        cube.save(fname.split('s3d.fits')[0]+ 'modelB_s3d.fits')
+                        cube.data = data - modelB
+                        # (optional but recommended) update history
+                        cube.add_history_entry("Replaced data with PSF-subtracted data")
+                        # save new file
+                        cube.save(fname.split('s3d.fits')[0]+ 'subtr_B_s3d.fits')
 
 
 
