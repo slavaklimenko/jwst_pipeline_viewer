@@ -2533,24 +2533,28 @@ class CUBElistTable(pg.TableWidget):
                 err = cube.data.err
                 npix = data.shape[0]
 
-                mean_image = np.nanmean(data, axis=0)
+                mean_image = np.nanmean(data[:100, :, :], axis=0)
+                spatial_mask = mean_image != 0
+                spatial_mask[:, 0] = 0
+                spatial_mask[:, -1] = 0
+                spatial_mask[0, :] = 0
+                spatial_mask[-1, :] = 0
+                # mask edge outliers
+                for k in range(3):
+                    pos = np.where(spatial_mask > 0)
+                    spatial_mask2 = np.array(spatial_mask)
+                    for i, j in zip(pos[0], pos[1]):
+                        if (spatial_mask[i - 1, j] == 0 or spatial_mask[i + 1, j] == 0 or
+                                spatial_mask[i, j - 1] == 0 or spatial_mask[i, j + 1] == 0):
+                            spatial_mask2[i, j] = 0
+                    spatial_mask = np.array(spatial_mask2)
+                del (spatial_mask2)
+                # find the center
+
+
                 #find the center
                 if 1:
-                    spatial_mask = mean_image != 0
-                    spatial_mask[:, 0] = 0
-                    spatial_mask[:, -1] = 0
-                    spatial_mask[0, :] = 0
-                    spatial_mask[-1, :] = 0
-                    for k in range(3):
-                        pos = np.where(spatial_mask > 0)
-                        spatial_mask2 = np.array(spatial_mask)
-                        for i, j in zip(pos[0], pos[1]):
-                            if spatial_mask[i - 1, j] == 0 or spatial_mask[i + 1, j] == 0 or spatial_mask[
-                                i, j - 1] == 0 or \
-                                    spatial_mask[i, j + 1] == 0:
-                                spatial_mask2[i, j] = 0
-                        spatial_mask = np.array(spatial_mask2)
-                    del (spatial_mask2)
+
                     pos =np.argwhere((mean_image*spatial_mask == np.nanmax(mean_image*spatial_mask)) )[0]
                     cen_x, cen_y = pos[0],pos[1]
 
@@ -3327,7 +3331,7 @@ class CUBElistTable(pg.TableWidget):
                             axs.set_xlabel('$x$ spaxel', fontsize=fontsize)
                         ax[0].set_ylabel('$y$ spaxel', fontsize=fontsize)
                         if 1:
-                            obj = cube_name.split('detector3//')[1][:5]
+                            obj = cube_name.split('detector3/')[1][:5]
                             ch,dith = '',''
                             if 'dith' in cube_name:
                                 ch = cube_name.split('dith=')[1][2:4]
