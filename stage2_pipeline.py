@@ -9,7 +9,9 @@ from matplotlib import rcParams
 from astropy.io import ascii, fits
 rcParams['font.family'] = 'serif'
 
-def read_settings(init_file='init.dat'):
+def read_settings():
+    module_dir = os.path.dirname(os.path.abspath(__file__))
+    init_file = os.path.join(module_dir, 'init.dat')
     init_settings = {}
     with open(init_file) as f:
         for k, line in enumerate(f):
