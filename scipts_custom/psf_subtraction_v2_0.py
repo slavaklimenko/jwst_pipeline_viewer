@@ -15,7 +15,7 @@ from multiprocessing import Pool
 import copy
 from scipy.signal import fftconvolve
 
-path_to_jwst_folder = '/home/slava/science/codes/python/jwst/'
+path_to_jwst_folder = '/home/slava/science/codes/python/jwst_Viewer-2.0.0/'
 
 if 0:
     def read_settings(init_file=path_to_jwst_folder+'/init.dat'):
@@ -184,7 +184,7 @@ def plot_comparison(data, params,psf_cube,mask_fitting, spectrum_model,params_in
     fmax = np.nanmax(image)
     vmin,vmax = np.log10(fmax) - 3.5,np.log10(fmax)
 
-    fig, ax = plt.subplots(1, 4, sharey=True, sharex=True)
+    fig, ax = plt.subplots(1, 4, sharey=True, sharex=True,figsize=(24,6))
     im0 = ax[0].imshow(np.log10(np.abs(image)), origin='lower', vmin=vmin, vmax=vmax, cmap=cmap)
     ax[0].set_title('Data')
 
@@ -216,7 +216,7 @@ def plot_comparison(data, params,psf_cube,mask_fitting, spectrum_model,params_in
         fig.colorbar(im2, ax=ax[2], orientation='vertical', fraction=0.046, pad=0.04)
 
 
-    fig.savefig(path_to_jwst_folder+'output/scripts/psf_subtraction.pdf')
+    fig.savefig(path_to_jwst_folder+'output/scripts/psf_subtraction.pdf',dpi=300,    bbox_inches='tight')
     plt.close(fig)
     #plt.show()
 
@@ -489,14 +489,16 @@ if __name__ == '__main__':
     #subtract two image in parallel
     if 1:
 
-        ch_list = ['1A_ch1-short', '1B_ch1-medium', '1C_ch1-long',
+        ch_list = [#'1A_ch1-short', '1B_ch1-medium',
+                   '1C_ch1-long',
                    '2A_ch2-short', '2B_ch2-medium', '2C_ch2-long',
                    '3A_ch3-short', '3B_ch3-medium', '3C_ch3-long',
                    '4A_ch4-short', '4B_ch4-medium', '4C_ch4-long']
         for ch in ch_list:
             # read source
             if 1:
-                fname = path_to_jwst_folder + '/output/detector3/' + 'B0218-ATCN6_N6/TXS0218+357ATCN6_N6_'+ch+'__CORR_s3d.fits'
+                #fname = path_to_jwst_folder + '/output/detector3/' + 'B0218-ATCN6_N6/TXS0218+357ATCN6_N6_'+ch+'__CORR_s3d.fits'
+                fname = path_to_jwst_folder + '/output/detector3/' + 'QSO-B1830-211-SIGHTLINEBATCN6_N6_' + ch + '__CORR_s3d.fits'
 
 
             cube = datamodels.open(fname)
@@ -511,10 +513,15 @@ if __name__ == '__main__':
                 psf_center_A = (58, 50)  # (49, 40)  # sA
                 psf_center_B = (49, 48)  # (41, 39)  # sA
             else:
-                l, raq, deq = np.nanmean(wavelength), 35.272790, 35.937148 #35.272754, 35.937156
+                # l, raq, deq = np.nanmean(wavelength), 35.272790, 35.937148 #35.272754, 35.937156 #B0218
+                # del_ra, del_dec = 0.307, 0.126
+                l, raq, deq = np.nanmean(wavelength), 278.416440, -21.061069
+                del_ra, del_dec = -0.653, -0.721
                 asec = 1 / 3600.
                 psf_center_A = cube.meta.wcs.world_to_pixel_values(raq, deq, l)
-                psf_center_B = cube.meta.wcs.world_to_pixel_values(raq + 0.307 * asec, deq + 0.126 * asec, l)
+                psf_center_B = cube.meta.wcs.world_to_pixel_values(raq +del_ra * asec, deq + del_dec * asec, l)
+                print('psf_center_A',psf_center_A)
+                print('psf_center_B',psf_center_B)
 
 
             from astropy.wcs import WCS
@@ -532,7 +539,7 @@ if __name__ == '__main__':
             yy, xx = np.indices(image.shape)
             # distance from center
             cenA = (psf_center_A[1],psf_center_A[0])
-            cenB = (psf_center_B[1],psf_center_A[0])
+            cenB = (psf_center_B[1],psf_center_B[0])
             rr = np.hypot(xx - cenA[1], yy - cenA[0])
             rr_B = np.hypot(xx - cenB[1], yy - cenB[0])
 
