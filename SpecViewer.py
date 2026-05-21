@@ -1,8 +1,8 @@
 import sys
 import glob
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QApplication, QHBoxLayout, QLabel, QLineEdit,QSizePolicy, QSlider, QSpacerItem, QVBoxLayout, QWidget,QComboBox, QPushButton
-from PyQt5 import QtGui
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QApplication, QHBoxLayout, QLabel, QLineEdit,QSizePolicy, QSlider, QSpacerItem, QVBoxLayout, QWidget,QComboBox, QPushButton
+from PyQt6 import QtGui
 import pyqtgraph as pg
 import numpy as np
 import sys, os
@@ -50,8 +50,8 @@ class spectrum():
 
 
                 if np.sum(mask_intersection) > 0:
-                    s_interp = interp1d(s.x, s.y, bounds_error=False, fill_value=np.NaN)
-                    s_interp_err = interp1d(s.x, s.err, bounds_error=False, fill_value=np.NaN)
+                    s_interp = interp1d(s.x, s.y, bounds_error=False, fill_value=np.nan)
+                    s_interp_err = interp1d(s.x, s.err, bounds_error=False, fill_value=np.nan)
                     mask_selfx_intersection = self.x>=s.x[0]
                     comb = [self.y[mask_selfx_intersection],s_interp(self.x[mask_selfx_intersection])]
                     e_comb = [self.err[mask_selfx_intersection],s_interp_err(self.x[mask_selfx_intersection])]
@@ -129,12 +129,25 @@ class Slider(QWidget):
         self.up_label.setFixedSize(60, 30)
         self.verticalLayout.addWidget(self.up_label)
         self.horizontalLayout = QHBoxLayout(self)
-        spacerItem = QSpacerItem(0, 100, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        #spacerItem = QSpacerItem(0, 100, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        spacerItem = QSpacerItem(
+            0,
+            100,
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Minimum
+        )
         self.horizontalLayout.addItem(spacerItem)
         self.slider = QSlider(self)
-        self.slider.setOrientation(Qt.Vertical)
+        #self.slider.setOrientation(Qt.Vertical)
+        self.slider.setOrientation(Qt.Orientation.Vertical)
         self.horizontalLayout.addWidget(self.slider)
-        spacerItem1 = QSpacerItem(40, 80, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        #spacerItem1 = QSpacerItem(40, 80, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        spacerItem1 = QSpacerItem(
+            40,
+            80,
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Minimum
+        )
         self.horizontalLayout.addItem(spacerItem1)
         self.verticalLayout.addLayout(self.horizontalLayout)
         self.low_label = QLineEdit(self)
@@ -216,7 +229,7 @@ class plotSpec(pg.PlotWidget):
                         y+=coef*y[0]
 
                 self.spec_line_colors[fname] = fcolor
-                pen = pg.mkPen(color=self.spec_line_colors[fname], style=Qt.SolidLine, width=2)
+                pen = pg.mkPen(color=self.spec_line_colors[fname],  style=Qt.PenStyle.SolidLine, width=2)
                 self.spectra_list[fname] = pg.PlotCurveItem(x, y,pen=pen)
 
                 #self.plot_lineA1 = pg.PlotCurveItem(x, y,pen='lightgreen')
@@ -228,7 +241,16 @@ class plotSpec(pg.PlotWidget):
                     self.vb.addItem(self.plot_errbar[fname])
                 #    pen = pg.mkPen(color='darkgray', style=Qt.DashLine, width=1)
                     #self.zero_level = pg.PlotCurveItem([wavel[0]-2, wavel[-1] + 2], [0, 0], pen=pen)
-                self.zero_level = pg.PlotCurveItem([0, 30], [0, 0], pen=pg.mkPen(color='darkgray', style=Qt.DashLine, width=1))
+                #self.zero_level = pg.PlotCurveItem([0, 30], [0, 0], pen=pg.mkPen(color='darkgray', style=Qt.DashLine, width=1))
+                self.zero_level = pg.PlotCurveItem(
+                    [0, 30],
+                    [0, 0],
+                    pen=pg.mkPen(
+                        color='darkgray',
+                        style=Qt.PenStyle.DashLine,
+                        width=1
+                    )
+                )
                 self.vb.addItem(self.zero_level)
                 self.show_template = False
                 if 0:
@@ -304,7 +326,7 @@ class Viewer(QWidget):
         self.comb_dithers_win.setFixedSize(250, 60)
         self.horizontalLayout.addWidget(self.comb_dithers_win)
         self.combine_dithers_win_option = QComboBox()
-        self.combine_dithers_win_option.addItems(['spec','bkgr', 'sbtr'])
+        self.combine_dithers_win_option.addItems(['green','red'])
         self.combine_dithers_win_option.setCurrentIndex(0)
         cb = self.combine_dithers_win_option
         width = cb.minimumSizeHint().width()
@@ -519,14 +541,12 @@ class Viewer(QWidget):
         self.w11.value_label.setText("%.2f" % (self.w11.x))
         self.w12.value_label.setText("%.2f" % (self.w12.x))
 
-    def setObjName(self,click=1,secret='FR_s3d_(A)_red'):
+    def setObjName(self,click=1,secret=''):
         read_mode = self.combine_dithers_win_option.currentText()
-        if read_mode == 'spec':
-            keyname = '.spec1d'
-        if read_mode == 'bkgr':
-            keyname = '_green_bkgr.spec1d'
-        if read_mode == 'sbtr':
-            keyname = '_green_bkgr_subtracted.spec1d'
+        if read_mode == 'green':
+            keyname = '_green.spec1d'
+        if read_mode == 'red':
+            keyname = '_red.spec1d'
 
         filenamelist = ['None'] + self.readfolder(obj_name=self.objname_box.currentText(),keyname=keyname)
 
@@ -584,12 +604,11 @@ class Viewer(QWidget):
 
     def comb_dithers(self, click=False, debug = True,   sigma_clip_level = 3, keyname='',method = 'mean'):
         read_mode = self.combine_dithers_win_option.currentText()
-        if read_mode == 'spec':
+        if read_mode == 'green':
             keyname = '_green.spec1d'
-        if read_mode == 'bkgr':
-            keyname = '_green_bkgr.spec1d'
-        if read_mode == 'sbtr':
-            keyname = '_green_bkgr_subtracted.spec1d'
+        if read_mode == 'red':
+            keyname = '_red.spec1d'
+
 
         filenamelist = self.readfolder(obj_name=self.objname_box.currentText(),dith=True,keyname=keyname)
 
@@ -1269,4 +1288,4 @@ if __name__ == '__main__':
     app = QApplication(sys.argv)
     v = Viewer(spec_folder=input_dir)
     v.show()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
