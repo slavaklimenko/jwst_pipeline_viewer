@@ -72,10 +72,10 @@ from JWST_cube_analyser import miri_psf_arcsec
 
 if __name__ == '__main__':
 
-    mode = 'star_psf'
+    mode = 'create_stellar_psf'
     debug = True
 
-    #create star psf for HD152999
+
     ch_list = ['1A_ch1-short']
     if 1:
         ch_list = ['1A_ch1-short','1B_ch1-medium','1C_ch1-long',
@@ -87,10 +87,10 @@ if __name__ == '__main__':
     path = '/home/slava/science/codes/python/jwst/'
     for ch in ch_list:
 
-        if mode == 'star_psf':
+        if mode == 'create_stellar_psf':
             print('ch',ch)
-            filename = (path + 'output/detector3/HD159222_ATCN6_N6/'+
-                        'HD-159222_ATCN6_N6_'+ch+'__CORR_s3d.fits')
+            #filename = (path + 'output/detector3/HD159222_ATCN6_N6/'+'HD-159222_ATCN6_N6_'+ch+'__CORR_s3d.fits')
+            filename = (path + 'output/detector3/HD163466_ATCN6N6/'+'HD-163466_ATCN6_N6_'+ch+'__CORR_s3d.fits')
             star_psf_cube = datamodels.open(filename)
             data = np.array(star_psf_cube.data)
             #wcs = star_psf_cube.meta.wcs
@@ -140,19 +140,70 @@ if __name__ == '__main__':
             plt.plot(cenA[1],cenA[0],'o',color='red')
             plt.show()
             #save data
-            if 0:
+            if 1:
                 half_size = 20
                 y0, x0 = cenA
-                ymin, ymax = y0 - half_size, y0 + half_size
-                xmin, xmax = x0 - half_size, x0 + half_size
+                ymin, ymax = y0 - half_size, y0 + half_size+1
+                xmin, xmax = x0 - half_size, x0 + half_size+1
                 # primary science cube
                 hdu_sci = fits.PrimaryHDU(data=norm_data[:, ymin:ymax, xmin:xmax], header=hdr)
                 # wavelength "cube" (broadcast to 3D for consistency)
                 hdu_wave = fits.ImageHDU(data=wavelength, name='WAVELENGTH')
 
                 hdul = fits.HDUList([hdu_sci, hdu_wave])
-                hdul.writeto(path+'data_local/miri_psf/psf_v2.0/'+ch+'_test.fits', overwrite=True)
+                hdul.writeto(path+'data_local/miri_psf/psf_v2.0/'+ch+'_based_HD-163466.fits', overwrite=True)
 
+        if mode == 'compare_stellar_psf':
+
+            #read psf models
+            fname = path+'data_local/miri_psf/psf_v2.0/'+ch+'_test.fits'
+            with fits.open(fname) as hdul:
+                # science cube
+                data = hdul[0].data
+                hdr = hdul[0].header
+
+                # wavelength array
+                wavelength = hdul['WAVELENGTH'].data
+            psf1= (data, wavelength)
+            fname2 = path+'data_local/miri_psf/psf_v2.0/'+ch+'_based_HD-163466.fits'
+            with fits.open(fname2) as hdul:
+                # science cube
+                data2 = hdul[0].data
+                hdr2 = hdul[0].header
+
+                # wavelength array
+                wavelength2 = hdul['WAVELENGTH'].data
+            psf2 = (data2, wavelength2)
+
+            # compare psf models
+            fig,ax = plt.subplots(2,3,sharey=True,sharex=True)
+            im1 = (np.abs(np.nanmean(psf1[0], axis=0)))
+            im2 = (np.abs(np.nanmean(psf2[0], axis=0)))
+
+            # Color scale from im1
+            vmin = np.nanpercentile(im1, 0.5)  # use 0.5 percentile
+            vmax = np.nanpercentile(im1, 95)  # use 95 percentile
+
+            ax[0, 0].imshow(im1, origin='lower', vmin=vmin, vmax=vmax)
+            ax[0, 0].set_title('PSF1 ' + ch)
+
+            ax[0, 1].imshow(im2, origin='lower', vmin=vmin, vmax=vmax)
+            ax[0, 1].set_title('PSF2 ' + ch)
+            ax[0, 2].imshow(im1 - im2, origin='lower', vmin=vmin, vmax=vmax)
+            ax[0, 2].set_title('PSF1-PSF2 ' + ch)
+
+            im_avg = np.mean([im1, im2], axis=0)
+
+            ax[1, 0].imshow(im_avg, origin='lower', vmin=vmin, vmax=vmax)
+
+            ax[1, 0].set_title('PSF aver')
+
+            ax[1, 1].imshow(im1 - im_avg, origin='lower', vmin=vmin, vmax=vmax)
+            ax[1, 1].set_title('PSF av -PSF1 ' + ch)
+
+            ax[1, 2].imshow(im2 - im_avg, origin='lower', vmin=vmin, vmax=vmax)
+            ax[1, 2].set_title('PSF av -PSF2 ' + ch)
+            plt.show()
 
 
 print('Ok!')
