@@ -875,7 +875,7 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
 
             if 1 and 'TXS0218' in name.split('_')[0]:
                 # show the position of sources
-                l, raq, deq = np.nanmean(wave), 35.272754, 35.937156
+                l, raq, deq = np.nanmean(wave), 35.272790, 35.937148  #35.272754, 35.937156
                 asec = 1 / 3600.
 
                 qA_pos_pix = cube.meta.wcs.world_to_pixel_values( raq, deq,l)
@@ -885,6 +885,36 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
                 tcolor = 'black'
                 print('pos A',qA_pos_pix)
                 print('pos B', qB_pos_pix)
+
+                plt.plot(qA_pos_pix[0], qA_pos_pix[1], 'o', color=tcolor)
+                plt.plot(qB_pos_pix[0], qB_pos_pix[1], 'o', color=tcolor)
+
+                plt.text(qA_pos_pix[0], qA_pos_pix[1], 'A', color=tcolor, fontsize=10)
+                plt.text(qB_pos_pix[0], qB_pos_pix[1], 'B', color=tcolor, fontsize=10)
+
+            if 1 and '0134' in name.split('_')[0]:
+                # show the position of sources
+                l, raq, deq = np.nanmean(wave),  23.648599, -9.517474  # 35.272754, 35.937156
+                asec = 1 / 3600.
+
+                qA_pos_pix = cube.meta.wcs.world_to_pixel_values(raq, deq, l)
+                qB_pos_pix = cube.meta.wcs.world_to_pixel_values(raq + 0.539 * asec, deq -0.415 * asec, l)
+                qC_pos_pix = cube.meta.wcs.world_to_pixel_values(raq + -0.082 * asec, deq + 0.156 * asec, l)
+                qD_pos_pix = cube.meta.wcs.world_to_pixel_values(raq + 0.258 * asec, deq + 0.205 * asec, l)
+                qG_pos_pix = cube.meta.wcs.world_to_pixel_values(raq + 0.054 * asec, deq + 0.015 * asec, l)
+                # qA_pos_pix = cube.conv_world_coord(t=l, x=raq, y=deq,mode='pipeline_world_to_pix')
+                # qB_pos_pix = cube.conv_world_coord(t=l, x=raq + 0.307 * asec, y=deq + 0.126 * asec, mode='pipeline_world_to_pix')
+                tcolor = 'black'
+                print('pos A', qA_pos_pix)
+                print('pos B', qB_pos_pix)
+
+                plt.plot(qA_pos_pix[0], qA_pos_pix[1], 'o', color=tcolor)
+                plt.plot(qB_pos_pix[0], qB_pos_pix[1], 'o', color=tcolor)
+                plt.plot(qC_pos_pix[0], qC_pos_pix[1], 'o', color='red')
+                plt.plot(qD_pos_pix[0], qD_pos_pix[1], 'o', color='blue')
+                plt.plot(qG_pos_pix[0], qG_pos_pix[1], 'x', color='black')
+
+
                 plt.text(qA_pos_pix[0], qA_pos_pix[1], 'A', color=tcolor, fontsize=10)
                 plt.text(qB_pos_pix[0], qB_pos_pix[1], 'B', color=tcolor, fontsize=10)
 
@@ -1439,10 +1469,6 @@ class plotSpec(pg.PlotWidget):
             if np.size(data) == np.size(wavel):
                 snr = np.nanmedian(data)/np.nanstd(data)
                 print('snr:', snr)
-                if normalize:
-                    norm = np.mean(data[10:40])
-                    data = data / norm
-                    err = err / norm
                 if smoothing and 0:
                     win = signal.windows.hann(50)
                     data = signal.convolve(data, win, mode='same') / sum(win)
@@ -1454,6 +1480,10 @@ class plotSpec(pg.PlotWidget):
                 pix_solid_angle = wcs1['CDELT1'] * wcs1['CDELT2'] * (np.pi / 180) ** 2 * 1e6
                 data*=pix_solid_angle
                 err*=pix_solid_angle
+                if normalize:
+                    norm = np.mean(data[10:40])
+                    data = data / norm
+                    err = err / norm
                 if snr>1:
                     self.plot_lineA1 = pg.PlotCurveItem(wavel, data,pen='lightgreen')
                     self.plot_errbarA1 = pg.ErrorBarItem(x=wavel,y=data,height=2*err,pen=pen, beam=1/6000)
@@ -1528,10 +1558,7 @@ class plotSpec(pg.PlotWidget):
             if np.size(data) == np.size(wavel):
                 snr = np.nanmedian(data) / np.nanstd(data)
                 print('snr2:', snr)
-                if normalize:
-                    norm = np.mean(data[10:40])
-                    data = data / norm
-                    err = err / norm
+
                 if smoothing:
                     win = signal.windows.hann(10)
                     data = signal.convolve(data, win, mode='same') / sum(win)
@@ -1541,6 +1568,10 @@ class plotSpec(pg.PlotWidget):
                     pix_solid_angle = wcs1['CDELT1'] * wcs1['CDELT2'] * (np.pi / 180) ** 2* 1e6
                     data*=pix_solid_angle
                     err*=pix_solid_angle
+                if normalize:
+                    norm = np.mean(data[10:40])
+                    data = data / norm
+                    err = err / norm
                 if snr > 1:
                     self.plot_lineA2 = pg.PlotCurveItem(wavel, data, pen=pen)
                     self.plot_errbarA2 = pg.ErrorBarItem(x=wavel, y=data, height=2*err, pen=pen)
@@ -1574,16 +1605,17 @@ class plotSpec(pg.PlotWidget):
         if add:
             wavel = self.parent.CUBE_A.data.wavelength
             if np.size(data) == np.size(wavel):
-                if normalize:
-                    norm = np.mean(data[10:40])
-                    data = data / norm
-                    err = err / norm
+
                 if 1:
                     # convert MJy/Sr to Jy
                     wcs1 = self.parent.CUBE_A.data.wcs
                     pix_solid_angle = wcs1['CDELT1'] * wcs1['CDELT2'] * (np.pi / 180) ** 2* 1e6
                     data*=pix_solid_angle
                     err*=pix_solid_angle
+                if normalize:
+                    norm = np.mean(data[10:40])
+                    data = data / norm
+                    err = err / norm
 
                 self.plot_lineA2m1 = pg.PlotCurveItem(wavel, data, pen=pen)
                 self.plot_errbarA2m1 = pg.ErrorBarItem(x=wavel, y=data, height=2*err, pen=pen)
@@ -1611,10 +1643,7 @@ class plotSpec(pg.PlotWidget):
         if add:
             wavel = self.parent.CUBE_B.data.wavelength
             if np.size(data) == np.size(wavel):
-                if normalize:
-                    norm = np.mean(data[10:40])
-                    data = data / norm
-                    err = err/norm
+
                 if smoothing:
                     win = signal.windows.hann(10)
                     data = signal.convolve(data, win, mode='same') / sum(win)
@@ -1624,6 +1653,10 @@ class plotSpec(pg.PlotWidget):
                     pix_solid_angle = wcs1['CDELT1'] * wcs1['CDELT2'] * (np.pi / 180) ** 2* 1e6
                     data*=pix_solid_angle
                     err*=pix_solid_angle
+                if normalize:
+                    norm = np.mean(data[10:40])
+                    data = data / norm
+                    err = err/norm
 
                 self.plot_lineB1 = pg.PlotCurveItem(wavel, data, pen=pen)
                 self.plot_errbarB1 = pg.ErrorBarItem(x=wavel, y=data, height=2*err, pen=pen)
@@ -1664,9 +1697,7 @@ class plotSpec(pg.PlotWidget):
         if add:
             wavel = self.parent.CUBE_B.data.wavelength
             if np.size(data) == np.size(wavel):
-                if normalize:
-                    norm = np.mean(data[10:40])
-                    data = data / norm
+
                 if smoothing:
                     win = signal.windows.hann(10)
                     data = signal.convolve(data, win, mode='same') / sum(win)
@@ -1675,7 +1706,9 @@ class plotSpec(pg.PlotWidget):
                     wcs1 = self.parent.CUBE_B.data.wcs
                     pix_solid_angle = wcs1['CDELT1'] * wcs1['CDELT2'] * (np.pi / 180) ** 2* 1e6
                     data *= pix_solid_angle
-
+                if normalize:
+                    norm = np.mean(data[10:40])
+                    data = data / norm
                 self.plot_lineB2 = pg.PlotCurveItem(wavel, data, pen=pen)
                 self.vb.addItem(self.plot_lineB2)
                 self.legend_model.addItem(self.plot_lineB2, label)
@@ -2035,7 +2068,7 @@ class CUBElistTable(pg.TableWidget):
                                                          master_resample_spec_flag=master_resample_spec_flag,
                                                          master_extract1d_flag=master_extract1d_flag)
 
-    def extract_roi(self, cube_name = '(A)',debug=True):
+    def extract_roi(self, cube_name = '(A)',debug=False):
         if cube_name == '(A)':
             cube = self.parent.parent.plot_3dcubeA
             data = self.parent.parent.CUBE_A.data
