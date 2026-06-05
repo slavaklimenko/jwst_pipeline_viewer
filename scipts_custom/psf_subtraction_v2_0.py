@@ -15,7 +15,7 @@ from multiprocessing import Pool
 import copy
 from scipy.signal import fftconvolve
 
-path_to_jwst_folder = '/home/slava/science/codes/python/jwst_Viewer-2.0.0/'
+path_to_jwst_folder = '/home/slava/science/codes/python/jwst/'
 
 if 0:
     def read_settings(init_file=path_to_jwst_folder+'/init.dat'):
@@ -294,7 +294,7 @@ def log_probability(theta, data_tmp,mask_tmp,parameters,psf_cube,spectrum_model)
 '''
 
 def subtract_psf(data,psf_cube,spectrum_model,params,mask_fitting,
-                 debug = True,save_results=True, nwalkers=100, nsteps = 100,arcsec_pix_scale=1):
+                 debug = False,save_results=True, nwalkers=100, nsteps = 100,arcsec_pix_scale=1):
 
     #copy input
     data = np.array(data)
@@ -538,12 +538,12 @@ if __name__ == '__main__':
                    '2A_ch2-short', '2B_ch2-medium', '2C_ch2-long',
                    '3A_ch3-short', '3B_ch3-medium', '3C_ch3-long',
                    '4A_ch4-short', '4B_ch4-medium', '4C_ch4-long']
-        ch_list = ['3A_ch3-short']
+        ch_list = ['4A_ch4-short', '4B_ch4-medium', '4C_ch4-long']
         for ch in ch_list:
             # read source
-
             if 1:
-                #fname = path_to_jwst_folder + '/output/detector3/' + 'B0218-ATCN6_N6/TXS0218+357ATCN6_N6_'+ch+'__CORR_s3d.fits'
+                fname = path_to_jwst_folder + 'output/detector3/' + 'B0218-ATCN6_N6/TXS0218+357ATCN6_N6_'+ch+'__CORR_s3d.fits'
+            else:
                 fname = path_to_jwst_folder + '/output/detector3/' + 'J0134_ATCN6_N6/J0134-0931_ATCN6_N6_' + ch + '__CORR_s3d.fits'
 
 
@@ -555,18 +555,18 @@ if __name__ == '__main__':
             image = np.nanmedian(cube.data, axis=0)  # [slice_numer]
             data = np.array(cube.data)
 
-            if 0:
-                psf_center_A = (58, 50)  # (49, 40)  # sA
-                psf_center_B = (49, 48)  # (41, 39)  # sA
-            else:
-                #l, raq, deq = np.nanmean(wavelength), 35.272790, 35.937148 #35.272754, 35.937156 #B0218
-                #del_ra,del_dec =  0.307, 0.126
-                l, raq, deq = np.nanmean(wavelength), 23.648599, -9.517474  # J0134
-                del_ra,del_dec =  0.539, -0.415
+            if 1:
+                l, raq, deq = np.nanmean(wavelength), 35.272790, 35.937148  # 35.272754, 35.937156 #B0218
+                del_ra,del_dec =  0.307, 0.126
                 asec = 1 / 3600.
                 psf_center_A = cube.meta.wcs.world_to_pixel_values(raq, deq, l)
                 psf_center_B = cube.meta.wcs.world_to_pixel_values(raq + del_ra * asec, deq + del_dec * asec, l)
-            if 1:
+            if 0:
+                l, raq, deq = np.nanmean(wavelength), 23.648599, -9.517474  # J0134
+                del_ra, del_dec = 0.539, -0.415
+                asec = 1 / 3600.
+                psf_center_A = cube.meta.wcs.world_to_pixel_values(raq, deq, l)
+                psf_center_B = cube.meta.wcs.world_to_pixel_values(raq + del_ra * asec, deq + del_dec * asec, l)
                 del_ra, del_dec = 0.258, 0.205
                 psf_center_C = cube.meta.wcs.world_to_pixel_values(raq + del_ra * asec, deq + del_dec * asec, l)
                 del_ra, del_dec = -0.082, -0.156
@@ -600,7 +600,7 @@ if __name__ == '__main__':
             names = ['xc', 'yc', 'amp','psf_rot']
             for name, value in zip(names, [cenA[0], cenA[1], 1.0, 0.0]):
                 params.add(name, value=value, min=0, max=np.inf)
-            params['amp'].max = 2
+            params['amp'].max = 10
             params['psf_rot'].min = -90
             params['psf_rot'].max = 90
 
@@ -614,16 +614,13 @@ if __name__ == '__main__':
                 params_B['xc'].value = cenB[0]
                 params_B['yc'].value = cenB[1]
                 params['psf_rot'].vary = False
-                if ch in ['4A_ch4-short', '4B_ch4-medium', '4C_ch4-long']:
-                    params['xc'].vary = False
-                    params['yc'].vary = False
-                    params['psf_rot'].vary = True
+
 
                 modelA = np.zeros_like(data)
                 modelB = np.zeros_like(data)
                 maskA = rr <= miri_psf_sigma_pix
                 maskB = rr_B <= miri_psf_sigma_pix
-                fitting_radius = 3*miri_psf_sigma_pix #pix
+                fitting_radius = 4*miri_psf_sigma_pix #pix
                 mask_radius = 2 * miri_psf_sigma_pix
                 flux_1sigma_A = np.nansum((data - modelB)[:, maskA], axis=1)
                 flux_1sigma_B = np.nansum((data - modelA)[:, maskB], axis=1)
@@ -652,7 +649,7 @@ if __name__ == '__main__':
                 plt.show()
             # run calculations
             if 1:
-                for it in range(3):
+                for it in range(5):
                     print('Iter', it, 'Step 1. subtract B and get model for spectrum A')
                     flux_1sigma_A = np.nansum((data-modelB)[:, maskA], axis=1)
                     print('Iter', it, 'Step 2. model A and subtract "model A"')
@@ -670,32 +667,12 @@ if __name__ == '__main__':
                         mask_fitting[rr_C<2*miri_psf_sigma_pix] = False
                         rr_D = np.hypot(xx - psf_center_D[0], yy - psf_center_D[1])
                         mask_fitting[rr_D<2*miri_psf_sigma_pix] = False
-                    if 0:
-                        plt.subplots()
-                        plt.imshow(np.log10(np.abs(image)), origin='lower')
-                        plt.plot(cenA[1], cenA[0], 'o', color='red')
-                        plt.plot(cenB[1], cenB[0], 'o', color='blue')
-                        cen_max = np.argwhere(image == np.nanmax(image))[0]
-                        plt.plot(cen_max[1], cen_max[0], 'x', color='black')
-
-                        x = np.arange(maskA.shape[1])
-                        y = np.arange(maskA.shape[0])
-                        X, Y = np.meshgrid(x, y)
-                        plt.contour(X, Y, maskA.astype(float), levels=[0], colors='green', linewidths=1.5)
-                        plt.contour(X, Y, mask_fitting.astype(float), levels=[0], colors='black',
-                                    linewidths=1.5)
-                        plt.contour(X, Y, maskB.astype(float), levels=[0], colors='green', linewidths=1.5)
-                        plt.contour(X, Y, mask_fitting.astype(float), levels=[0], colors='black',
-                                    linewidths=1.5)
-
-                        plt.subplots()
-                        plt.plot(wavelength, flux_1sigma_A, color='red')
-                        plt.plot(wavelength, flux_1sigma_B, color='blue')
-                        plt.show()
 
                     data_fit = data if it == 0 else data - modelB
                     modelA, params_A = subtract_psf(data = data_fit, psf_cube=psf, spectrum_model=flux_1sigma_A, params=params,
                              mask_fitting=mask_fitting,arcsec_pix_scale=1/pix_size)
+
+
 
 
                     #save model
