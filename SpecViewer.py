@@ -3,6 +3,7 @@ import glob
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication, QHBoxLayout, QLabel, QLineEdit,QSizePolicy, QSlider, QSpacerItem, QVBoxLayout, QWidget,QComboBox, QPushButton
 from PyQt6 import QtGui
+from PyQt6.QtGui import QGuiApplication
 import pyqtgraph as pg
 import numpy as np
 import sys, os
@@ -28,7 +29,7 @@ class spectrum():
         if name is not None:
             self.name = name
 
-    def append(self,s,mode = 'mean',debug=False):
+    def append(self,s,mode = 'second',debug=False):
         if not hasattr(self, 'x'):
             if hasattr(s,'x'):
                 self.x = s.x.copy()
@@ -94,7 +95,8 @@ class Slider(QWidget):
         self.filename_box = QComboBox(self)
         self.filename_box.addItems(filenamelist)
         self.filename_box.setCurrentIndex(0)
-        self.filename_box.setFixedSize(200, 30)
+        #self.filename_box.setFixedSize(200, 30)
+        self.filename_box.resize(200, 30)
 
         self.horizontalLayout0.addWidget(self.filename_box)
         self.verticalLayout.addLayout(self.horizontalLayout0)
@@ -104,7 +106,8 @@ class Slider(QWidget):
         self.horizontalLayout1.addWidget(QLabel(name))
         self.value_label = QLineEdit(self)
         self.value_label.setText(str(val))
-        self.value_label.setFixedSize(60, 30)
+        #self.value_label.setFixedSize(60, 30)
+        self.value_label.resize(60, 30)
         self.horizontalLayout1.addWidget(self.value_label)
         #self.value_suggested_label = QLineEdit(self)
         #self.value_suggested_label.setText(str(val))
@@ -118,7 +121,8 @@ class Slider(QWidget):
         self.horizontalLayout1.addWidget(QLabel('mod:'))
         self.value_suggested_label = QLineEdit(self)
         self.value_suggested_label.setText(str(val))
-        self.value_suggested_label.setFixedSize(90, 30)
+        #self.value_suggested_label.setFixedSize(90, 30)
+        self.value_suggested_label.resize(90, 30)
         self.horizontalLayout1.addWidget(self.value_suggested_label)
         self.horizontalLayout1.addStretch(1)
         self.verticalLayout.addLayout(self.horizontalLayout1)
@@ -126,7 +130,8 @@ class Slider(QWidget):
 
         self.up_label = QLineEdit(self)
         self.up_label.setText(str(maximum))
-        self.up_label.setFixedSize(60, 30)
+        #self.up_label.setFixedSize(60, 30)
+        self.up_label.resize(60, 30)
         self.verticalLayout.addWidget(self.up_label)
         self.horizontalLayout = QHBoxLayout(self)
         #spacerItem = QSpacerItem(0, 100, QSizePolicy.Expanding, QSizePolicy.Minimum)
@@ -152,7 +157,8 @@ class Slider(QWidget):
         self.verticalLayout.addLayout(self.horizontalLayout)
         self.low_label = QLineEdit(self)
         self.low_label.setText(str(minimum))
-        self.low_label.setFixedSize(60, 30)
+        #self.low_label.setFixedSize(60, 30)
+        self.low_label.resize(60, 30)
         self.verticalLayout.addWidget(self.low_label)
         self.resize(self.sizeHint())
 
@@ -311,11 +317,13 @@ class Viewer(QWidget):
         self.objname_box = QComboBox(self)
         self.objname_box.addItems(objnamelist)
         self.objname_box.setCurrentIndex(0)
-        self.objname_box.setFixedSize(200, 30)
+        #self.objname_box.setFixedSize(200, 30)
+        self.objname_box.resize(200, 30)
         self.horizontalLayout.addWidget(self.objname_box)
         self.obj_name_win = QPushButton('ReadSpecList')
         self.obj_name_win.clicked[bool].connect(self.setObjName)
-        self.obj_name_win.setFixedSize(200, 60)
+        #self.obj_name_win.setFixedSize(200, 60)
+        self.obj_name_win.resize(200, 60)
         self.horizontalLayout.addWidget(self.obj_name_win)
         #self.read_win_option = QComboBox()
         #self.read_win_option.addItems(['subtract_bkgr', 'add_to_err','None'])
@@ -323,7 +331,8 @@ class Viewer(QWidget):
         #self.horizontalLayout.addWidget(self.read_win_option)
         self.comb_dithers_win = QPushButton('CombineDithers')
         self.comb_dithers_win.clicked.connect(self.comb_dithers)
-        self.comb_dithers_win.setFixedSize(250, 60)
+        #self.comb_dithers_win.setFixedSize(250, 60)
+        self.comb_dithers_win.resize(250, 60)
         self.horizontalLayout.addWidget(self.comb_dithers_win)
         self.combine_dithers_win_option = QComboBox()
         self.combine_dithers_win_option.addItems(['green','red'])
@@ -335,7 +344,8 @@ class Viewer(QWidget):
         self.calc_scaling_win = QPushButton('ScaleCh')
         #self.build_cube.clicked[bool].connect(partial(self.call_build_3dCube))
         self.calc_scaling_win.clicked[bool].connect(partial(self.calcChunkCoeffs))
-        self.calc_scaling_win.setFixedSize(200, 60)
+        #self.calc_scaling_win.setFixedSize(200, 60)
+        self.calc_scaling_win.resize(200, 60)
         self.horizontalLayout.addWidget(self.calc_scaling_win)
         self.scale_mode_win_option = QComboBox()
         self.scale_mode_win_option.addItems(['multiply', 'add'])
@@ -348,39 +358,51 @@ class Viewer(QWidget):
         self.save_data_win = QPushButton('SaveSpec')
         #self.build_cube.clicked[bool].connect(partial(self.call_build_3dCube))
         self.save_data_win.clicked[bool].connect(partial(self.saveObj))
-        self.save_data_win.setFixedSize(200, 60)
+        #self.save_data_win.setFixedSize(200, 60)
+        self.save_data_win.resize(200, 60)
         self.horizontalLayout.addWidget(self.save_data_win)
         self.save_data_filename = QLineEdit()
         self.save_data_filename.setText('filename')
-        self.save_data_filename.setFixedSize(150, 30)
+        #self.save_data_filename.setFixedSize(150, 30)
+        self.save_data_filename.resize(150, 30)
         self.horizontalLayout.addWidget(self.save_data_filename)
         self.combine_win = QPushButton('Combine')
         self.combine_win.clicked[bool].connect(partial(self.combineChunks))
-        self.combine_win.setFixedSize(200, 60)
+        #self.combine_win.setFixedSize(200, 60)
+        self.combine_win.resize(200, 60)
         self.horizontalLayout.addWidget(self.combine_win)
         self.rebin_win = QPushButton('Rebin')
         # self.build_cube.clicked[bool].connect(partial(self.call_build_3dCube))
         self.rebin_win.clicked[bool].connect(partial(self.RebinIt))
-        self.rebin_win.setFixedSize(200, 60)
+        #self.rebin_win.setFixedSize(200, 60)
+        self.rebin_win.resize(200, 60)
         self.horizontalLayout.addWidget(self.rebin_win)
         self.rebin_n_pix = QLineEdit()
         self.rebin_n_pix.setText('4')
-        self.rebin_n_pix.setFixedSize(100, 30)
+        #self.rebin_n_pix.setFixedSize(100, 30)
+        self.rebin_n_pix.resize(30, 30)
         self.horizontalLayout.addWidget(self.rebin_n_pix)
         self.horizontalLayout.addWidget(QLabel('Smooth:'))
         self.smooth_n_pix = QLineEdit()
         self.smooth_n_pix.setText('-1')
-        self.smooth_n_pix.setFixedSize(100, 30)
+        #self.smooth_n_pix.setFixedSize(100, 30)
+        self.smooth_n_pix.resize(100, 30)
         self.horizontalLayout.addWidget(self.smooth_n_pix)
         self.recalc_errorbar =  QPushButton('RecalcStd')
         self.recalc_errorbar.clicked[bool].connect(partial(self.RecalcStd))
-        self.recalc_errorbar.setFixedSize(200, 60)
+        #self.recalc_errorbar.setFixedSize(200, 60)
+        self.recalc_errorbar.resize(200, 60)
         self.horizontalLayout.addWidget(self.recalc_errorbar)
-
+        self.leak_correction_button = QPushButton('Leak_corr')
+        self.leak_correction_button.clicked[bool].connect(partial(self.ApplyLeakCorr))
+        self.leak_correction_button.resize(200, 60)
+        self.horizontalLayout.addWidget(self.leak_correction_button)
+        self.leak_coeff = QLineEdit()
+        self.leak_coeff.setText('1')
+        self.leak_coeff.resize(10, 30)
+        self.horizontalLayout.addWidget(self.leak_coeff)
         self.horizontalLayout.addStretch(1)
         self.mainLayout.addLayout(self.horizontalLayout)
-
-
 
         self.horizontalLayout = QHBoxLayout(self)
         if 1:
@@ -422,9 +444,7 @@ class Viewer(QWidget):
             self.w12 = Slider(0, 1, name='ch4C:',filenamelist=filenamelist,path =  self.spec_folder,val=1)
             self.horizontalLayout.addWidget(self.w12)
 
-            self.w13 = Slider(0, 1, name='extra:', filenamelist=filenamelist, path=self.spec_folder, val=1)
-            #self.w13 = Slider(0, 3, name='tmplate:', filenamelist=['cassis_yaaar_spcfw_15121152t-copy-red_norm.dat'], path=self.spec_tmp,val=1)
-            self.horizontalLayout.addWidget(self.w13)
+
         self.mainLayout.addLayout(self.horizontalLayout)
         #self.p6 = self.win.addPlot(title="My Plot")
         #self.curve = self.p6.plot(pen='r')
@@ -443,7 +463,6 @@ class Viewer(QWidget):
              self.w10.filename_box.currentIndexChanged.connect(self.w10.read_spectrum)
              self.w11.filename_box.currentIndexChanged.connect(self.w11.read_spectrum)
              self.w12.filename_box.currentIndexChanged.connect(self.w12.read_spectrum)
-             self.w13.filename_box.currentIndexChanged.connect(self.w13.read_spectrum)
              self.update_plot()
 
         if 1:
@@ -462,7 +481,7 @@ class Viewer(QWidget):
             self.w10.slider.valueChanged.connect(self.update_plot)
             self.w11.slider.valueChanged.connect(self.update_plot)
             self.w12.slider.valueChanged.connect(self.update_plot)
-            self.w13.slider.valueChanged.connect(self.update_plot)
+
 
     def update_slider(self):
         self.update_plot()
@@ -505,9 +524,6 @@ class Viewer(QWidget):
         if self.w12.data != None:
             self.win.plot_spec(fname='CH4C', add=False, show_err_bar=False)
             self.win.plot_spec(fname='CH4C', fcolor='yellow', data=self.w12.data, coef=self.w12.x,  show_err_bar=False)
-        if self.w13.data != None:
-            self.win.plot_spec(fname='template', add=False, show_err_bar=False)
-            self.win.plot_spec(fname='template', fcolor='white', data=self.w13.data, coef=self.w13.x, show_err_bar=False)
 
         #x = np.linspace(0, 10, 100)
         #data = a + np.cos(x + c * np.pi / 180) * np.exp(-b * x) * d
@@ -1164,7 +1180,7 @@ class Viewer(QWidget):
         #self.win.plot_spec(fname='Combined', fcolor='green', data=self.combined_spec, coef=1, show_err_bar=True)
 
 
-    def RecalcStd(self,ckick=False,mode = 'Combined'):
+    def RecalcStd(self,click=False,mode = 'Combined'):
         debug=False
         if mode == 'Combined':
             y_orig = np.array(self.combined_spec.y)
@@ -1175,15 +1191,7 @@ class Viewer(QWidget):
 
         npix =spec_tmp.x.shape[0]
 
-        from scipy import signal
-        #win_size = 150
-        #win = signal.windows.hann(win_size)
-        #filtered = signal.convolve(spec_tmp.y, win, mode='same') / sum(win)
-        s = np.arange(npix)
-        #mask = (s > win_size / 2) * (s < len(spec_tmp.x) - win_size / 2)
-        #spec_tmp.y[mask] = filtered[mask]
-        #spec_tmp.y[s <= win_size / 2] = np.mean(spec_tmp.y[s < win_size / 2])
-        #spec_tmp.y[s >= len(spec_tmp.x) - win_size / 2] = np.mean(spec_tmp.y[s >= len(spec_tmp.x) - win_size / 2])
+
         from scipy.signal import savgol_filter
         spec_tmp.y = savgol_filter(spec_tmp.y, 50, 3)
         if debug:
@@ -1244,11 +1252,34 @@ class Viewer(QWidget):
 
             plt.show()
 
-        #self.win.plot_spec(fname='Combined', add=False, show_err_bar=False)
-        #self.win.plot_spec(fname='Combined', fcolor='green', data=self.combined_spec, coef=1, show_err_bar=False)
+
         if mode == 'Combined':
             self.win.plot_spec(fname='Combined', add=False, show_err_bar=True)
             self.win.plot_spec(fname='Combined', fcolor='green', data=self.combined_spec, coef=1, show_err_bar=True)
+
+    def ApplyLeakCorr(self, click=False, mode='Combined'):
+        debug = False
+        from scripts.leak_correction import correct_miri_mrs_spectral_leak
+        leakfilename = '/home/slava/science/codes/python/jwst/data_local/leak/MRS_spectral_leak_fractional.fits'
+        if mode == 'Combined':
+            x = np.array(self.combined_spec.x)
+            y = np.array(self.combined_spec.y)
+            spec_tmp = self.combined_spec.copy()
+
+            leak_coeff = float(self.leak_coeff.text())
+
+            (y_corr, leak) = correct_miri_mrs_spectral_leak(ch3spec=(x, y),
+                                                           ch1spec=(x, y*leak_coeff),
+                                                           leakreffile=leakfilename)
+            self.combined_spec.y  = y_corr
+        #if mode == 'Combined':
+        #    self.combined_spec.err = spec_std
+
+
+        if mode == 'Combined':
+            self.win.plot_spec(fname='Combined', add=False, show_err_bar=True)
+            self.win.plot_spec(fname='Combined', fcolor='green', data=self.combined_spec, coef=1, show_err_bar=True)
+
 
     def readfolder(self,path=None,obj_name='',dith=True, keyname='_sci.spec1d'):
 
@@ -1285,7 +1316,25 @@ if __name__ == '__main__':
 
     input_dir ='./output/detector3/roi_spectra/'
 
+    if 0:
+        app = QApplication(sys.argv)
+        v = Viewer(spec_folder=input_dir)
+        #v.show()
+        v.showMaximized()
+        sys.exit(app.exec())
+
+    from PyQt6.QtGui import QGuiApplication
+
     app = QApplication(sys.argv)
+
+    screen = QGuiApplication.primaryScreen()
+    geometry = screen.availableGeometry()
+
     v = Viewer(spec_folder=input_dir)
+    v.resize(geometry.width(), geometry.height())
     v.show()
+
     sys.exit(app.exec())
+
+# button.setFixedSize(600, 30)
+#button.resize(600, 30)
