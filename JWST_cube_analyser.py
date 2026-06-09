@@ -928,14 +928,18 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
                 ]
                 black_green_red_white = LinearSegmentedColormap.from_list("BGRW", colors)
 
-                vmin,vmax = (np.nanquantile(np.log10(np.abs(image_comb*pix_solid_angle*1e6*1e3)).flatten(), 0.1),
-                                          np.nanquantile(np.log10(np.abs(image_comb*pix_solid_angle*1e6*1e3)).flatten(), 1))
-                vmin,vmax = 0,0.35
-                sp = ax.imshow(image_comb*pix_solid_angle*1e6*1e3,
-                               origin='lower',   cmap=black_green_red_white , vmin=vmin, vmax=vmax)
-                #sp = ax.imshow(np.log10(np.abs(image_comb/image_max_flux)), origin='lower',
-                #               cmap=black_green_red_white, vmin=vmin, vmax=vmax)
-                fig.colorbar(sp, fraction=0.046, pad=0.04,label='F(mJy)')
+                flux_scale = 'log'
+                if flux_scale == 'linear':
+                    vmin,vmax = 0,0.35
+                    sp = ax.imshow(image_comb*pix_solid_angle*1e6*1e3,
+                                   origin='lower',   cmap=black_green_red_white , vmin=vmin, vmax=vmax)
+                elif  flux_scale == 'log':
+                    vmin,vmax = (np.nanquantile(np.log10(np.abs(image_comb*pix_solid_angle*1e6*1e3)).flatten(), 0.1),
+                                              np.nanquantile(np.log10(np.abs(image_comb*pix_solid_angle*1e6*1e3)).flatten(), 1))
+                    sp = ax.imshow(np.log10(np.abs(image_comb/image_max_flux)), origin='lower',
+                                   cmap=black_green_red_white, vmin=vmin, vmax=vmax)
+                    fig.colorbar(sp, fraction=0.046, pad=0.04,label='log F(mJy)')
+
 
                 x1,y1  = np.cos(angle), -np.sin(angle)
                 x2,y2  = np.sin(angle), np.cos(angle)
@@ -990,7 +994,7 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
                 ax.set_ylabel('spaxel',fontsize=fontsize)
                 #ax.set_title(name.split('_')[0])
             fig.savefig('/home/slava/science/codes/python/jwst/output/detector3/images/'+name+'_log.pdf', bbox_inches='tight')
-
+            plt.close(fig)
 
 
             #plt.xticks([])
@@ -4212,18 +4216,18 @@ class expRunWidget(QWidget):
         horizontal_layout.addStretch(1)
         l.addLayout(horizontal_layout)
 
-        horizontal_layout = QHBoxLayout(self)
-        self.background_extraction = QPushButton('SaveMedianFlux', self, checkable=False)
+        #horizontal_layout = QHBoxLayout(self)
+        #self.background_extraction = QPushButton('SaveMedianFlux', self, checkable=False)
         # self.set_roi_radius.setChecked(False)
-        self.background_extraction.clicked[bool].connect(self.extract_mean_background)
+        #self.background_extraction.clicked[bool].connect(self.extract_mean_background)
         # self.set_roi_radius.setFixedSize(200, 60)
         # self.prepare_extraction.resize(200, 60)
-        cb = self.background_extraction
-        width = cb.minimumSizeHint().width()
-        cb.setFixedWidth(width)
+        #cb = self.background_extraction
+        #width = cb.minimumSizeHint().width()
+        #cb.setFixedWidth(width)
         # self.select_roi.clicked[bool].connect(self.ShowROI)
         # self.select_roi.setFixedSize(200, 60)
-        horizontal_layout.addWidget(self.background_extraction)
+        #horizontal_layout.addWidget(self.background_extraction)
 
         horizontal_layout.addStretch(1)
         l.addLayout(horizontal_layout)
@@ -4616,18 +4620,18 @@ class expRunWidget(QWidget):
             print('Spectra extraction is done!')
 
 
-    def extract_mean_background(self):
-        cube_choice = self.name_cube_subtracted.currentText()
-        if 1:
-            data = np.array(self.parent.CUBE_B.data.data)
-            wavel = self.parent.CUBE_B.data.wavelength
-            name = (self.parent.CUBE_B.cubename.split('/')[-1]).split('.fits')[0]
-            spec = np.nanmedian(np.nanmean(data,axis=1),axis=1)
-            spec1d = np.zeros((spec.shape[0],3))
-            spec1d[:,0] = wavel
-            spec1d[:, 1] = spec
-            spec1d[:,2] = spec/50
-            np.savetxt('./output/detector3/background/'+name+'_median.dat',spec1d)
+    #def extract_mean_background(self):
+    #    cube_choice = self.name_cube_subtracted.currentText()
+    #    if 1:
+    #        data = np.array(self.parent.CUBE_B.data.data)
+    #        wavel = self.parent.CUBE_B.data.wavelength
+    #        name = (self.parent.CUBE_B.cubename.split('/')[-1]).split('.fits')[0]
+    #        spec = np.nanmedian(np.nanmean(data,axis=1),axis=1)
+    #        spec1d = np.zeros((spec.shape[0],3))
+    #        spec1d[:,0] = wavel
+    #        spec1d[:, 1] = spec
+    #        spec1d[:,2] = spec/50
+    #        np.savetxt('./output/detector3/background/'+name+'_median.dat',spec1d)
 
     def make_fringe_model(self, s=None, flag_update_data=True, debug=False, show_results=False, brightness_level=0.9):
         mode = 'Custom' #self.parent.exp_commands.fringe_correction_mode.text()
