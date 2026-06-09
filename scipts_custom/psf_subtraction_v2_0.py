@@ -529,16 +529,14 @@ if __name__ == '__main__':
                 # save new file
                 cube.save(fname.split('s3d.fits')[0] + 'subtracted_s3d.fits')
 
-
-
     #subtract two images iteratively
     if 1:
-
         ch_list = ['1A_ch1-short', '1B_ch1-medium', '1C_ch1-long',
                    '2A_ch2-short', '2B_ch2-medium', '2C_ch2-long',
                    '3A_ch3-short', '3B_ch3-medium', '3C_ch3-long',
                    '4A_ch4-short', '4B_ch4-medium', '4C_ch4-long']
-        ch_list = ['4A_ch4-short', '4B_ch4-medium', '4C_ch4-long']
+        ch_list = [ '1A_ch1-short', '1B_ch1-medium', '1C_ch1-long',
+                   ]
         for ch in ch_list:
             # read source
             if 1:
@@ -592,8 +590,9 @@ if __name__ == '__main__':
             rr_B = np.hypot(xx - cenB[1], yy - cenB[0])
 
             #define psf
-            #(psf,psf_w) = read_psf(channel=ch+'_test.fits')
             (psf, psf_w) = read_psf(channel=ch + '_based_HD-163466.fits')
+            psf_name = 'HD-163466'
+            #(psf, psf_w) = read_psf(channel=ch + '_based_HD-159222.fits')
 
             #define parameters
             params = Parameters()
@@ -620,7 +619,7 @@ if __name__ == '__main__':
                 modelB = np.zeros_like(data)
                 maskA = rr <= miri_psf_sigma_pix
                 maskB = rr_B <= miri_psf_sigma_pix
-                fitting_radius = 4*miri_psf_sigma_pix #pix
+                fitting_radius = 3*miri_psf_sigma_pix #pix
                 mask_radius = 2 * miri_psf_sigma_pix
                 flux_1sigma_A = np.nansum((data - modelB)[:, maskA], axis=1)
                 flux_1sigma_B = np.nansum((data - modelA)[:, maskB], axis=1)
@@ -649,7 +648,7 @@ if __name__ == '__main__':
                 plt.show()
             # run calculations
             if 1:
-                for it in range(5):
+                for it in range(3):
                     print('Iter', it, 'Step 1. subtract B and get model for spectrum A')
                     flux_1sigma_A = np.nansum((data-modelB)[:, maskA], axis=1)
                     print('Iter', it, 'Step 2. model A and subtract "model A"')
@@ -678,20 +677,20 @@ if __name__ == '__main__':
                     #save model
                     if save_model:
                         plot_comparison(data_fit, params_A, psf, mask_fitting, flux_1sigma_A, params,
-                                        filename=ch+'_subtr_A.pdf')
+                                        filename=ch+'_subtr_A_based'+psf_name+'.pdf')
                         params_A.dump(open('paramsA.json', 'w'))
                         cube.data = modelA
                         # (optional but recommended) update history
                         cube.add_history_entry("Replaced data with PSF-convolved model")
                         # save new file
-                        cube.save(fname.split('s3d.fits')[0] + 'modelA_based_HD-163466_s3d.fits')
+                        cube.save(fname.split('s3d.fits')[0] + 'modelA_based_'+psf_name+'_s3d.fits')
                         # save psf subtracted cube
                         cube.data = data - modelA
                         # (optional but recommended) update history
                         cube.add_history_entry("Replaced data with PSF-subtracted data")
                         #cube.history.append("Replaced data with PSF-subtracted data")
                         # save new file
-                        cube.save(fname.split('s3d.fits')[0]+  'subtr_A_based_HD-163466_s3d.fits')
+                        cube.save(fname.split('s3d.fits')[0]+  'subtr_A_based_'+psf_name+'_s3d.fits')
 
                     print('Iter', it, 'Step 3. get model for spectrum B.')
                     flux_1sigma_B = np.nansum((data - modelA)[:, maskB], axis=1)
@@ -708,18 +707,18 @@ if __name__ == '__main__':
                     # save model
                     if save_model:
                         plot_comparison(data_fit, params_B, psf, mask_fitting, flux_1sigma_B, params,
-                                        filename=ch+'_subtr_B.pdf')
+                                        filename=ch+'_subtr_B_based'+psf_name+'.pdf')
                         params_B.dump(open('paramsB.json', 'w'))
                         cube.data = modelB
                         # (optional but recommended) update history
                         cube.add_history_entry("Replaced data with PSF-subtracted data")
                         # save new file
-                        cube.save(fname.split('s3d.fits')[0]+ 'modelB_based_HD-163466_s3d.fits')
+                        cube.save(fname.split('s3d.fits')[0]+ 'modelB_based_'+psf_name+'_s3d.fits')
                         cube.data = data - modelB
                         # (optional but recommended) update history
                         cube.add_history_entry("Replaced data with PSF-subtracted data")
                         # save new file
-                        cube.save(fname.split('s3d.fits')[0]+ 'subtr_B_based_HD-163466_s3d.fits')
+                        cube.save(fname.split('s3d.fits')[0]+ 'subtr_B_based_'+psf_name+'_s3d.fits')
 
 
 
