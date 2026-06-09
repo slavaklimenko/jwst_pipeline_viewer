@@ -160,6 +160,7 @@ def model_img(params , cube_shape, psf_cube, spectrum_model,
 
         ax[1].imshow(np.nanmean(model_cube, axis=0), origin='lower')
         ax[1].set_title("Model (unconvolved)")
+        ax[1].plot(psf_center[1],psf_center[0],'o')
 
         ax[2].imshow(np.nanmean(model_convolved, axis=0), origin='lower')
         ax[2].set_title("Model (convolved)")
@@ -222,8 +223,8 @@ def plot_comparison(data, params,psf_cube,mask_fitting, spectrum_model,params_in
     if filename is None:
         filename = 'psf_subtraction.pdf'
     fig.savefig(path_to_jwst_folder + 'output/scripts/' + filename, dpi=300, bbox_inches='tight')
-    plt.close(fig)
-    #plt.show()
+    #plt.close(fig)
+    plt.show()
 
 
 def lnprior(parameters):
@@ -267,57 +268,28 @@ def log_probability(theta, data_tmp, mask_tmp, parameters, psf_cube, spectrum_mo
 
     return -0.5 * chiq
 
-'''
-def log_probability(theta, data_tmp,mask_tmp,parameters,psf_cube,spectrum_model):
-    vary_params = [p for p in parameters.values() if p.vary]
-    for val, p in zip(theta, vary_params):
-        p.value = val
-
-    chi_prior = lnprior(parameters= parameters)
-
-    if chi_prior == 0:
-
-        m_i = model_img(parameters, data_tmp.shape, psf_cube=psf_cube, spectrum_model=spectrum_model,
-                        debug=False, get_qso_pos=False)
-
-        residuals = data_tmp - m_i
-        residuals[:, ~mask_tmp] = np.nan
-
-        snr = 20
-        err = np.abs(data_tmp) / snr
-        weights = np.ones_like(residuals)
-        # weights[residuals<-err] *= 10
-        chiq = np.nansum(np.power(residuals / err * weights, 2))
-        return -0.5 * chiq
-    else:
-        return chi_prior
-'''
 
 def subtract_psf(data,psf_cube,spectrum_model,params,mask_fitting,
-                 debug = False,save_results=True, nwalkers=100, nsteps = 100,arcsec_pix_scale=1):
+                 debug = True,save_results=True, nwalkers=100, nsteps = 100,arcsec_pix_scale=1):
 
     #copy input
     data = np.array(data)
-    y, x = np.where(mask_fitting)
+    x, y = np.where(mask_fitting)
     # cut to match fitting area
-    data_new = data[:,y.min():y.max() + 1,x.min():x.max() + 1]
-    mask_new = mask_fitting[y.min():y.max() + 1,x.min():x.max() +1]
-    y0, x0 = y.min(), x.min()
+    data_new = data[:,x.min():x.max() + 1,y.min():y.max() + 1]
+    mask_new = mask_fitting[x.min():x.max() + 1,y.min():y.max() +1]
+    #y0, x0 = y.min(), x.min()
+    x0, y0 = x.min(), y.min()
     #(xc_new, yc_new) = (xc - y.min(), yc - x.min())
     params_new = copy.deepcopy(params)
     params_init = copy.deepcopy(params)
-    params_new['xc'].value = params['xc'].value - y0
-    params_new['yc'].value = params['yc'].value - x0
+    params_new['xc'].value = params['xc'].value - x0
+    params_new['yc'].value = params['yc'].value - y0
 
 
     #find init values for qso center
     data_tmp = np.array(data_new)
-    if 0:
-        plt.subplots()
-        plt.imshow(np.nanmean(data_tmp,axis=0))
-        plt.plot(params_new['xc'].value,params_new['xc'].value,'o',color='red')
-        plt.title('fitting area')
-        plt.show()
+
     print('init parameters values:', [(params_new[p].name, params_new[p].value) for p in params_new])
     #use leastsq for init guess
     if 0:
@@ -343,6 +315,27 @@ def subtract_psf(data,psf_cube,spectrum_model,params,mask_fitting,
         params_new['yc'].min = params_new['yc'].value - 0.1*arcsec_pix_scale  # mask_new.shape[1]-1
         params_new['amp'].stderr = 0.5
         params_new['psf_rot'].stderr = 20
+
+    if 1:
+        print('arcsec_pix_scale',arcsec_pix_scale,'delta',0.1*arcsec_pix_scale)
+        print(params_new['xc'].value,params_new['xc'].value-0.1*arcsec_pix_scale ,params_new['xc'].value+0.1*arcsec_pix_scale )
+        print(params_new['yc'].value, params_new['yc'].value - 0.1 * arcsec_pix_scale,
+              params_new['yc'].value + 0.1 * arcsec_pix_scale)
+        from matplotlib.patches import Rectangle
+        fig, ax = plt.subplots()
+        plt.imshow(np.nanmean(data_tmp,axis=0),origin='lower')
+        plt.plot(params_new['yc'].value,params_new['xc'].value,'o',color='red')
+        xc_min = params_new['xc'].min
+        xc_max = params_new['xc'].max
+        yc_min = params_new['yc'].min
+        yc_max = params_new['yc'].max
+
+        # rectangle width/height
+        rect = Rectangle((yc_min, xc_min), yc_max - yc_min, xc_max - xc_min,
+            fill=False,edgecolor='red',linewidth=2 )
+        ax.add_patch(rect)
+        plt.title('fitting area')
+        plt.show()
 
     print('prepare emcee')
     par_names = [p.name for p in params_new.values() if p.vary]
@@ -406,8 +399,8 @@ def subtract_psf(data,psf_cube,spectrum_model,params,mask_fitting,
     #plot_comparison(data_new, params_new, psf_cube, mask_new, spectrum_model)
 
     #convert to original scale
-    params['xc'].value = params_new['xc'].value + y0
-    params['yc'].value= params_new['yc'].value + x0
+    params['xc'].value = params_new['xc'].value + x0
+    params['yc'].value= params_new['yc'].value + y0
     params['amp'].value = params_new['amp'].value
     params['psf_rot'].value = params_new['psf_rot'].value
 
@@ -535,7 +528,7 @@ if __name__ == '__main__':
                    '2A_ch2-short', '2B_ch2-medium', '2C_ch2-long',
                    '3A_ch3-short', '3B_ch3-medium', '3C_ch3-long',
                    '4A_ch4-short', '4B_ch4-medium', '4C_ch4-long']
-        ch_list = [ '1A_ch1-short', '1B_ch1-medium', '1C_ch1-long',
+        ch_list = [  '1B_ch1-medium'
                    ]
         for ch in ch_list:
             # read source
@@ -554,21 +547,21 @@ if __name__ == '__main__':
             data = np.array(cube.data)
 
             if 1:
-                l, raq, deq = np.nanmean(wavelength), 35.272790, 35.937148  # 35.272754, 35.937156 #B0218
+                l, raq, decq = np.nanmean(wavelength), 35.272790, 35.937148  # 35.272754, 35.937156 #B0218
                 del_ra,del_dec =  0.307, 0.126
                 asec = 1 / 3600.
-                psf_center_A = cube.meta.wcs.world_to_pixel_values(raq, deq, l)
-                psf_center_B = cube.meta.wcs.world_to_pixel_values(raq + del_ra * asec, deq + del_dec * asec, l)
+                psf_center_A = cube.meta.wcs.world_to_pixel_values(raq, decq, l)
+                psf_center_B = cube.meta.wcs.world_to_pixel_values(raq + del_ra * asec, decq + del_dec * asec, l)
             if 0:
-                l, raq, deq = np.nanmean(wavelength), 23.648599, -9.517474  # J0134
+                l, raq, decq = np.nanmean(wavelength), 23.648599, -9.517474  # J0134
                 del_ra, del_dec = 0.539, -0.415
                 asec = 1 / 3600.
-                psf_center_A = cube.meta.wcs.world_to_pixel_values(raq, deq, l)
-                psf_center_B = cube.meta.wcs.world_to_pixel_values(raq + del_ra * asec, deq + del_dec * asec, l)
+                psf_center_A = cube.meta.wcs.world_to_pixel_values(raq, decq, l)
+                psf_center_B = cube.meta.wcs.world_to_pixel_values(raq + del_ra * asec, decq + del_dec * asec, l)
                 del_ra, del_dec = 0.258, 0.205
-                psf_center_C = cube.meta.wcs.world_to_pixel_values(raq + del_ra * asec, deq + del_dec * asec, l)
+                psf_center_C = cube.meta.wcs.world_to_pixel_values(raq + del_ra * asec, decq + del_dec * asec, l)
                 del_ra, del_dec = -0.082, -0.156
-                psf_center_D = cube.meta.wcs.world_to_pixel_values(raq + del_ra * asec, deq + del_dec * asec, l)
+                psf_center_D = cube.meta.wcs.world_to_pixel_values(raq + del_ra * asec, decq + del_dec * asec, l)
 
             from astropy.wcs import WCS
             wcs = WCS(hdr)
@@ -582,12 +575,12 @@ if __name__ == '__main__':
             print('1sigma rad =', miri_psf_sigma_pix, 'pix')
 
             # pixel grids
-            yy, xx = np.indices(image.shape)
+            xx,yy = np.indices(image.shape)
             # distance from center
             cenA = (psf_center_A[1],psf_center_A[0])
             cenB = (psf_center_B[1],psf_center_B[0])
-            rr = np.hypot(xx - cenA[1], yy - cenA[0])
-            rr_B = np.hypot(xx - cenB[1], yy - cenB[0])
+            rr = np.hypot(xx - cenA[0], yy - cenA[1])
+            rr_B = np.hypot(xx - cenB[0], yy - cenB[1])
 
             #define psf
             (psf, psf_w) = read_psf(channel=ch + '_based_HD-163466.fits')
@@ -625,7 +618,7 @@ if __name__ == '__main__':
                 flux_1sigma_B = np.nansum((data - modelA)[:, maskB], axis=1)
                 save_model = True
 
-            if 0:
+            if 1:
                 plt.subplots()
                 plt.imshow(np.log10(np.abs(image)),origin='lower')
                 plt.plot(cenA[1],cenA[0],'o',color='red')
@@ -662,9 +655,9 @@ if __name__ == '__main__':
                         mask_fitting[rr_B<mask_radius] = False
                     if 'psf_center_C' in locals() and ch in ['1A_ch1-short', '1B_ch1-medium', '1C_ch1-long']:
                         # cenB = (psf_center_B[1],psf_center_B[0])
-                        rr_C = np.hypot(xx - psf_center_C[0], yy - psf_center_C[1])
+                        rr_C = np.hypot(xx - psf_center_C[1], yy - psf_center_C[0])
                         mask_fitting[rr_C<2*miri_psf_sigma_pix] = False
-                        rr_D = np.hypot(xx - psf_center_D[0], yy - psf_center_D[1])
+                        rr_D = np.hypot(xx - psf_center_D[1], yy - psf_center_D[0])
                         mask_fitting[rr_D<2*miri_psf_sigma_pix] = False
 
                     data_fit = data if it == 0 else data - modelB
@@ -678,7 +671,7 @@ if __name__ == '__main__':
                     if save_model:
                         plot_comparison(data_fit, params_A, psf, mask_fitting, flux_1sigma_A, params,
                                         filename=ch+'_subtr_A_based'+psf_name+'.pdf')
-                        params_A.dump(open('paramsA.json', 'w'))
+                        params_A.dump(open(fname.split('s3d.fits')[0]+  'subtr_A_based_'+psf_name+'_paramsA.json', 'w'))
                         cube.data = modelA
                         # (optional but recommended) update history
                         cube.add_history_entry("Replaced data with PSF-convolved model")
@@ -703,12 +696,12 @@ if __name__ == '__main__':
                     params['psf_rot'].value =params_A['psf_rot'].value
                     data_fit = data if it == 0 else data - modelA
                     modelB, params_B = subtract_psf(data=data_fit, psf_cube=psf, spectrum_model=flux_1sigma_B, params=params,
-                                                  mask_fitting=mask_fitting)
+                                                  mask_fitting=mask_fitting,arcsec_pix_scale=1/pix_size)
                     # save model
                     if save_model:
                         plot_comparison(data_fit, params_B, psf, mask_fitting, flux_1sigma_B, params,
                                         filename=ch+'_subtr_B_based'+psf_name+'.pdf')
-                        params_B.dump(open('paramsB.json', 'w'))
+                        params_B.dump(open(fname.split('s3d.fits')[0]+ 'subtr_B_based_'+psf_name+'_paramsB.json', 'w'))
                         cube.data = modelB
                         # (optional but recommended) update history
                         cube.add_history_entry("Replaced data with PSF-subtracted data")
