@@ -822,97 +822,7 @@ class plotCube(pg.ImageView): #(pg.PlotWidget):
             plt.text(xc - (rad*r)/norm,  yc +  rad/norm, 'N', color='black')
             plt.title(name.split('_')[0])
             plt.savefig('/home/slava/science/codes/python/jwst/output/detector3/images/log_relative_flux.png')
-            if 1 and 'B1830' in name.split('_')[0]:
-                #show the position of sources
-                l,raq,deq = np.nanmean(wave),278.416441,-21.061058
-                #l, raq, deq = np.nanmean(wave), 278.416310, -21.0611197
-                asec = 1/3600.
-
-
-                qA_pos_pix = cube.meta.wcs.world_to_pixel_values(raq, deq,l)
-                qB_pos_pix = cube.meta.wcs.world_to_pixel_values(raq-0.653*asec, deq-0.721*asec,l)
-                qC_pos_pix = cube.meta.wcs.world_to_pixel_values(raq-0.5*asec, deq-0.459*asec,l)
-                S1_pos_pix = cube.meta.wcs.world_to_pixel_values(raq +0.088 * asec, deq + 0.535 * asec,l)
-                                               #star S1(M) from Castle
-                P_pos_pix = cube.meta.wcs.world_to_pixel_values(raq -0.327 * asec, deq - 0.491 * asec,l)
-                                                #star P from Castle
-                G_pos_pix = cube.meta.wcs.world_to_pixel_values(raq -0.52 * asec, deq - 0.52 * asec,l)
-                                                #Lens G from Courbin 2002
-                SP_pos_pix = cube.meta.wcs.world_to_pixel_values(raq -0.285 * asec, deq - 0.72 * asec,l)
-                                                #Lens SP from Courbin 2002
-                G2_pos_pix = cube.meta.wcs.world_to_pixel_values(raq + 0.245 * asec, deq - 2.49 * asec,l)
-                                                 # Low-z G from Courbin 2002
-                #other stars (?) from Courbin 2002
-                sadd1 =cube.meta.wcs.world_to_pixel_values(raq +1.51 * asec, deq - 2.04 * asec,l)
-                sadd2 =cube.meta.wcs.world_to_pixel_values(raq +0.52 * asec, deq - 1.75 * asec,l)
-                sadd3 = cube.meta.wcs.world_to_pixel_values(raq - 1.12 * asec, deq - 1.22 * asec,l)
-                sadd4 = cube.meta.wcs.world_to_pixel_values(raq - 1.41 * asec, deq - 1.67 * asec,l)
-                sadd5 = cube.meta.wcs.world_to_pixel_values(raq - 1.74 * asec, deq - 1.30 * asec,l)
-                sadd6 = cube.meta.wcs.world_to_pixel_values(raq - 0.78 * asec, deq +0.55 * asec,l)
-                sadd7 = cube.meta.wcs.world_to_pixel_values(raq - 0.89 * asec, deq +0.96 * asec,l)
-                star_add = [sadd1,sadd2,sadd3,sadd4,sadd5,sadd6,sadd7]
-
-                print('pos A',qA_pos_pix)
-                print('pos B', qB_pos_pix)
-                tcolor= 'black'
-                plt.plot(qA_pos_pix[0],qA_pos_pix[1],'o',color=tcolor)
-                plt.plot(qB_pos_pix[0], qB_pos_pix[1],  'o',color=tcolor)
-                plt.plot(G_pos_pix[0], G_pos_pix[1], 'x', color=tcolor)
-                plt.plot(G2_pos_pix[0], G2_pos_pix[1], 'x', color=tcolor)
-
-                if 1:
-                    for s in star_add:
-                        plt.plot(s[0],s[1],'*',color='black')
-
-                #plt.text(qC_pos_pix[1], qC_pos_pix[2], 'C', color=tcolor, fontsize=10)
-
-            if 1 and 'TXS0218' in name.split('_')[0]:
-                # show the position of sources
-                l, raq, deq = np.nanmean(wave), 35.272790, 35.937148  #35.272754, 35.937156
-                asec = 1 / 3600.
-
-                qA_pos_pix = cube.meta.wcs.world_to_pixel_values( raq, deq,l)
-                qB_pos_pix = cube.meta.wcs.world_to_pixel_values(raq + 0.307 * asec, deq + 0.126 * asec,l)
-                #qA_pos_pix = cube.conv_world_coord(t=l, x=raq, y=deq,mode='pipeline_world_to_pix')
-                #qB_pos_pix = cube.conv_world_coord(t=l, x=raq + 0.307 * asec, y=deq + 0.126 * asec, mode='pipeline_world_to_pix')
-                tcolor = 'black'
-                print('pos A',qA_pos_pix)
-                print('pos B', qB_pos_pix)
-
-                plt.plot(qA_pos_pix[0], qA_pos_pix[1], 'o', color=tcolor)
-                plt.plot(qB_pos_pix[0], qB_pos_pix[1], 'o', color=tcolor)
-
-                plt.text(qA_pos_pix[0], qA_pos_pix[1], 'A', color=tcolor, fontsize=10)
-                plt.text(qB_pos_pix[0], qB_pos_pix[1], 'B', color=tcolor, fontsize=10)
-
-            if 1 and '0134' in name.split('_')[0]:
-                # show the position of sources
-                l, raq, deq = np.nanmean(wave),  23.648599, -9.517474  # 35.272754, 35.937156
-                asec = 1 / 3600.
-
-                qA_pos_pix = cube.meta.wcs.world_to_pixel_values(raq, deq, l)
-                qB_pos_pix = cube.meta.wcs.world_to_pixel_values(raq + 0.539 * asec, deq -0.415 * asec, l)
-                qC_pos_pix = cube.meta.wcs.world_to_pixel_values(raq + -0.082 * asec, deq - 0.156 * asec, l)
-                qD_pos_pix = cube.meta.wcs.world_to_pixel_values(raq + 0.258 * asec, deq + 0.205 * asec, l)
-                qG_pos_pix = cube.meta.wcs.world_to_pixel_values(raq + 0.054 * asec, deq + 0.015 * asec, l)
-                # qA_pos_pix = cube.conv_world_coord(t=l, x=raq, y=deq,mode='pipeline_world_to_pix')
-                # qB_pos_pix = cube.conv_world_coord(t=l, x=raq + 0.307 * asec, y=deq + 0.126 * asec, mode='pipeline_world_to_pix')
-                tcolor = 'black'
-                print('pos A', qA_pos_pix)
-                print('pos B', qB_pos_pix)
-
-                plt.plot(qA_pos_pix[0], qA_pos_pix[1], 'o', color=tcolor)
-                plt.plot(qB_pos_pix[0], qB_pos_pix[1], 'o', color=tcolor)
-                plt.plot(qC_pos_pix[0], qC_pos_pix[1], 'o', color='red')
-                plt.plot(qD_pos_pix[0], qD_pos_pix[1], 'o', color='blue')
-                plt.plot(qG_pos_pix[0], qG_pos_pix[1], 'x', color='black')
-
-
-                plt.text(qA_pos_pix[0], qA_pos_pix[1], 'A', color=tcolor, fontsize=10)
-                plt.text(qB_pos_pix[0], qB_pos_pix[1], 'B', color=tcolor, fontsize=10)
-
-                # plt.text(qC_pos_pix[1], qC_pos_pix[2], 'C', color=tcolor, fontsize=10)
-
+            
             fig, ax = plt.subplots(figsize=(4,4))
             fontsize= 10
             if 1:
@@ -4098,7 +4008,6 @@ class expRunWidget(QWidget):
         #lst = self.parent.exp_pars.readfolder(self.parent.CUBE_A.path)
         lst = self.read_CubesNameList()
         lst_num = 0
-        lst_num = [i for i, item in enumerate(lst) if 'B1830' in item][0]
         self.sourse_listA.addItems(lst)  # ['Object', 'Background','Both'])
         self.sourse_listA.setCurrentIndex(lst_num)
         # p = self.asn_source.currentText()
@@ -4896,20 +4805,7 @@ class expRunWidget(QWidget):
                     np.nansum([np.power(image.err[:, posx, posy], 2) for posx, posy in zip(pos[0], pos[1])], axis=0),
                     0.5)
                 sp_continuum = sp(x=wavel, y=np.array(flux), err=np.array(ferr))
-            if template_case == 'synthetic':
-                #f = np.loadtxt(
-                #    '/home/slava/science/research/kulkarni/JWST-DLAs/calibration_program/HD159222fit_cont.dat')
-                #f = np.loadtxt(
-                #    '/home/slava/science/research/kulkarni/JWST-DLAs/calibration_program/HD37122_cont.dat')
-                f = np.loadtxt(
-                    './data_local/continuum/PKS1830_A_cont.dat')
-                #f = np.loadtxt(
-                #    './data_local/continuum/PKS1830_B_cont.dat')
-                f_interp = interp1d(f[:, 0], f[:, 1], fill_value='extrapolate')
-                sp_continuum = sp(wavel, f_interp(wavel), f_interp(wavel)/100)
-                mask_features_in = np.loadtxt('./data_local/continuum/mask_CO.dat')
-                mask_features = interp1d(mask_features_in[:,0],mask_features_in[:,1],fill_value='extrapolate')
-                del mask_features_in
+           
 
             #run corrections
             pix_number = 0
@@ -4976,156 +4872,7 @@ class expRunWidget(QWidget):
                                   vmax=1)
                     plt.show()
                 # set quasar images model
-                elif template_case == 'complex':
-                    #f = np.loadtxt('/home/slava/science/research/kulkarni/JWST-DLAs/ID2441/Continuum/fit_contA.dat')
-                    f = np.loadtxt('/home/slava/science/projects/jwst/ID2441/Continuum/sightlineA.txt')
-                    #f = np.loadtxt('/home/slava/science/research/kulkarni/JWST-DLAs/ID2441/Continuum/QSO-B1830-211-SIGHTLINEB_3A_ch3-short_FR_s3d_(A)_green.spec1d')
-                    f_interp = interp1d(f[:, 0], f[:, 1], fill_value='extrapolate')
-                    sp_integrated_A = sp(x=wavel, y=f_interp(wavel), err=f_interp(wavel) * 0.01)
-                    f = np.array(np.nanmedian(sp_integrated_A.y))
-                    sp_integrated_A.y /= f
-                    sp_integrated_A.err /= f
-
-                    #f = np.loadtxt('/home/slava/science/research/kulkarni/JWST-DLAs/ID2441/Continuum/fit_contB.dat')
-                    f = np.loadtxt('/home/slava/science/projects/jwst/ID2441/Continuum/sightlineB.txt')
-                    #f = np.loadtxt('/home/slava/science/research/kulkarni/JWST-DLAs/ID2441/Continuum/QSO-B1830-211-SIGHTLINEB_3A_ch3-short_FR_s3d_(A)_red.spec1d')
-                    f_interp = interp1d(f[:, 0], f[:, 1], fill_value='extrapolate')
-                    sp_integrated_B = sp(x=wavel, y=f_interp(wavel), err=f_interp(wavel) * 0.01)
-                    f = np.array(np.nanmedian(sp_integrated_B.y))
-                    sp_integrated_B.y /= f
-                    sp_integrated_B.err /= f
-
-                    # set quasar images coordinates
-                    sA_coords = self.parent.CUBE_A.conv_world_coord(t=wavel[10], x=278.416405, y=-21.061055,
-                                                                    mode='pipeline_world_to_pix')
-                    posA = [int(sA_coords[2]),int(sA_coords[1])]
-                    #mask_radA = np.sqrt((image_ind[0] - posA[0]) ** 2 + (image_ind[1] - posA[1]) ** 2) <= 1
-                    mask_radA = ((image_ind[0] - posA[0] <= 1)*(image_ind[0] - posA[0] >=0)*
-                                 (image_ind[1] - posA[1] <= 1) * (image_ind[1] - posA[1] >= 0))
-                    im1 = np.array(image_comb)
-                    im1[~mask_radA] = np.nan
-                    posA = np.argwhere(im1 == np.nanmax(im1))[0]
-                    #del mask_radA,im1
-
-                    sB_coords = self.parent.CUBE_A.conv_world_coord(t=wavel[10], x=278.41620026, y=-21.06127259,
-                                                                    mode='pipeline_world_to_pix')
-                    posB = [int(sB_coords[2]), int(sB_coords[1])]
-                    mask_radB = ((image_ind[0] - posB[0] <= 1) * (image_ind[0] - posB[0] >= 0) *
-                                 (image_ind[1] - posB[1] <= 1) * (image_ind[1] - posB[1] >= 0))
-                    im2 = np.array(image_comb)
-                    im2[~mask_radB] = np.nan
-                    posB = np.argwhere(im2 == np.nanmax(im2))[0]
-                    #del im
-
-                    if 0:
-                        fig,ax = plt.subplots(1,3,sharex=True,sharey=True)
-                        ax[0].imshow(image_comb,origin='lower')
-                        ax[1].imshow(im1, origin='lower')
-                        ax[2].imshow(im2, origin='lower')
-                        ax[0].plot(posA[1],posA[0],'o')
-                        ax[0].plot((sA_coords[1]),(sA_coords[2]), 'x',markersize=10)
-                        ax[0].plot(posB[1],posB[0],'o')
-                        ax[0].plot((sB_coords[1]),(sB_coords[2]), 'x',markersize=10)
-                        plt.show()
-                    del mask_radA,mask_radB, im1,im2
-
-                    print('pos:',posA,posB)
-                    #fluxes of A and B quasars in their central pixels
-                    fA = np.nanmedian(image.data[:, posA[0], posA[1]])
-                    fB = np.nanmedian(image.data[:, posB[0], posB[1]])
-
-                    plt.subplots()
-                    plt.plot(wavel,image.data[:, posA[0], posA[1]])
-                    plt.plot(wavel,sp_integrated_A.y*fA )
-                    plt.plot(wavel,image.data[:, posB[0], posB[1]])
-                    plt.plot(wavel,sp_integrated_B.y*fB )
-
-                    plt.show()
-                    #make a cube model
-                    #def psf_model(r,sigma = miri_psf_sigma):
-                    #    return np.exp(-r**2/2/sigma**2)
-
-
-                    #make webbpsf model for quasars brightness distribution
-                    if 1:
-                        from scripts.psf_subtraction import read_psf,model_img
-                        from lmfit import Parameters
-
-                        band_letter = {'SHORT': 'A', 'MEDIUM': 'B', 'LONG': 'C'}
-                        psf = read_psf(channel=channel+band_letter[band],source='custom_psf') #source= 'webbpsf')
-                        pars_tmp = Parameters()
-                        names = ['xc', 'yc', 'amp']
-                        values = [posA[0],posA[1],1]
-                        #values = [int(sA_coords[2]),int(sA_coords[1]),1]
-                        for name, value in zip(names, values):
-                            pars_tmp.add(name, value=value, min=0, max=np.inf)
-                        m_A = model_img(params=pars_tmp, img_shape=image_comb.shape, psf_image=psf,
-                                        overdist=False, debug=False, get_qso_pos=False)
-                        m_A*=fA/np.nanmax(m_A)
-                        values = [posB[0], posB[1], 1]
-                        #values = [int(sB_coords[2]), int(sB_coords[1]), 1]
-                        for name, value in zip(names, values):
-                            pars_tmp.add(name, value=value, min=0, max=np.inf)
-                        m_B = model_img(params=pars_tmp, img_shape=image_comb.shape, psf_image=psf,
-                                        overdist=False, debug=False, get_qso_pos=False)
-                        m_B *= fB / np.nanmax(m_B)
-
-                    def model_qso_cube(pos=[1,2]):
-                        rA = m_A[pos[0],pos[1]]
-                        rB = m_B[pos[0], pos[1]]
-                        f = np.array(rA*sp_integrated_A.y + rB*sp_integrated_B.y)
-                        return f
-
-                    #make a mask for calculating fringe corrections:
-                    d = image_comb / d_max
-                    mask_warm_pixels = (image_snr > snr_lolimit) * edge_spatial_mask
-                    #mask_warm_pixels = (d > 1 - brightness_level)
-                    mask_radA = np.sqrt((image_ind[0] - posA[0]) ** 2 + (image_ind[1] - posA[1]) ** 2) < 3 * miri_psf_sigma
-                    mask_radB = np.sqrt((image_ind[0] - posB[0]) ** 2 + (image_ind[1] - posB[1]) ** 2) < 3 * miri_psf_sigma
-                    mask_pixels =(mask_warm_pixels)*(mask_radA+mask_radB)*(edge_spatial_mask)
-                    pos_fringes = np.where(mask_pixels == True)
-
-                    if 1:
-                        fig, ax = plt.subplots(1, 3, sharex=True, sharey=True)
-                        ax[0].imshow(d, origin='lower')
-                        #plot mask
-                        m = mask_pixels.astype(float)
-                        x = np.arange(mask_pixels.shape[1])
-                        y = np.arange(mask_pixels.shape[0])
-                        X, Y = np.meshgrid(x, y)
-                        ax[0].contour(X, Y, m, levels=[0], colors='red', linewidths=2,vmin=0,vmax=1)
-
-                        ax[0].plot(posA[1], posA[0], 'o')
-                        ax[0].plot((sA_coords[1]), (sA_coords[2]), 'x', markersize=10)
-                        ax[0].plot(posB[1], posB[0], 'o')
-                        ax[0].plot((sB_coords[1]), (sB_coords[2]), 'x', markersize=10)
-
-                        dc = np.zeros_like(d)
-                        for posx, posy in zip(pos_fringes[0], pos_fringes[1]):
-                            dc[posx,posy] = np.nanmedian(model_qso_cube(pos=[posx,posy]))/d_max
-                        ax[1].imshow(dc, origin='lower',vmin=0,vmax=1)
-                        ax[2].imshow(d-dc, origin='lower',vmin=-0.1,vmax=0.1)
-                        plt.show()
-
-                    #calculate fringes
-                    pix_number = 0
-                    for posx, posy in zip(pos_fringes[0], pos_fringes[1]):
-                        print(pix_number, ' from ', pos_fringes[0].shape[0])
-                        print('pix coordinate:', posx, posy, ' relative brightness: ', d[posx, posy])
-                        pix_number += 1
-                        if 1:
-                            flux = np.array(image.data[:, posx, posy])
-                            ferr = np.array(image.err[:, posx, posy])
-                            sp_i = sp(x=wavel, y=flux, err=ferr)
-                            model_i = sp(x=wavel,y=model_qso_cube(pos=[posx,posy]),err=ferr)
-                            sp_i_fringe_model = fringe_custom_correction_1d(sp_i, model_i, debug=True,
-                                                                            show_fit_chunks=False,
-                                                                            fringe_fq_model=fringe_fq_model,
-                                                                            title='(' + str(posx) + ',' + str(posy) + ')')
-
-                            if flag_update_data:
-                                image.data[:, posx, posy] -= sp_i_fringe_model.y
-
+                
         elif mode == 'Pipeline':
             from jwst.residual_fringe.utils import fit_residual_fringes_1d
 
