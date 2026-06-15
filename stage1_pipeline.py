@@ -79,9 +79,6 @@ from stdatamodels.jwst.datamodels import dqflags
 from jwst.assign_wcs import AssignWcsStep
 from jwst.superbias import SuperBiasStep
 
-#from exotic_miri.reference import SetCustomGain, SetCustomLinearity, GetWavelengthMap
-#from exotic_miri.stage_1 import DropGroupsStep
-#from exotic_miri.stage_2 import CleanOutliersStep, BackgroundSubtractStep, Extract1DBoxStep, AlignSpectraStep
 
 import jwst
 print(jwst.__version__)
@@ -89,7 +86,7 @@ print(jwst.__version__)
 
 output_dir = settings['output1_dir'] #')./output/detector1/'
 input_dir = settings['input1_dir'] #./input/detector1/'
-#miri_uncal_file= 'jw02155001001_04102_00001_mirifulong_uncal.fits'
+
 
 #functions
 def download_files(files, output_directory, force=False):
