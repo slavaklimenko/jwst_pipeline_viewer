@@ -4646,8 +4646,6 @@ class expRunWidget(QWidget):
                     sp_integrated = sp(x=wavel, y=np.array(flux), err=np.array(ferr))
                 elif integrated_spectrum_mode == 'synthetic':
                     #read continuum from the file
-                    #f = np.loadtxt('/home/slava/science/research/kulkarni/JWST-DLAs/ID2441/Continuum/fit_contA.dat')
-                    #f = np.loadtxt('/home/slava/science/research/kulkarni/JWST-DLAs/ID2441/Continuum/sightlineA.txt')
                     #f = np.loadtxt('/home/slava/science/research/kulkarni/JWST-DLAs/calibration_program/HD159222fit_cont.dat')
                     f = np.loadtxt(
                         '/home/slava/science/research/kulkarni/JWST-DLAs/calibration_program/HD37122_cont.dat')
