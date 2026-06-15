@@ -93,10 +93,6 @@ from stdatamodels.jwst.datamodels import dqflags
 import scipy
 
 #define input/output
-#output_dir = './output/detector2/'
-#input_dir = './output/results'
-#miri_uncal_file= 'jw02155001001_04102_00001_mirifulong_uncal.fits'
-#input_file_base = os.path.basename(miri_uncal_file).replace('uncal.fits', '')
 output_dir = settings['output2_dir'] #')./output/detector1/'
 input_dir = settings['input2_dir'] #./input/detector1/'
 
@@ -1128,8 +1124,7 @@ class detector2():
                 header = hdulist[0].header
                 f_band, f_ch,f_name  = header['BAND'], header['CHANNEl'],header['TARGPROP']
                 if band == f_band and f_ch == channel and 'BACK' not  in f_name and targ_name in f_name:
-                    if 'jw02155003001_05101_00001_mirifulong' not in f:
-                        short_list.append(f)
+                    short_list.append(f)
                 hdulist.close()
 
             if len(short_list)>0:
