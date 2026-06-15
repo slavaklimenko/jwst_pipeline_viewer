@@ -533,9 +533,7 @@ if __name__ == '__main__':
         for ch in ch_list:
             # read source
             if 1:
-                fname = path_to_jwst_folder + 'output/detector3/' + 'B0218-ATCN6_N6/TXS0218+357ATCN6_N6_'+ch+'__CORR_s3d.fits'
-            else:
-                fname = path_to_jwst_folder + '/output/detector3/' + 'J0134_ATCN6_N6/J0134-0931_ATCN6_N6_' + ch + '__CORR_s3d.fits'
+                fname = path_to_jwst_folder + 'output/detector3/' + 'source_name.fits'
 
 
             cube = datamodels.open(fname)
@@ -547,22 +545,12 @@ if __name__ == '__main__':
             data = np.array(cube.data)
 
             if 1:
-                l, raq, decq = np.nanmean(wavelength), 35.272790, 35.937148  # 35.272754, 35.937156 #B0218
-                del_ra,del_dec =  0.307, 0.126
+                l, raq, decq = np.nanmean(wavelength), source_ra,source_dec
+                del_ra,del_dec =  0.1, 0.1
                 asec = 1 / 3600.
                 psf_center_A = cube.meta.wcs.world_to_pixel_values(raq, decq, l)
                 psf_center_B = cube.meta.wcs.world_to_pixel_values(raq + del_ra * asec, decq + del_dec * asec, l)
-            if 0:
-                l, raq, decq = np.nanmean(wavelength), 23.648599, -9.517474  # J0134
-                del_ra, del_dec = 0.539, -0.415
-                asec = 1 / 3600.
-                psf_center_A = cube.meta.wcs.world_to_pixel_values(raq, decq, l)
-                psf_center_B = cube.meta.wcs.world_to_pixel_values(raq + del_ra * asec, decq + del_dec * asec, l)
-                del_ra, del_dec = 0.258, 0.205
-                psf_center_C = cube.meta.wcs.world_to_pixel_values(raq + del_ra * asec, decq + del_dec * asec, l)
-                del_ra, del_dec = -0.082, -0.156
-                psf_center_D = cube.meta.wcs.world_to_pixel_values(raq + del_ra * asec, decq + del_dec * asec, l)
-
+          
             from astropy.wcs import WCS
             wcs = WCS(hdr)
 
