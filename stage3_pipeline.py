@@ -542,25 +542,5 @@ class detector3():
 
 if __name__ == '__main__':
     print('Hi PyCharm')
-    miri_uncal_file = 'jw02155001001_04102_00001_mirifulong_uncal.fits'
-    input_dir = './output/detector2'
-    output_dir  = './output/detector3/'
-    spec3_cachedir = './temp/spec3/'
-    exposure = detector3(obj_key_name = 'jw02155001001_04102',bkgr_key_name = 'jw02155009001_02101', path = input_dir, output_dir=output_dir) #cubename='./output/detector3/sci_1SHORT(A)_ch1-short_s3d.fits')
-    exposure.create_association(input_dir=input_dir, source='BACKGROUND-AO0235+164', channel='3', band='SHORT',
-                                subfilename='_TEST_4EXP')
-    exposure.build_cube(input_file=exposure.local_asn_file, channel='3', master_bkgr_flag=False,
-               master_res_bkgr_flag=True, master_outlier_flag=True,
-               master_resample_spec_flag=True, master_extract1d_flag=True)
-    #exposure.init_cube()
-    #exposure.load3asn(asnfile='sci_1short.json')
-    #exposure.residual_background_matching()
-    #exposure =  detector3(obj_key_name = 'jw02155001001_04102',bkgr_key_name = 'jw02155009001_02101', path = input_dir, output_dir=output_dir)
-    #[sci, bkg] = exposure.create_association(input_dir=exposure.path, channel = '1', band ='short')
-    #exposure.cube_creation(channel='1')
-    #exposure.spec_extraction()
-    #exposure.plot_cube(cube_filename='./output/detector3/sci_1SHORT(A)_ch1-short_s3d.fits')
-    #exposure.plot_spec()
 
-    plt.show()
 
