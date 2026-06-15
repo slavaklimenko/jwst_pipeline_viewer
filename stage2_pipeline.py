@@ -1939,27 +1939,6 @@ class detector2():
 
 if __name__ == '__main__':
     print('Hi PyCharm')
-    miri_uncal_file = 'jw02155001001_04102_00001_mirifulong_uncal.fits'
-    input_dir = './output/tmp'
-    spec2_cachedir = './temp/spec2/'
-    exp1 = detector2(miri_uncal_file=miri_uncal_file, path = input_dir, output_dir=output_dir,spec2_cachedir=spec2_cachedir)
-    #input_file =  'jw02155001001_04102_00001_mirifulong_rate.fits' #N of hot pix 983  of  1051
-    input_file = 'jw02155001001_04102_00004_mirifulong_rate.fits'  # N of hot pix 983  of  1051
-    exp1.create_mask_hot_pix_step(input_file='jw02155009001_02101_00001_mirifulong_rate.fits',ref_file = "jw02155016001_02103_00001_mirifulong_rate.fits",
-                          dither_file='jw02155001001_04102_00002_mirifulong_rate.fits',save_file=False)
-    #exp1.show_hot_pix_maps()
-    exp1.compare_maps()
-    exp1.fix_cold_pix_step(debug=True)
-    plt.show()
-    exp1.assignwcsstep()
-    exp1.flat_field_step()
-    exp1.source_type_identification()
-    exp1.stray_light_step()
-    exp1.fringe_flat_step()
-    exp1.flux_calibration_step()
-    exp1.cube_building_step()
-    #exp1.spec1d_extraction_step()
-
-
+    
 
 
