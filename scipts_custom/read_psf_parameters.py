@@ -71,7 +71,7 @@ if __name__ == '__main__':
             params_list[i,4] = psf_center_B[0]
             params_list[i,5] = psf_center_B[1]
             params_list[i,6] =  params_B['amp'].value
-        np.savetxt(path_to_jwst_folder + 'output/detector3/QSO-B1830-211-SIGHTLINEB_ATCN6_N6/'+'fit_parameters_values.txt', params_list)
+        np.savetxt(path_to_jwst_folder + 'output/detector3/cube_name/'+'fit_parameters_values.txt', params_list)
         print(params_list)
 
 
