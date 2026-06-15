@@ -1,32 +1,48 @@
 # jwst_Viewer
 
-The code provides interface for jwst pipeline v2.0.0
+This code provides a graphical interface for visualizing and analyzing MIRI MRS data processed with the official JWST pipeline stages 1, 2, and 3.
 
-How to run the code
-1) download it directly or by
-   git clone https://github.com/slavaklimenko/jwst_Viewer
+## Installation and Usage
 
-2) edit path to your uncalib files in "init.dat" file
+### 1. Download the code
 
-3) create a conda environment and install the following packages:
-python                    3.11.0
-asdf                      2.15.0
-astropy                   5.3
-jwst                      1.11.0 
-pyqt5                     5.15.9 
-pyqt5-qt5                 5.15.2
-pyqt5-sip                 12.12.1
-pyqtgraph                 0.13.3
-python                    3.11.0 
-scipy                     1.9.3 
-stdatamodels              1.7.0
-stsci-image               2.3.5
-stsci-imagestats          1.6.3
-stsci-stimage             0.2.6
+Either download the repository directly or clone it using:
 
-You can simply use:
+```bash
+git clone https://github.com/slavaklimenko/jwst_Viewer
+```
 
-$ pip install -r /path/to/requirements.txt
+### 2. Create a Python environment and install dependencies
+
+Create a new Conda environment:
+
+```bash
+conda create -n jwst_viewer python=3.13.13
+conda activate jwst_viewer
+```
+Install the required JWST pipeline version manually:
+
+```bash
+conda install jwst=2.0.0
+```
+
+Install the required packages using the provided environment file:
+
+```bash
+conda env update -n jwst_viewer -f environment.yml
+```
 
 
-4) run main.py file
+### 3. Configure the input data path
+
+Edit the paths to your uncalibrated JWST data and CRDS data directory in the `init.dat` file.
+
+### 4. Run the program
+
+Start the viewer by running:
+
+```bash
+python main.py
+```
+
+This launches the detector image viewer for inspecting JWST pipeline Stage 1 and Stage 2 products, as well as the MRS cube analysis tools for creating and analyzing Stage 3 spectral cubes.
