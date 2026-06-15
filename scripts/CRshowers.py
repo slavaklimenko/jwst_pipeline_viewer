@@ -12,12 +12,6 @@ from matplotlib import rcParams
 from astropy.io import ascii, fits
 rcParams['font.family'] = 'serif'
 
-# Number of sample points
-#int_file = './output/results/jw02441001001_04104_00001_mirifushort_rateints.fits'
-#int_file = '/home/slava/science/codes/python/jwst/output/detector1/jw02441001001_04106_00002_mirifushort_rateints.fits'
-#int_file = '/home/slava/science/codes/python/jwst/output/results/jw02441001001_04102_00001_mirifulong_rateints.fits'
-
-
 
 def fit_hist(d=np.histogram([1,2,3]),mask_lim = 2,debug=False,return_full_range=False):
     xc = np.array([np.mean([d[1][ii], d[1][ii + 1]]) for ii in range(len(d[0]))])
